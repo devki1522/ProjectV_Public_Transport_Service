@@ -1,0 +1,31 @@
+# Frontend
+node_modules/
+dist/
+coverage/
+*.local
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Go
+*.exe
+*.exe~
+*.test
+*.out
+coverage.txt
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
