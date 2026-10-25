@@ -1,0 +1,15 @@
+glob_matcher: doublestar
+
+pre-commit:
+  jobs:
+    - name: frontend-lint
+      glob: "frontend/**/*.{js,jsx,json}"
+      root: frontend/
+      # Invoke Oxlint's Node entry point to avoid nested npm .cmd quoting on Windows.
+      run: node node_modules/oxlint/bin/oxlint --deny-warnings
+    - name: go-format
+      glob: "backend/**/*.go"
+      run: node scripts/check-go.mjs format
+    - name: go-vet
+      glob: "backend/**/*.{go,mod,sum}"
+      run: node scripts/check-go.mjs vet

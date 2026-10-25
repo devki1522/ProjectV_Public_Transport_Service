@@ -1,0 +1,17 @@
+{
+  "name": "projectv-public-transport-service",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "prepare": "lefthook install",
+    "hooks:install": "lefthook install",
+    "lint": "lefthook run pre-commit --all-files",
+    "lint:go:format": "node scripts/check-go.mjs format",
+    "lint:go:vet": "node scripts/check-go.mjs vet",
+    "docs:build": "node scripts/build-docs.mjs"
+  },
+  "devDependencies": {
+    "fflate": "0.8.3",
+    "lefthook": "2.2.2"
+  }
+}

@@ -1,0 +1,15 @@
+# Generate and package from the repository root: npm run docs:build
+PROJECT_NAME           = "Public Transport Service"
+PROJECT_BRIEF          = "Architecture and design information"
+OUTPUT_DIRECTORY       = build/docs
+INPUT                  = docs/design.md
+# Additional design pages can be added to INPUT as the project grows.
+FILE_PATTERNS          = *.md
+USE_MDFILE_AS_MAINPAGE  = docs/design.md
+MARKDOWN_SUPPORT       = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_AS_ERROR          = YES

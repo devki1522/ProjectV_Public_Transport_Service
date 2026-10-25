@@ -29,3 +29,13 @@ pgdata/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tooling and generated documentation
+.venv/
+/build/
+lefthook-local.yml
+.lefthook-local.yml
+
+# Logs from tools run at the repository root or in the backend
+*.log
+npm-debug.log*
