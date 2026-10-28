@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+
+  database:
+    image: postgres:18
+
+    environment:
+      POSTGRES_USER: projectv
+      POSTGRES_PASSWORD: local_dev_password
+      POSTGRES_DB: public_transport
+
+    ports:
+      - "127.0.0.1:5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
