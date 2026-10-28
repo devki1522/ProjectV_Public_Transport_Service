@@ -25,8 +25,20 @@ jobs:
           cache: false
       - run: npm ci
       - run: npm ci --prefix frontend
-      - name: Run lint, formatting, vet, and all unit tests
+      - name: Run lint, formatting, and vet
         run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+      - name: Run all unit tests
+        working-directory: backend
+        run: go test -count=1 ./...
 
   documentation:
     runs-on: ubuntu-latest

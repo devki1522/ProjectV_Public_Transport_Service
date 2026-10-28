@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "lefthook install",
     "hooks:install": "lefthook install",
-    "lint": "lefthook run pre-commit --all-files",
+    "lint": "lefthook run pre-commit --all-files --job frontend-lint --job go-format --job go-vet",
     "lint:go:format": "node scripts/check-go.mjs format",
     "lint:go:vet": "node scripts/check-go.mjs vet",
     "docs:build": "node scripts/build-docs.mjs",

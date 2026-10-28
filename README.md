@@ -138,17 +138,23 @@ From the repository root:
 npm run lint
 ```
 
-This runs the same Lefthook pre-commit checks across all tracked files: frontend
-Oxlint with warnings treated as failures, Go formatting, `go vet`, and all Go unit
-tests. On every commit, the full unit suite runs; frontend lint and Go format/vet
-checks run when relevant files are staged and inspect their entire component.
-Checks inspect the working tree, including unstaged edits, and do not rewrite
-files. Fix formatting with `gofmt -w <file>` and stage the resulting changes.
+This runs only the lint-related Lefthook jobs across all tracked files: frontend
+Oxlint with warnings treated as failures, Go formatting, and `go vet`.
+Run `npm test` separately for all backend unit tests.
 
-GitHub Actions runs these same checks on every push and pull request through the
-`lint` job, including the full unit suite. A test failure fails the job and blocks
-a local commit when hooks are installed. Configure branch protection to require
-`lint` to enforce these checks before merging.
+The pre-commit hook runs both categories as separate jobs: `frontend-lint`,
+`go-format`, `go-vet`, and `go-test`. On every commit, the full unit suite runs;
+frontend lint and Go format/vet checks run when relevant files are staged and
+inspect their entire component. Checks inspect the working tree, including
+unstaged edits, and do not rewrite files. Fix formatting with `gofmt -w <file>`
+and stage the resulting changes.
+
+GitHub Actions runs independent `lint` and `test` jobs on every push and pull
+request. The `lint` job runs `npm run lint`; the `test` job runs
+`go test -count=1 ./...` from `backend/`, matching `npm test`. The jobs run
+independently so a lint failure does not prevent test results from being reported.
+A test failure also blocks a local commit when hooks are installed. Configure
+branch protection to require both `lint` and `test` before merging.
 
 ## Doxygen design documentation
 
