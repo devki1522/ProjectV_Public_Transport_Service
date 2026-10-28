@@ -33,20 +33,22 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	router := chi.NewRouter()
-
-	router.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "ok",
-		})
-	})
-
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: router,
+		Handler: newRouter(),
 	}
 
 	log.Printf("Backend running on port %d", cfg.Server.Port)
 	log.Fatal(server.ListenAndServe())
+}
+
+func newRouter() http.Handler {
+	router := chi.NewRouter()
+	router.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "ok",
+		})
+	})
+	return router
 }

@@ -8,7 +8,8 @@
     "lint": "lefthook run pre-commit --all-files",
     "lint:go:format": "node scripts/check-go.mjs format",
     "lint:go:vet": "node scripts/check-go.mjs vet",
-    "docs:build": "node scripts/build-docs.mjs"
+    "docs:build": "node scripts/build-docs.mjs",
+    "test": "node scripts/check-go.mjs test"
   },
   "devDependencies": {
     "fflate": "0.8.3",

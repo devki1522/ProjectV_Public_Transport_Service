@@ -13,3 +13,6 @@ pre-commit:
     - name: go-vet
       glob: "backend/**/*.{go,mod,sum}"
       run: node scripts/check-go.mjs vet
+    - name: go-test
+      # Run the complete unit suite on every commit, regardless of staged file types.
+      run: node scripts/check-go.mjs test

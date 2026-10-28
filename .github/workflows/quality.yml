@@ -1,4 +1,4 @@
-name: Code quality
+name: Code quality and tests
 
 on:
   push:
@@ -25,7 +25,8 @@ jobs:
           cache: false
       - run: npm ci
       - run: npm ci --prefix frontend
-      - run: npm run lint
+      - name: Run lint, formatting, vet, and all unit tests
+        run: npm run lint
 
   documentation:
     runs-on: ubuntu-latest

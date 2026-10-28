@@ -2,13 +2,18 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const mode = process.argv[2]
-if (!['format', 'vet'].includes(mode)) {
-  console.error('Usage: node scripts/check-go.mjs <format|vet>')
+if (!['format', 'vet', 'test'].includes(mode)) {
+  console.error('Usage: node scripts/check-go.mjs <format|vet|test>')
   process.exit(1)
 }
 
 const command = mode === 'format' ? 'gofmt' : 'go'
-const result = spawnSync(command, mode === 'format' ? ['-l', '.'] : ['vet', './...'], {
+const args = {
+  format: ['-l', '.'],
+  vet: ['vet', './...'],
+  test: ['test', '-count=1', './...'],
+}[mode]
+const result = spawnSync(command, args, {
   cwd: fileURLToPath(new URL('../backend/', import.meta.url)),
   encoding: 'utf8',
   stdio: mode === 'format' ? 'pipe' : 'inherit',
