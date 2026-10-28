@@ -41,23 +41,9 @@ The Go backend uses Go modules. Dependencies are managed through `go.mod`.
 
 ## Running Locally
 
-Start the backend from the `backend` directory:
-
-```bash
-go run ./cmd/server
-```
-
-The backend runs at `http://localhost:8080`.
-
-In a separate terminal, start the frontend from the `frontend` directory:
-
-```bash
-npm run dev
-```
-
-The frontend is typically available at `http://localhost:5173`.
-
-The frontend uses Vite's development proxy to forward `/api` requests to the Go backend.
+To run the frontend, backend, and database run:
+`docker compose up --build --d`
+from the project root
 
 ### Verify the Connection
 

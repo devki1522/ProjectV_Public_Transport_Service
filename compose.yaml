@@ -7,14 +7,16 @@ services:
     build: ./backend
     ports:
       - "8080:8080"
+    env_file:
+      - "./backend/.env"
 
   database:
     image: postgres:18
 
     environment:
-      POSTGRES_USER: projectv
-      POSTGRES_PASSWORD: local_dev_password
-      POSTGRES_DB: public_transport
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the root .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the root .env}
 
     ports:
       - "127.0.0.1:5432:5432"
