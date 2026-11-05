@@ -1,13 +1,17 @@
 -- This is the initial PostgreSQL schema.
--- Apply to an empty database. Future changes should use new migrations.
+-- Apply to an empty database. During early class development, edit this file
+-- and recreate local databases when needed. Use migrations once data must persist.
 
 CREATE TABLE routes (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     number VARCHAR(20) NOT NULL,
     name VARCHAR(100) NOT NULL,
     direction VARCHAR(20) NOT NULL
-        CHECK (direction IN ('northbound', 'southbound', 'eastbound', 'westbound')),
+        -- GTFS 0/1 identify opposite traversals, not compass bearings.
+        CHECK (direction IN ('northbound', 'southbound', 'eastbound', 'westbound', 'direction_0', 'direction_1')),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    source_id TEXT UNIQUE,
+    route_type INTEGER CHECK (route_type >= 0),
     CONSTRAINT uq_routes_number_direction UNIQUE (number, direction)
 );
 
@@ -17,7 +21,15 @@ CREATE TABLE stops (
     latitude DOUBLE PRECISION NOT NULL CHECK (latitude BETWEEN -90 AND 90),
     longitude DOUBLE PRECISION NOT NULL CHECK (longitude BETWEEN -180 AND 180),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    is_accessible BOOLEAN NOT NULL DEFAULT FALSE
+    is_accessible BOOLEAN NOT NULL DEFAULT FALSE,
+    source_id TEXT UNIQUE,
+    stop_code TEXT,
+    platform_code TEXT,
+    stop_url TEXT,
+    location_type INTEGER NOT NULL DEFAULT 0 CHECK (location_type BETWEEN 0 AND 4),
+    parent_station_id INTEGER REFERENCES stops(id) ON DELETE RESTRICT,
+    -- Preserve GTFS unknown (0), accessible (1), inaccessible (2).
+    wheelchair_boarding INTEGER NOT NULL DEFAULT 0 CHECK (wheelchair_boarding BETWEEN 0 AND 2)
 );
 
 CREATE TABLE route_stops (
@@ -103,3 +115,45 @@ CREATE INDEX idx_disruption_routes_stop_id ON disruption_routes(stop_id);
 -- * Require at least one disruption_routes row before publishing a disruption.
 -- * Define how a disruption changes routing and departures; an alert alone is not a cancellation engine.
 -- * A route's complete ordered stop list and schedule should be edited transactionally.
+
+CREATE INDEX idx_stops_parent_station_id ON stops(parent_station_id);
+
+CREATE TABLE route_shapes (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_id TEXT NOT NULL UNIQUE,
+    -- GeoJSON LineString with WGS84 [longitude, latitude] coordinates.
+    geometry JSONB NOT NULL CHECK (COALESCE((
+        geometry->>'type' = 'LineString'
+        AND jsonb_typeof(geometry->'coordinates') = 'array'
+        AND jsonb_array_length(geometry->'coordinates') >= 2
+    ), FALSE))
+);
+
+-- A direction-specific route may have several branches/short turns. Keeping
+-- these separate avoids inventing an ordered list by concatenating branches.
+CREATE TABLE route_patterns (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_id TEXT NOT NULL UNIQUE,
+    route_id INTEGER NOT NULL REFERENCES routes(id) ON DELETE RESTRICT,
+    shape_id INTEGER NOT NULL REFERENCES route_shapes(id) ON DELETE RESTRICT,
+    headsign TEXT NOT NULL,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX idx_route_patterns_route_id ON route_patterns(route_id);
+CREATE INDEX idx_route_patterns_shape_id ON route_patterns(shape_id);
+CREATE UNIQUE INDEX uq_route_patterns_primary ON route_patterns(route_id) WHERE is_primary;
+
+CREATE TABLE route_pattern_stops (
+    pattern_id INTEGER NOT NULL REFERENCES route_patterns(id) ON DELETE CASCADE,
+    stop_id INTEGER NOT NULL REFERENCES stops(id) ON DELETE RESTRICT,
+    stop_sequence INTEGER NOT NULL CHECK (stop_sequence > 0),
+    PRIMARY KEY (pattern_id, stop_sequence)
+);
+CREATE INDEX idx_route_pattern_stops_stop_id ON route_pattern_stops(stop_id);
+
+-- Records the exact offline snapshot; repeating it does not overwrite edits.
+CREATE TABLE seed_imports (
+    name TEXT PRIMARY KEY,
+    sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+    imported_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

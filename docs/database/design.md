@@ -1,8 +1,13 @@
 # Database Design
 
-**Status:** Proposed initial design (Sprint 1)  
+**Status:** Initial design with offline GRT location import
 **Database:** PostgreSQL  
 **Implementation:** [`database/migrations/001_initial_schema.sql`](../../database/migrations/001_initial_schema.sql)
+
+The initial schema includes the GRT location tables and metadata. The GRT-specific
+fields and compatibility rules are detailed in section 7. During early class
+development, update this one schema file and recreate local databases when needed.
+Exact SQL constraints remain the executable source of truth.
 
 ## 1. Purpose and scope
 
@@ -38,7 +43,7 @@ Place the approved ERD image alongside this document as `docs/database/erd.png`.
 | `id` (PK)   | Internal identifier for one direction-specific route  |
 | `number`    | Public-facing route number; shared between directions |
 | `name`      | Rider-facing route name                               |
-| `direction` | Northbound, southbound, eastbound, or westbound       |
+| `direction` | Compass label or published GTFS `direction_0` / `direction_1` |
 | `is_active` | Whether the route remains part of normal service      |
 
 A route number can appear more than once, but `(number, direction)` must be unique. The current model treats opposite directions as separate route records, which duplicates shared names in exchange for a simpler six-week implementation.
@@ -135,9 +140,9 @@ Each row means one **route-wide alert** (`stop_id IS NULL`) or one **route-and-s
 
 1. **Simplified schedule types.** Only weekday/weekend/daily are supported. Holiday cancellations can be represented by disruptions; special replacement schedules would require a future extension.
 2. **Route-centric disruptions.** We deliberately do not target individual trip instances. A notice can identify a route and affected stops, but automatically cancelling just one specific departure is not modelled. This is a deliberate simplification that should be reconciled with the SRS before claiming full trip-cancellation support.
-3. **Route geometry.** Stop order does not define the actual road path. Choose either stored geometry (e.g., GeoJSON) or an external routing/map service before promising accurate route polylines.
+3. **Route geometry.** Stop order does not define the actual road path. Imported GTFS polylines are stored as GeoJSON in `route_shapes`; use those for route maps.
 4. **In-memory live state.** Vehicle locations and trip associations are lost on process restart until refreshed; stale updates must not be shown as current.
-5. **Directions.** Routes only support compass directions. Circular/inbound/outbound route labels require extending that constraint.
+5. **Directions.** Routes support compass labels and GTFS traversal IDs (`direction_0` / `direction_1`). GTFS IDs do not encode compass bearings; patterns retain destination headsigns for display.
 6. **Single-source of truth.** Other enterprise services retain ownership of budgets, personnel and incident records. Public Transport stores its own transit-facing disruption announcements only.
 
 ## 6. Implementation and verification
@@ -147,6 +152,50 @@ Each row means one **route-wide alert** (`stop_id IS NULL`) or one **route-and-s
 3. Add test records for two routes sharing a stop, a circular route, and two scheduled trips.
 4. Test duplicate stop sequences, invalid coordinates, invalid direction/schedule type, trip-to-route-stop mismatch, departure-before-arrival, and foreign-key deletion behaviour.
 5. Test a multi-route disruption with multiple stops; verify invalid route/stop pairs are rejected by the Go API.
-6. Keep future schema changes in **new migration files** rather than editing a migration already applied by teammates.
+6. During early class development, edit the initial schema and recreate local databases when necessary. Switch to new migration files once team data or deployed databases must be preserved.
 
 **Implementation note:** The SQL file is the intended PostgreSQL schema. The earlier SQL-import version for diagram tools omitted some database constraints to accommodate importer limitations; do not use that import-only version as the production migration.
+
+## 7. Offline GRT location data
+
+The [database guide](../../database/README.md) documents the seed contents,
+counts, source licence, import commands and validation. The fixed, converted GRT
+snapshot is stored directly in `database/seeds/grt.sql`. The initializer
+creates the current initial schema when absent and seeds in one transaction; it refuses to merge
+an initial import into existing location records. Repeating the same snapshot
+preserves records and team edits.
+
+The initial schema includes the following structures to preserve the location data:
+
+| Extension | Reason |
+| --- | --- |
+| `routes.source_id`, `route_type` | Separate external identity from generated PKs; distinguish bus and light rail |
+| Additional `direction_0` / `direction_1` direction values | GTFS traversal IDs do not encode compass bearings; original compass values remain valid |
+| `stops.source_id`, `stop_code`, `platform_code`, `stop_url`, `location_type`, `parent_station_id`, `wheelchair_boarding` | Retain stop/platform numbers, location links, station relationships and unknown accessibility |
+| `route_shapes` | Store actual GTFS polylines as GeoJSON without PostGIS |
+| `route_patterns` and `route_pattern_stops` | Preserve each branch/short turn and repeated stop occurrences separately |
+| `seed_imports` | Identify a loaded snapshot and prevent repeat imports from overwriting team edits |
+
+`routes` remains direction-specific. A route has many patterns, each pattern
+references one shape and has ordered stop occurrences linked to `stops`.
+Exactly one pattern per imported route is marked primary by the importer;
+a partial unique index prevents two primaries. Existing `route_stops` contains
+that primary pattern (longest traversal, frequency/hash tie breaks). It is a
+compatibility list, not an assertion that other branches do not exist. Full
+route browsing must use patterns when branch coverage matters.
+
+The earlier compass-only and unstored-geometry limitations are addressed for
+this import. For class scope, the existing simplified schedule model is retained:
+6,666 trips and 190,327 stop times are seeded from representative published
+weekday and Saturday services. Weekday repeats Monday–Friday; Saturday repeats
+on both weekend days. Holidays and seasonal/date exceptions are ignored. Only
+departures with the exact primary ordered stop list are scheduled, preserving
+the existing trip/route-stop foreign keys and after-midnight `INTERVAL` values.
+No new schedule tables or migration are required. The location-only seed can
+be upgraded by rerunning the seed; a separate import marker prevents duplicate
+timetables or overwriting existing schedules.
+
+Only if accurate date-aware planning or branch-specific timetables are required
+should service calendars and trip-to-pattern associations be added. For the class
+scope, no further schedule, fleet, dispatch, GPS-history or fare-management
+redesign is needed.

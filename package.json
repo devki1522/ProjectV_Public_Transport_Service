@@ -9,9 +9,12 @@
     "lint:go:format": "node scripts/check-go.mjs format",
     "lint:go:vet": "node scripts/check-go.mjs vet",
     "docs:build": "node scripts/build-docs.mjs",
-    "test": "node scripts/check-go.mjs test"
+    "test": "node scripts/check-go.mjs test && node --test scripts/grt-seed.test.mjs",
+    "test:db": "node --test scripts/grt-seed.test.mjs",
+    "db:seed": "node scripts/seed-grt.mjs"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
     "fflate": "0.8.3",
     "lefthook": "2.2.2"
   }
