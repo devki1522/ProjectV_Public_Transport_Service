@@ -11,22 +11,26 @@ import (
 	"time"
 )
 
+// Config contains the server and database settings for the API.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server   ServerConfig   // HTTP server settings.
+	Database DatabaseConfig // Database connection settings.
 }
 
+// ServerConfig contains HTTP server settings.
 type ServerConfig struct {
-	Port int
+	Port int // TCP port on which the API listens.
 }
 
+// DatabaseConfig contains database connection pool settings.
 type DatabaseConfig struct {
-	DSN             string
-	MaxIdleConns    int
-	MaxOpenCons     int
-	ConnMaxLifetime time.Duration
+	DSN             string        // PostgreSQL connection string.
+	MaxIdleConns    int           // Maximum number of idle connections.
+	MaxOpenCons     int           // Maximum number of open connections.
+	ConnMaxLifetime time.Duration // Maximum amount of time a connection may be reused.
 }
 
+// Load reads the API configuration from environment variables.
 func Load() (Config, error) {
 	port, err := strconv.Atoi(getEnv("PORT", "8080"))
 	if err != nil {

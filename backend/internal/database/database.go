@@ -1,3 +1,4 @@
+// Package database provides database connection setup for the API.
 package database
 
 import (
@@ -8,6 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Connect opens and verifies a PostgreSQL connection using the supplied configuration.
 func Connect(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
 	if err != nil {
