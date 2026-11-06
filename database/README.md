@@ -15,23 +15,25 @@ configuration. This project's original role and current examples use `projectv`.
 
 ## Seed the database
 
-With the database service running:
+Start the database and backend, and wait for the backend's startup AutoMigrate
+to complete before loading data:
 
 ```bash
 npm run db:seed
 ```
 
-The loader creates tables from [`001_initial_schema.sql`](migrations/001_initial_schema.sql)
-if absent, then loads [`grt.sql`](seeds/grt.sql) in the same transaction. No GRT
+The loader loads [`grt.sql`](seeds/grt.sql) into the existing tables in a
+transaction. No GRT
 downloads are needed. Repeating it preserves IDs and team edits. A first import
 into populated location or schedule tables is refused; errors roll back the load.
 
 For a separate PostgreSQL server, configure the standard `PGHOST`, `PGPORT`,
 `PGDATABASE`, `PGUSER` and `PGPASSWORD` variables and use
-`npm run db:seed -- --local` with `psql` on PATH.
+`npm run db:seed -- --local` with `psql` on PATH. Run the backend against that
+database first so AutoMigrate creates the tables.
 
-During early class development, edit the initial schema and recreate local
-databases when necessary. Editing the file alone does not change existing tables.
+The [GORM models](../backend/internal/models) define the schema. The backend
+applies model changes through AutoMigrate on startup.
 See the [database design](../docs/database/design.md) for fields and relationships.
 
 ## Inspect the data
@@ -73,12 +75,6 @@ Kitchener, Cambridge and township services:
   timetable repeats on both weekend days. Holidays and seasonal changes are ignored.
 - Times after midnight remain above 24 hours as PostgreSQL `INTERVAL` values.
 - Vehicles, live positions, disruptions and fares are outside the seed.
-
-## Test
-
-Run `npm run test:db` to check loading, counts, relationships, constraints,
-after-midnight times, identity sequences, safe reruns and conflict rollback.
-The test uses PGlite (PostgreSQL compiled to WASM) and needs no running database.
 
 ## Source and licence
 

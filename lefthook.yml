@@ -16,6 +16,3 @@ pre-commit:
     - name: go-test
       # Run the complete unit suite on every commit, regardless of staged file types.
       run: node scripts/check-go.mjs test
-    - name: database-test
-      glob: "{database/**,scripts/*grt*.mjs,package.json,package-lock.json}"
-      run: node --test scripts/grt-seed.test.mjs

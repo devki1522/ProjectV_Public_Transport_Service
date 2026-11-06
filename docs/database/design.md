@@ -2,12 +2,11 @@
 
 **Status:** Initial design with offline GRT location import
 **Database:** PostgreSQL  
-**Implementation:** [`database/migrations/001_initial_schema.sql`](../../database/migrations/001_initial_schema.sql)
+**Implementation:** [GORM models](../../backend/internal/models)
 
 The initial schema includes the GRT location tables and metadata. The GRT-specific
-fields and compatibility rules are detailed in section 7. During early class
-development, update this one schema file and recreate local databases when needed.
-Exact SQL constraints remain the executable source of truth.
+fields and compatibility rules are detailed in section 7. Update the GORM models
+to change the schema; the backend runs AutoMigrate on startup.
 
 ## 1. Purpose and scope
 
@@ -15,7 +14,7 @@ This schema stores the persistent information needed for route and stop manageme
 
 **Outside the database:** live vehicle positions and current trip associations are held in Go memory and refreshed from GPS updates or a simulator. The database does **not** persist GPS history, manage vehicle dispatch, payments, payroll, or other services' internal records.
 
-This document describes the design; the SQL migration is the executable source of truth for exact column types and constraints.
+This document describes the design; the GORM models define the column types and constraints.
 
 ## 2. ERD and relationships
 
@@ -132,7 +131,7 @@ Each row means one **route-wide alert** (`stop_id IS NULL`) or one **route-and-s
 ## 4. Data integrity and lifecycle
 
 - All keys reference existing parents; normal routes/stops are **deactivated** rather than deleted when possible.
-- The migration uses restrictive deletion for referenced routes and stops, avoiding accidental loss of schedules and alerts. Deleting a trip removes its stop times; deleting a disruption removes its route associations.
+- The models specify restrictive deletion for referenced routes and stops, avoiding accidental loss of schedules and alerts. Deleting a trip removes its stop times; deleting a disruption removes its route associations.
 - The backend should require at least one route association before a disruption becomes visible. A normal FK alone cannot guarantee that a parent has children.
 - An **announcement** does not, by itself, remove a trip from planning results. Implementing cancellation/closure effects needs explicit filtering logic based on impact type, target, and time range.
 
@@ -148,20 +147,18 @@ Each row means one **route-wide alert** (`stop_id IS NULL`) or one **route-and-s
 ## 6. Implementation and verification
 
 1. Review this ERD and the above limitations as a team.
-2. Start PostgreSQL; run `database/migrations/001_initial_schema.sql` once on an empty database.
+2. Start PostgreSQL and the backend; wait for startup AutoMigrate to complete.
 3. Add test records for two routes sharing a stop, a circular route, and two scheduled trips.
 4. Test duplicate stop sequences, invalid coordinates, invalid direction/schedule type, trip-to-route-stop mismatch, departure-before-arrival, and foreign-key deletion behaviour.
 5. Test a multi-route disruption with multiple stops; verify invalid route/stop pairs are rejected by the Go API.
-6. During early class development, edit the initial schema and recreate local databases when necessary. Switch to new migration files once team data or deployed databases must be preserved.
-
-**Implementation note:** The SQL file is the intended PostgreSQL schema. The earlier SQL-import version for diagram tools omitted some database constraints to accommodate importer limitations; do not use that import-only version as the production migration.
+6. Update the GORM models when changing the schema and restart the backend to apply changes.
 
 ## 7. Offline GRT location data
 
 The [database guide](../../database/README.md) documents the seed contents,
 counts, source licence, import commands and validation. The fixed, converted GRT
-snapshot is stored directly in `database/seeds/grt.sql`. The initializer
-creates the current initial schema when absent and seeds in one transaction; it refuses to merge
+snapshot is stored directly in `database/seeds/grt.sql`. After the backend has
+created the tables, the seed loader imports data in one transaction; it refuses to merge
 an initial import into existing location records. Repeating the same snapshot
 preserves records and team edits.
 
@@ -191,7 +188,7 @@ weekday and Saturday services. Weekday repeats Monday–Friday; Saturday repeats
 on both weekend days. Holidays and seasonal/date exceptions are ignored. Only
 departures with the exact primary ordered stop list are scheduled, preserving
 the existing trip/route-stop foreign keys and after-midnight `INTERVAL` values.
-No new schedule tables or migration are required. The location-only seed can
+No new schedule tables are required. The location-only seed can
 be upgraded by rerunning the seed; a separate import marker prevents duplicate
 timetables or overwriting existing schedules.
 

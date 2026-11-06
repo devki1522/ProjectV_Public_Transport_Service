@@ -40,7 +40,7 @@ are listed in [`.env.example`](.env.example).
 - `cmd/api/`: startup, dependency wiring and HTTP routes.
 - `internal/config/`: environment parsing and validation.
 - `internal/database/`: database connection and pool setup.
-- `internal/models/`: GORM mappings for every table in the SQL migration.
+- `internal/models/`: GORM models defining the database tables and constraints.
 
 Keep startup small. As endpoints grow, separate HTTP handling, application
 logic and database access under `internal/`, passing dependencies explicitly.
@@ -54,10 +54,6 @@ go test -count=1 ./...
 Tests live beside their implementation as `*_test.go` files and need no database
 or credentials. Add tests for behavior changes and format Go files with `gofmt`.
 
-From the repository root, `npm run test:db` also compares the GORM-generated
-tables with `database/migrations/001_initial_schema.sql` using PGlite. This needs
-Go and the root npm dependencies, but no running PostgreSQL server. It checks
-column order, types, defaults, nullability, identity generation, foreign keys,
-checks, and index rules; constraint and index names may differ. Keep the models
-and SQL migration synchronized when changing the schema. API startup does not
-run GORM AutoMigrate or modify existing tables.
+The API runs GORM AutoMigrate after connecting to PostgreSQL and before serving
+HTTP requests. Update the models to change the schema; add new models to the
+AutoMigrate call in `cmd/api/main.go`. Startup stops if AutoMigrate fails.

@@ -40,6 +40,8 @@ func main() {
 		&models.RouteStop{},
 		&models.Trip{},
 		&models.StopTime{},
+		&models.Vehicle{},
+		&models.Disruption{},
 		&models.DisruptionRoute{},
 		&models.RouteShape{},
 		&models.RoutePattern{},

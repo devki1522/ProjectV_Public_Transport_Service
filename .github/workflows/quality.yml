@@ -40,22 +40,6 @@ jobs:
         working-directory: backend
         run: go test -count=1 ./...
 
-  database-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache: false
-      - run: npm ci
-      - name: Run database tests
-        run: npm run test:db
-
   documentation:
     runs-on: ubuntu-latest
     steps:

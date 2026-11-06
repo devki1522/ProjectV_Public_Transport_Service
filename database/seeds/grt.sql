@@ -6,7 +6,7 @@
 -- ION ZIP SHA-256: 9f872bb7bc6ca99029e6426a50e5a2167a96522f13ad97b92a8177b04a84b34c
 -- Weekday: 2026-11-05 repeated Mon-Fri. Weekend: 2026-11-07 repeated Sat-Sun.
 -- Holidays ignored. Timetables follow only the primary stop list per direction.
--- Apply after 001_initial_schema.sql, inside a transaction (npm run db:seed).
+-- Apply after backend startup AutoMigrate, inside a transaction (npm run db:seed).
 
 DO $locations$
 DECLARE previous_hash TEXT;
