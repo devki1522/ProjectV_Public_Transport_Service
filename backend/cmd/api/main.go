@@ -8,6 +8,7 @@ import (
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 )
@@ -32,6 +33,21 @@ func main() {
 		log.Fatal(err)
 	}
 	defer sqlDB.Close()
+
+	if err := db.AutoMigrate(
+		&models.Route{},
+		&models.Stop{},
+		&models.RouteStop{},
+		&models.Trip{},
+		&models.StopTime{},
+		&models.DisruptionRoute{},
+		&models.RouteShape{},
+		&models.RoutePattern{},
+		&models.RoutePatternStop{},
+		&models.SeedImport{},
+	); err != nil {
+		log.Fatalf("migrate database :%v", err)
+	}
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
