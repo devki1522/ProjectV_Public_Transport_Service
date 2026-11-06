@@ -1,6 +1,5 @@
 package models
 
-
 type Vehicle struct {
 	ID           int    `gorm:"primaryKey;column:id" json:"id"`
 	Number       string `gorm:"column:number;type:varchar(20);not null;unique" json:"number"`
@@ -9,6 +8,5 @@ type Vehicle struct {
 }
 
 func (v Vehicle) TableName() string {
-			return "vehicle";
+	return "vehicle"
 }
-
