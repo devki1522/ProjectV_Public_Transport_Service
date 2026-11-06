@@ -7,6 +7,6 @@ type Vehicle struct {
 	IsAccessible bool   `gorm:"column:is_accessible;default:false;not null" json:"is_accessible"`
 }
 
-func (v Vehicle) TableName() string {
-	return "vehicle"
+func (Vehicle) TableName() string {
+	return "vehicles"
 }

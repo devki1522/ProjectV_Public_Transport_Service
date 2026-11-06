@@ -15,8 +15,11 @@ type Stop struct {
 	ParentStationID    *int    `gorm:"column:parent_station_id" json:"parent_station_id,omitempty"`
 	WheelchairBoarding int     `gorm:"column:wheelchair_boarding;default:0;not null;check:wheelchair_boarding BETWEEN 0 AND 2" json:"wheelchair_boarding"`
 
-	ParentStation *Stop  `gorm:"foreignKey:ParentStationID;references:ID;constraint:OnDelete:RESTRICT" json:"parent_station,omitempty"`
-	ChildStops    []Stop `gorm:"foreignKey:ParentStationID" json:"child_stops,omitempty"`
+	ParentStation     *Stop              `gorm:"foreignKey:ParentStationID;references:ID;constraint:OnDelete:RESTRICT" json:"parent_station,omitempty"`
+	ChildStops        []Stop             `gorm:"foreignKey:ParentStationID" json:"child_stops,omitempty"`
+	RouteStops        []RouteStop        `gorm:"foreignKey:StopID" json:"route_stops,omitempty"`
+	RoutePatternStops []RoutePatternStop `gorm:"foreignKey:StopID" json:"route_pattern_stops,omitempty"`
+	DisruptionRoutes  []DisruptionRoute  `gorm:"foreignKey:StopID" json:"disruption_routes,omitempty"`
 }
 
 func (Stop) TableName() string {
