@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,8 +8,9 @@ import (
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
-	"github.com/go-chi/chi/v5"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -53,20 +53,13 @@ func main() {
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: newRouter(),
+		Handler: newRouter(db),
 	}
 
 	log.Printf("Backend running on port %d", cfg.Server.Port)
 	log.Fatal(server.ListenAndServe())
 }
 
-func newRouter() http.Handler {
-	router := chi.NewRouter()
-	router.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "ok",
-		})
-	})
-	return router
+func newRouter(db *gorm.DB) http.Handler {
+	return router.New(db)
 }
