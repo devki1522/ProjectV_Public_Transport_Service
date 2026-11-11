@@ -44,7 +44,7 @@ func TestJSONSerialization(t *testing.T) {
 		ID:        1,
 		Number:    "7",
 		Name:      "Main",
-		Direction: "northbound",
+		Direction: "direction_0",
 		IsActive:  true,
 		SourceID:  &sourceID,
 		RouteType: &routeType,
@@ -108,5 +108,24 @@ func TestRouteShapeGeometry(t *testing.T) {
 
 	if string(unmarshaled.Geometry) != geomJSON {
 		t.Errorf("unmarshaled geometry = %s, want %s", string(unmarshaled.Geometry), geomJSON)
+	}
+}
+
+func TestStopAccessibilityPreservesThreeStates(t *testing.T) {
+	for _, state := range []int{WheelchairBoardingUnknown, WheelchairBoardingAccessible, WheelchairBoardingInaccessible} {
+		data, err := json.Marshal(Stop{WheelchairBoarding: state})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if fields["wheelchair_boarding"] != float64(state) {
+			t.Fatalf("accessibility state %d was lost: %s", state, data)
+		}
+		if _, exists := fields["is_accessible"]; exists {
+			t.Fatalf("redundant accessibility boolean exposed: %s", data)
+		}
 	}
 }

@@ -42,7 +42,7 @@ Place the approved ERD image alongside this document as `docs/database/erd.png`.
 | `id` (PK)   | Internal identifier for one direction-specific route  |
 | `number`    | Public-facing route number; shared between directions |
 | `name`      | Rider-facing route name                               |
-| `direction` | Compass label or published GTFS `direction_0` / `direction_1` |
+| `direction` | Published GTFS traversal ID: `direction_0` or `direction_1` |
 | `is_active` | Whether the route remains part of normal service      |
 
 A route number can appear more than once, but `(number, direction)` must be unique. The current model treats opposite directions as separate route records, which duplicates shared names in exchange for a simpler six-week implementation.
@@ -55,9 +55,9 @@ A route number can appear more than once, but `(number, direction)` must be uniq
 | `name`                  | Display name                               |
 | `latitude`, `longitude` | Position for stop displays and map markers |
 | `is_active`             | Whether the stop is part of normal service |
-| `is_accessible`         | Normal accessibility of the stop           |
+| `wheelchair_boarding`   | Accessibility: 0 unknown, 1 accessible, 2 inaccessible |
 
-Temporary closures or accessibility problems are **disruptions**, not reasons to change the stop's permanent flags. Geographic ranges are checked in SQL.
+Temporary closures or accessibility problems are **disruptions**, not reasons to change the stop's normal accessibility. `wheelchair_boarding` is the only stored stop accessibility field, preserving unknown separately from inaccessible. Geographic ranges are checked in SQL.
 
 ### `route_stops`
 
@@ -141,7 +141,7 @@ Each row means one **route-wide alert** (`stop_id IS NULL`) or one **route-and-s
 2. **Route-centric disruptions.** We deliberately do not target individual trip instances. A notice can identify a route and affected stops, but automatically cancelling just one specific departure is not modelled. This is a deliberate simplification that should be reconciled with the SRS before claiming full trip-cancellation support.
 3. **Route geometry.** Stop order does not define the actual road path. Imported GTFS polylines are stored as GeoJSON in `route_shapes`; use those for route maps.
 4. **In-memory live state.** Vehicle locations and trip associations are lost on process restart until refreshed; stale updates must not be shown as current.
-5. **Directions.** Routes support compass labels and GTFS traversal IDs (`direction_0` / `direction_1`). GTFS IDs do not encode compass bearings; patterns retain destination headsigns for display.
+5. **Directions.** Routes use only GTFS traversal IDs (`direction_0` / `direction_1`). GTFS IDs do not encode compass bearings; patterns retain destination headsigns for display.
 6. **Single-source of truth.** Other enterprise services retain ownership of budgets, personnel and incident records. Public Transport stores its own transit-facing disruption announcements only.
 
 ## 6. Implementation and verification
@@ -167,7 +167,7 @@ The initial schema includes the following structures to preserve the location da
 | Extension | Reason |
 | --- | --- |
 | `routes.source_id`, `route_type` | Separate external identity from generated PKs; distinguish bus and light rail |
-| Additional `direction_0` / `direction_1` direction values | GTFS traversal IDs do not encode compass bearings; original compass values remain valid |
+| `direction_0` / `direction_1` direction values | Preserve opposite traversals consistently without assigning compass bearings |
 | `stops.source_id`, `stop_code`, `platform_code`, `stop_url`, `location_type`, `parent_station_id`, `wheelchair_boarding` | Retain stop/platform numbers, location links, station relationships and unknown accessibility |
 | `route_shapes` | Store actual GTFS polylines as GeoJSON without PostGIS |
 | `route_patterns` and `route_pattern_stops` | Preserve each branch/short turn and repeated stop occurrences separately |
@@ -181,7 +181,7 @@ that primary pattern (longest traversal, frequency/hash tie breaks). It is a
 compatibility list, not an assertion that other branches do not exist. Full
 route browsing must use patterns when branch coverage matters.
 
-The earlier compass-only and unstored-geometry limitations are addressed for
+The direction representation and route geometry are addressed for
 this import. For class scope, the existing simplified schedule model is retained:
 6,666 trips and 190,327 stop times are seeded from representative published
 weekday and Saturday services. Weekday repeats Monday–Friday; Saturday repeats
