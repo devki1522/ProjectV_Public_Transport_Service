@@ -40,22 +40,24 @@ jobs:
         working-directory: backend
         run: go test -count=1 ./...
 
-  documentation:
+  backend-documentation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install documentation tools
-        run: sudo apt-get update && sudo apt-get install -y doxygen
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: false
       - run: npm ci
-      - name: Generate and package HTML design information
+      - name: Build and verify static pkgsite documentation
         run: npm run docs:build
       - uses: actions/upload-artifact@v4
         with:
-          name: doxygen-design-information
-          path: build/docs/design-information.zip
+          name: backend-pkgsite-documentation
+          path: docs/backend/backend-documentation.zip
           if-no-files-found: error
