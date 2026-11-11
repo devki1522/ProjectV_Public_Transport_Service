@@ -11,7 +11,7 @@ import (
 func TestHealth(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	recorder := httptest.NewRecorder()
-	newRouter().ServeHTTP(recorder, request)
+	newRouter(nil).ServeHTTP(recorder, request)
 	response := recorder.Result()
 	defer response.Body.Close()
 

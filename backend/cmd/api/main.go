@@ -2,15 +2,16 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
-	"github.com/go-chi/chi/v5"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 // main loads configuration, connects to the database, and starts the HTTP server.
@@ -35,23 +36,32 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	if err := db.AutoMigrate(
+		&models.Route{},
+		&models.Stop{},
+		&models.RouteStop{},
+		&models.Trip{},
+		&models.StopTime{},
+		&models.Vehicle{},
+		&models.Disruption{},
+		&models.DisruptionRoute{},
+		&models.RouteShape{},
+		&models.RoutePattern{},
+		&models.RoutePatternStop{},
+		&models.SeedImport{},
+	); err != nil {
+		log.Fatalf("migrate database :%v", err)
+	}
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: newRouter(),
+		Handler: newRouter(db),
 	}
 
 	log.Printf("Backend running on port %d", cfg.Server.Port)
 	log.Fatal(server.ListenAndServe())
 }
 
-// newRouter creates the API router and registers its health endpoint.
-func newRouter() http.Handler {
-	router := chi.NewRouter()
-	router.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "ok",
-		})
-	})
-	return router
+func newRouter(db *gorm.DB) http.Handler {
+	return router.New(db)
 }

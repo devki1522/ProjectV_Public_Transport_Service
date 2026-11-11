@@ -1,60 +1,21 @@
 # Public Transport Service
 
-## Architecture
+A class project using React, a Go REST API, and PostgreSQL. Docker Compose runs
+the three services. Start here for setup; use the component guides for details:
 
-The application uses a React frontend with Vite, a Go REST API, and PostgreSQL.
-Docker Compose runs all three services. The frontend requests `/api/health` through
-Vite's `/api` proxy, which forwards to `http://backend:8080` inside Docker.
-The backend initializes its database connection before starting the HTTP server.
+- [Backend](backend/README.md): API, configuration and Go development.
+- [Database](database/README.md): GRT seed, data assumptions and database access.
+- [Frontend](frontend/README.md): UI development, API proxy and builds.
 
-```text
-backend/
-  cmd/api/             Application entry point and HTTP router
-  internal/
-    config/            Environment configuration and validation
-    database/          PostgreSQL connection and pool setup
-    handlers/          HTTP handlers as endpoints are added
-    models/            Domain and persistence types as needed
-    routes/            Route registration as the API grows
-    services/          Application logic as features are added
-    utils/             Shared helpers, only when needed
-frontend/              React application
-database/             SQL migrations and seed data (planned)
-scripts/               Cross-platform quality and documentation commands
-compose.yaml           Container configuration
-lefthook.yml           Local quality checks
-.github/workflows/     CI quality checks and documentation build
-```
+## Requirements
 
-### Code and architecture rules
+Install Git, Docker Desktop, Node.js 24+ with npm, and Go matching
+[`backend/go.mod`](backend/go.mod). Go and `gofmt` must be on PATH. Windows
+also needs Git for Windows' shell for the commit hooks.
 
-- Keep `cmd/api` focused on startup, dependency wiring, and server configuration.
-  Put reusable backend implementation in focused packages under `internal`.
-- Keep HTTP parsing, response formatting, and status codes in handlers; put
-  application rules in services and database setup/access in the database layer.
-  Add these layers when a feature needs them rather than creating empty abstractions.
-- Pass dependencies explicitly. Services should not depend on HTTP handlers, and
-  shared helpers should have a clear purpose rather than becoming a catch-all.
-- Read configuration through `internal/config`. Validate required values at startup,
-  return errors from library packages, and handle fatal startup errors in `main`.
-- Return JSON from API endpoints and set `Content-Type: application/json` before
-  writing the response. Keep frontend expectations and API documentation aligned.
-- Format Go with `gofmt`, pass `go vet`, and follow the existing frontend Oxlint
-  rules. Source files use LF as enforced by `.gitattributes`; keep Windows batch
-  scripts on CRLF. Do not override this with editor-specific line-ending changes.
-- Keep actual `.env` files out of Git. Commit `.env.example` files with safe local
-  examples and update them whenever configuration requirements change.
-- Add or update tests with behavior changes. Keep unit tests independent of Docker,
-  PostgreSQL, real credentials, and network services.
+## Setup
 
-## Prerequisites
-
-Install Go matching `backend/go.mod`, Node.js 24 or newer with npm, Git, and
-Docker Desktop. Go and `gofmt` must be on PATH. On Windows, Go's default binary
-folder is `C:\Program Files\Go\bin`; Git for Windows supplies Lefthook's shell.
-Python is not required for the project checks.
-
-## Installation
+Clone the repository and open its folder:
 
 ```bash
 git clone https://github.com/devki1522/ProjectV_Public_Transport_Service.git
@@ -63,84 +24,39 @@ npm ci
 npm ci --prefix frontend
 ```
 
-The root `npm ci` installs Lefthook and installs the Git hooks through the
-`prepare` script. Run this once per clone. To reinstall hooks, run
-`npm run hooks:install`. Go dependencies are managed by `backend/go.mod` and
-`backend/go.sum` and downloaded by Go when needed.
-
-## Running locally
-
-Copy the two environment examples before starting Compose. From PowerShell at
-the repository root:
+For a new checkout, copy the environment examples in PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 Copy-Item backend/.env.example backend/.env
+```
+
+Use `cp` instead of `Copy-Item` in bash. Keep existing `.env` files when updating
+a checkout, and never commit them. The examples contain matching local settings;
+see the [database guide](database/README.md#configuration) if you change credentials.
+
+Start the app:
+
+```bash
 docker compose up --build -d
 ```
 
-In bash, use `cp` instead of `Copy-Item`. Copy examples only when creating your
-local configuration; preserve existing values when updating an existing clone.
+Open the UI at http://localhost:3000. Follow the
+[database seed instructions](database/README.md#seed-the-database) to load GRT data.
+To stop the app while keeping the database volume, run `docker compose down`.
 
-The root `.env` supplies `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`
-to Compose. `backend/.env` supplies the API configuration, including
-`DATABASE_URL`. Its credentials and database name must match the root `.env`.
-Inside Docker the database hostname is `database`; when running the backend
-directly on your computer, use `localhost` instead. Existing PostgreSQL volumes
-retain their stored credentials when environment values change.
+## Shared checks
 
-Open the frontend at `http://localhost:3000`. To check the API directly, open
-`http://localhost:8080/api/health`. The expected HTTP 200 JSON response is:
-
-```json
-{"status":"ok"}
-```
-
-## Testing
-
-Run all backend unit tests from the repository root:
-
-```bash
-npm test
-```
-
-Or run Go directly from `backend/`:
-
-```bash
-go test -count=1 ./...
-go test -count=1 -cover ./...
-```
-
-`-count=1` ensures tests execute rather than reuse cached successes. The suite
-currently covers configuration defaults, environment overrides, invalid inputs,
-valid boundaries, and the health endpoint's status, JSON body, and content type.
-Tests do not require either `.env` file or a running database.
-
-### Test organization
-
-Put Go unit tests beside the code they test with a `_test.go` suffix, for example
-`internal/config/config_test.go`. Go excludes these files from production builds.
-Use the same package when a test needs unexported helpers; use a `_test` package
-when testing only the public API. Use table-driven tests for related cases,
-`t.Setenv` for isolated environment changes, and `httptest` for HTTP behavior.
-Do not run environment-mutating tests in parallel.
-
-Use a dedicated `tests/integration/` directory for future tests spanning services
-or requiring PostgreSQL. Keep those separately invoked so `go test ./...` remains
-self-contained; document their setup when introducing them. There is currently
-no frontend unit test runner or database integration suite.
-
-## Automated quality checks
-
-From the repository root:
+Run from the repository root before committing:
 
 ```bash
 npm run lint
+npm test
 ```
 
-This runs only the lint-related Lefthook jobs across all tracked files: frontend
-Oxlint with warnings treated as failures, Go formatting, and `go vet`.
-Run `npm test` separately for all backend unit tests.
+Lint checks frontend code, Go formatting and `go vet`. Tests cover the backend
+without a running server. Source files use LF line endings;
+Windows `.bat` and `.cmd` files use CRLF, as defined in `.gitattributes`.
 
 The pre-commit hook runs both categories as separate jobs: `frontend-lint`,
 `go-format`, `go-vet`, and `go-test`. On every commit, the full unit suite runs;
