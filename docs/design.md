@@ -11,7 +11,7 @@ resident timetables, upcoming departures, and stop detail endpoints. See the
 
 | Component | Responsibility | Implementation |
 | --- | --- | --- |
-| Frontend | Display service status | `frontend/src/App.jsx` |
+| Frontend | Resident timetable and departure workflows | `frontend/src/App.jsx`, `frontend/src/features/` |
 | Development proxy | Forward `/api` requests to port 8080 | `frontend/vite.config.js` |
 | Backend | Register HTTP routes and serve JSON | `backend/cmd/api/main.go`, `backend/internal/router/` |
 | Transit reads | Validate schedule queries, select recurring service, enrich optional estimates | `backend/internal/transit/` |
@@ -19,10 +19,22 @@ resident timetables, upcoming departures, and stop detail endpoints. See the
 
 ## Request flow
 
-On mounting, the React component requests `/api/health`. During local development,
-Vite forwards the request to the backend at `http://localhost:8080`. The backend
-returns a JSON object with `status` set to `ok`. The frontend displays the status,
-or `Connection failed` if the request fails. No database is queried by this endpoint.
+The React app loads active routes from `/api/routes`, groups their public route
+numbers, and keeps direction-specific IDs for requests. Selecting a date loads
+`/api/routes/{id}/schedule?date=...`; trip disclosures show ordered stop times.
+The departure tab requests `/api/departures` with route, optional stop/trip,
+and absolute time-window filters. Optional estimates supplement scheduled times.
+
+The API module owns transport, a shared keyed request hook handles cancellation,
+retries and visible-page refresh, and feature components own their display state.
+Formatting uses the agency timezone rather than the device timezone. The frontend
+has explicit loading, empty, error and stale-result states; it supplies no demo
+data when the backend is unavailable. See the [frontend guide](../frontend/README.md)
+and [UI design system](../frontend/DESIGN.md).
+
+Vite forwards `/api` to the Compose backend by default. `API_PROXY_TARGET` can
+point host development at `http://localhost:8080` without changing source.
+The health endpoint remains available without querying the database.
 
 ## Health API
 

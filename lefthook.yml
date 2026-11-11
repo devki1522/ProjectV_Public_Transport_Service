@@ -7,6 +7,10 @@ pre-commit:
       root: frontend/
       # Invoke Oxlint's Node entry point to avoid nested npm .cmd quoting on Windows.
       run: node node_modules/oxlint/bin/oxlint --deny-warnings
+    - name: frontend-test
+      glob: "frontend/**/*.{js,jsx,json}"
+      root: frontend/
+      run: node node_modules/vitest/vitest.mjs run
     - name: go-format
       glob: "backend/**/*.go"
       run: node scripts/check-go.mjs format

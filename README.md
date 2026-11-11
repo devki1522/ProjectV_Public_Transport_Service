@@ -55,12 +55,12 @@ npm test
 ```
 
 Lint checks frontend code, Go formatting and `go vet`. Tests cover the backend
-without a running server. Source files use LF line endings;
+and resident frontend behavior without a running server. Source files use LF line endings;
 Windows `.bat` and `.cmd` files use CRLF, as defined in `.gitattributes`.
 
 `npm ci` installs the Git hooks. Reinstall them with `npm run hooks:install`
 if needed. The hooks run relevant checks before commits; GitHub Actions also
-runs lint and backend tests on pushes and pull requests.
+runs lint, backend/frontend tests, and the frontend build on pushes and pull requests.
 
 ## Design documentation
 
