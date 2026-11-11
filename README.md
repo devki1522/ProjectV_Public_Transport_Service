@@ -156,26 +156,45 @@ independently so a lint failure does not prevent test results from being reporte
 A test failure also blocks a local commit when hooks are installed. Configure
 branch protection to require both `lint` and `test` before merging.
 
-## Doxygen design documentation
+## Static backend documentation (pkgsite)
 
-The sprint input asks for a ZIP containing Doxygen-generated HTML design
-information. Doxygen does not have built-in Go or JavaScript/JSX parsers, but it
-can generate HTML from Markdown. This repository uses `docs/design.md` as its
-initial design page, configured in `Doxyfile`. Add further design pages to the
-`INPUT` setting as needed. This build does not extract API symbols from source;
-confirm the required documentation scope with the instructor. Use standard Go
-documentation comments and `go doc` for Go API documentation.
+Write backend documentation as standard Go comments next to packages, exported
+types, fields and functions. The build uses **official pkgsite v0.6.0** to render
+those comments, then exports its HTML and CSS into an offline snapshot. New Go
+packages are discovered automatically using `go list ./...`, including `internal`
+packages and commands. Empty placeholder directories do not appear.
 
-Install [Doxygen](https://www.doxygen.nl/download.html), then run from the root:
+From WSL Ubuntu:
 
 ```bash
 npm run docs:build
 ```
 
-Open `build/docs/html/index.html` to review the result. The script packages the
-whole HTML directory (including assets) as `build/docs/design-information.zip`.
+Go matching `backend/go.mod` and Node.js 24+ are required. The first build needs
+internet access to download the pinned pkgsite tool and its dependencies. Later
+builds can reuse Go's caches. No application server, PostgreSQL, Docker or Doxygen
+is needed to build backend documentation.
 
-The `documentation` GitHub Actions job also builds and packages the HTML. Download
-the `doxygen-design-information` artifact from a successful workflow run and
-extract it to obtain `design-information.zip` for submission. Generated files are
-ignored by Git. Documentation generation runs separately from commit hooks.
+Outputs:
+
+- `build/docs/backend/html/index.html`: open directly in a browser, including
+  after extracting the ZIP. It also works under a subdirectory on a static host.
+- `build/docs/backend/backend-documentation.zip`: complete shareable site.
+- `build/docs/backend/html/build-info.json`: tool version and included packages.
+
+Each build regenerates the snapshot from the current working tree, removes stale
+generated HTML, checks local links and source line anchors, then creates the ZIP.
+Generated output and the local pkgsite binary under `build/tools` are ignored by
+Git. To upgrade pkgsite, change `pkgsiteVersion` in
+`scripts/build-backend-docs.mjs`, rebuild, and review the resulting pages.
+
+The snapshot retains pkgsite's documentation layout, package/type/function links,
+and offline source pages with line anchors. The package index replaces server
+search; browser Find works within each page. Dynamic version/import tabs,
+playground controls and other server-dependent controls are omitted. Standard
+library, third-party package and Go website links remain online links; their
+documentation is not bundled. Only declarations pkgsite normally documents are
+included, not private implementation symbols.
+
+GitHub Actions runs the same build and uploads the
+`backend-pkgsite-documentation` artifact containing the ZIP.

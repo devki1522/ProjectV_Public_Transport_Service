@@ -36,7 +36,4 @@ Update these design pages when components, endpoints, or data flows change. Add
 requirement and GitHub issue references when they are assigned; this initial page
 does not claim traceability to requirements that have not yet been supplied.
 
-Doxygen generates these Markdown pages as HTML. It does not extract Go or React
-API symbols from this repository. Go source should use standard Go documentation
-comments; `go doc` can display those separately. Confirm with the instructor
-whether manually maintained design pages meet the expected submission scope.
+The static website documentation for this repo can be accessed in build/docs. To run a dynamic website use Go pkgsite
