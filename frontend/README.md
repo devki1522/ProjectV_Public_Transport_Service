@@ -1,7 +1,36 @@
 # Frontend
 
-The React UI uses Vite and currently displays the backend's health status.
+The React/Vite UI provides resident route timetables and upcoming departures
+for work items 164, 166 and 167 (SRS PT-FR-004, PT-FR-006 and PT-FR-007).
 Use the [project setup](../README.md#setup) to run it with Docker Compose.
+
+## Resident workflows
+
+- Search routes by public number or name, then select a travel direction.
+- In **Timetable**, select a date and optional time-of-day filter. Expand a trip
+  to see its ordered arrival and departure times at every stop. Longer lists
+  have pages of eight trips.
+- In **Upcoming departures**, filter the selected route by stop, trip and a
+  2-, 6- or 24-hour window. Refresh manually or leave the tab open for updates
+  every minute while the browser page is visible.
+- An available estimate is labeled **Estimated** and shown beside the published
+  scheduled time. Missing estimates stay **Scheduled**; the UI does not infer
+  live data. The default backend has no live provider configured.
+
+All times and today's date use `America/Toronto`, independent of the user's
+device timezone. Overnight timetable times have a +1 (or later day) label;
+upcoming departures on another date show that date. The fixed seed has no
+holiday exceptions. `Direction 1` and `Direction 2` refer to the imported GTFS
+traversal codes, not compass directions.
+
+On mobile, a native route selector replaces the searchable route rail. Native
+date/select/disclosure controls, keyboard tabs, focus indicators, a skip link,
+and explicit loading, empty, error and stale-refresh states support the main
+flows. Requests are cancelled when the selection changes.
+
+The UI uses the real [backend API](../backend/README.md#resident-schedules-and-departures).
+It contains no demo fallback or hard-coded schedule data. Test fixtures are
+isolated under `src/test/` and are not imported by application code.
 
 ## Development
 
@@ -12,21 +41,42 @@ npm run dev -- --port 3000
 ```
 
 `vite.config.js` forwards `/api` requests to `http://backend:8080` for Compose.
-When running Vite on your host instead, change that target to
-`http://localhost:8080` and ensure the backend is running. Stop the Compose
-frontend first to free port 3000; restore the proxy target before returning
-to Compose.
+When running Vite on your host, set the proxy target without editing source:
+
+```powershell
+$env:API_PROXY_TARGET = 'http://localhost:8080'
+npm run dev -- --port 3000
+```
+
+Ensure the backend is running. Stop the Compose frontend first to free port
+3000. In bash, use `API_PROXY_TARGET=http://localhost:8080 npm run dev -- --port 3000`.
+The default remains the Compose backend hostname.
 
 ## Files and checks
 
 - `src/main.jsx`: React entry point.
-- `src/App.jsx`: application UI and API requests.
-- `src/App.css` and `src/index.css`: application and shared styles.
+- `src/App.jsx`: application shell and selected route/date/view state.
+- `src/api/transit.js`: REST requests, response checks and safe request errors.
+- `src/hooks/useResource.js`: keyed requests, cancellation, retries and refresh.
+- `src/features/schedule/`: date-based timetable, paging and trip stop times.
+- `src/features/departures/`: departure board, filters and estimate presentation.
+- `src/components/`: shared route picker, loading, empty and error states.
+- `src/lib/transit.js`: agency-local dates, grouping, time filters and estimates.
+- `src/App.css` and `src/index.css`: layout, components and shared design tokens.
+- [DESIGN.md](DESIGN.md): visual system and frontend design scope.
+
+This single-screen tool uses local React state and a shared request hook; it
+does not need a routing library or global state store. Keep API transport,
+formatting and display components separate as features grow. Self-hosted DM
+Sans and Lucide icons are bundled locally; no external font service is needed.
 
 ```bash
 npm run lint -- --deny-warnings
+npm test
 npm run build
 ```
 
-The build writes static files to `dist/`. There is currently no frontend unit
-test runner.
+The build writes static files to `dist/`. Vitest and React Testing Library
+cover resident interactions, API filters, date/time boundaries, estimate
+fallback, retries and stale-response protection. Root `npm test` runs both Go
+and frontend suites. CI checks frontend tests and the production build.

@@ -55,7 +55,7 @@ npm test
 ```
 
 Lint checks frontend code, Go formatting and `go vet`. Tests cover the backend
-without a running server. Source files use LF line endings;
+and resident frontend behavior without a running server. Source files use LF line endings;
 Windows `.bat` and `.cmd` files use CRLF, as defined in `.gitattributes`.
 
 The pre-commit hook runs both categories as separate jobs: `frontend-lint`,
