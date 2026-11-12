@@ -1,0 +1,485 @@
+basePath: /
+definitions:
+  handlers.TransitRouteResponse:
+    properties:
+      direction:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      number:
+        type: string
+      route_type:
+        type: integer
+      source_id:
+        type: string
+    type: object
+  services.CreateTransitRouteInput:
+    properties:
+      direction:
+        type: string
+      name:
+        type: string
+      number:
+        type: string
+    type: object
+  services.UpdateTransitRouteInput:
+    properties:
+      direction:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      number:
+        type: string
+    type: object
+  transit.Departure:
+    properties:
+      estimated_departure_time:
+        type: string
+      route:
+        $ref: '#/definitions/transit.Route'
+      route_stop_id:
+        type: integer
+      scheduled_departure_time:
+        type: string
+      service_date:
+        type: string
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+      stop_sequence:
+        type: integer
+      trip_id:
+        type: integer
+    type: object
+  transit.Route:
+    properties:
+      direction:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      number:
+        type: string
+    type: object
+  transit.ScheduledTrip:
+    properties:
+      id:
+        type: integer
+      schedule_type:
+        type: string
+      status:
+        type: string
+      stop_times:
+        items:
+          $ref: '#/definitions/transit.StopTime'
+        type: array
+    type: object
+  transit.Stop:
+    properties:
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      name:
+        type: string
+      wheelchair_boarding:
+        type: integer
+    type: object
+  transit.StopDetails:
+    properties:
+      departures:
+        items:
+          $ref: '#/definitions/transit.Departure'
+        type: array
+      stop:
+        $ref: '#/definitions/transit.Stop'
+    type: object
+  transit.StopTime:
+    properties:
+      route_stop_id:
+        type: integer
+      scheduled_arrival_time:
+        type: string
+      scheduled_departure_time:
+        type: string
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+      stop_sequence:
+        type: integer
+    type: object
+  transit.Timetable:
+    properties:
+      route:
+        $ref: '#/definitions/transit.Route'
+      service_date:
+        type: string
+      timezone:
+        type: string
+      trips:
+        items:
+          $ref: '#/definitions/transit.ScheduledTrip'
+        type: array
+    type: object
+info:
+  contact: {}
+  description: Waterloo Region transit routes, timetables, and departures. Route writes
+    currently have no authentication.
+  title: Public Transport Service API
+  version: "1.0"
+paths:
+  /api/departures:
+    get:
+      responses: {}
+  /api/health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check API health
+      tags:
+      - health
+  /api/routes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.TransitRouteResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all routes, including inactive routes
+      tags:
+      - routes
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Route fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreateTransitRouteInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.TransitRouteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a route
+      tags:
+      - routes
+  /api/routes/{id}:
+    delete:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Route deactivated
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Deactivate a route while preserving related records
+      tags:
+      - routes
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TransitRouteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a route
+      tags:
+      - routes
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Route fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/services.UpdateTransitRouteInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TransitRouteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update route fields
+      tags:
+      - routes
+  /api/routes/{id}/schedule:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Agency-local service date (YYYY-MM-DD)
+        example: "2026-11-10"
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transit.Timetable'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a route timetable
+      tags:
+      - schedules
+  /api/routes/{routeID}/departures:
+    get:
+      parameters:
+      - description: Positive resource ID
+        in: path
+        minimum: 1
+        name: routeID
+        required: true
+        type: integer
+      responses: {}
+  /api/stops/{id}:
+    get:
+      description: Filters combine with AND. Path IDs fix their filter; conflicting
+        query IDs are rejected. Departure windows are [from, until), at most 24 hours.
+        /api/departures requires at least one ID filter.
+      parameters:
+      - description: Positive stop ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Positive stop_id
+        in: query
+        minimum: 1
+        name: stop_id
+        type: integer
+      - description: Positive route_id
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Positive trip_id
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - description: RFC3339 timestamp; defaults to now
+        in: query
+        name: from
+        type: string
+      - description: RFC3339 timestamp; defaults to from plus 2 hours
+        in: query
+        name: until
+        type: string
+      - default: 20
+        description: Maximum results
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transit.StopDetails'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get stop details and upcoming departures
+      tags:
+      - schedules
+  /api/stops/{stopID}/departures:
+    get:
+      parameters:
+      - description: Positive resource ID
+        in: path
+        minimum: 1
+        name: stopID
+        required: true
+        type: integer
+      responses: {}
+  /api/trips/{tripID}/departures:
+    get:
+      parameters:
+      - description: Positive resource ID
+        in: path
+        minimum: 1
+        name: tripID
+        required: true
+        type: integer
+      responses: {}
+swagger: "2.0"

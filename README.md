@@ -114,3 +114,31 @@ included, not private implementation symbols.
 
 GitHub Actions runs the same build and uploads the
 `backend-pkgsite-documentation` artifact containing the ZIP.
+
+## HTTP API documentation (Swag)
+
+Swagger UI is served by the backend at http://localhost:8080/swagger/index.html.
+Use the backend URL; the current Vite proxy forwards only `/api`.
+The UI serves bundled assets and loads its specification from `/swagger/doc.json`.
+No external CDN is required. Requests target the same host that serves the UI.
+
+From the repository root, regenerate the committed specification after changing
+HTTP annotations or request/response types:
+
+```bash
+npm run docs:api
+```
+
+This runs Swag v1.16.6 and produces `backend/docs/docs.go`, `swagger.json`, and
+`swagger.yaml`. Go must be on PATH; the first run downloads the pinned generator.
+Commit all three generated files with their source changes. CI regenerates them
+and rejects stale output. Docker builds use these committed files.
+
+Keep ordinary Go doc comments above Swag annotations. Swag documents the HTTP
+contract; the existing `npm run docs:build` pkgsite build documents Go packages,
+types and functions and remains independent. Swagger annotations may appear as
+text in pkgsite. Swag output uses Swagger 2.0.
+
+The interactive UI can execute real requests, including route writes. Those
+writes currently have no authentication; DELETE deactivates rather than removes
+a route. Use a development database when trying mutations.
