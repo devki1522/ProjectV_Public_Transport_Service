@@ -7,14 +7,19 @@ import (
 	"time"
 )
 
+// AgencyTimezone is the time zone used to interpret transit service dates.
 const AgencyTimezone = "America/Toronto"
 
+// ErrNotFound indicates that a requested transit resource does not exist.
 var ErrNotFound = errors.New("transit resource not found")
 
+// InvalidInput reports a validation failure in a transit request.
 type InvalidInput struct{ Message string }
 
+// Error returns the validation error message.
 func (e *InvalidInput) Error() string { return e.Message }
 
+// Route contains the public route details returned by schedule queries.
 type Route struct {
 	ID        int    `json:"id"`
 	Number    string `json:"number"`
@@ -23,6 +28,7 @@ type Route struct {
 	IsActive  bool   `json:"is_active"`
 }
 
+// Stop contains the public stop details returned by schedule queries.
 type Stop struct {
 	ID                 int     `json:"id"`
 	Name               string  `json:"name"`
@@ -32,6 +38,7 @@ type Stop struct {
 	IsActive           bool    `json:"is_active"`
 }
 
+// StopTime contains the scheduled times for one stop occurrence.
 type StopTime struct {
 	RouteStopID        int       `json:"route_stop_id"`
 	StopID             int       `json:"stop_id"`
@@ -41,6 +48,7 @@ type StopTime struct {
 	ScheduledDeparture time.Time `json:"scheduled_departure_time"`
 }
 
+// ScheduledTrip groups a trip with its ordered stop times.
 type ScheduledTrip struct {
 	ID           int        `json:"id"`
 	ScheduleType string     `json:"schedule_type"`
@@ -48,6 +56,7 @@ type ScheduledTrip struct {
 	StopTimes    []StopTime `json:"stop_times"`
 }
 
+// Timetable contains the trips for a route on one service date.
 type Timetable struct {
 	Route       Route           `json:"route"`
 	ServiceDate string          `json:"service_date"`
@@ -55,6 +64,7 @@ type Timetable struct {
 	Trips       []ScheduledTrip `json:"trips"`
 }
 
+// Departure combines a scheduled departure with an optional live estimate.
 type Departure struct {
 	TripID             int        `json:"trip_id"`
 	Route              Route      `json:"route"`
@@ -67,12 +77,14 @@ type Departure struct {
 	EstimatedDeparture *time.Time `json:"estimated_departure_time"`
 }
 
+// DepartureQuery selects departures by stop, route, trip, time window, and limit.
 type DepartureQuery struct {
 	StopID, RouteID, TripID int
 	From, Until             time.Time
 	Limit                   int
 }
 
+// StopDetails combines stop metadata with its upcoming departures.
 type StopDetails struct {
 	Stop       Stop        `json:"stop"`
 	Departures []Departure `json:"departures"`
@@ -90,6 +102,7 @@ type EstimateProvider interface {
 	Estimates(context.Context, []Departure) (map[DepartureKey]time.Time, error)
 }
 
+// Repository defines the schedule data reads required by the transit service.
 type Repository interface {
 	Route(context.Context, int) (Route, error)
 	Stop(context.Context, int) (Stop, error)

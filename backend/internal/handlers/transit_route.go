@@ -24,8 +24,10 @@ type TransitRouteService interface {
 	Deactivate(context.Context, int) error
 }
 
+// TransitRouteHandler serves HTTP requests for transit route management.
 type TransitRouteHandler struct{ service TransitRouteService }
 
+// NewTransitRouteHandler creates a route HTTP handler for the given service.
 func NewTransitRouteHandler(service TransitRouteService) *TransitRouteHandler {
 	return &TransitRouteHandler{service: service}
 }
@@ -45,6 +47,7 @@ func transitRouteResponse(route models.Route) TransitRouteResponse {
 	return TransitRouteResponse{route.ID, route.Number, route.Name, route.Direction, route.IsActive, route.SourceID, route.RouteType}
 }
 
+// List returns the transit routes available to clients.
 func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	routes, err := h.service.List(r.Context())
 	if err != nil {
@@ -58,6 +61,7 @@ func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+// Get returns one transit route by identifier.
 func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -71,6 +75,7 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, transitRouteResponse(route))
 }
 
+// Create validates and creates a transit route.
 func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input services.CreateTransitRouteInput
 	if !decodeTransitRouteInput(w, r, &input) {
@@ -85,6 +90,7 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, transitRouteResponse(route))
 }
 
+// Update validates and updates a transit route.
 func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -102,6 +108,7 @@ func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, transitRouteResponse(route))
 }
 
+// Delete deactivates a transit route without removing related data.
 func (h *TransitRouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {

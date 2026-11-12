@@ -1,5 +1,6 @@
 package models
 
+// DisruptionRoute represents the association between a disruption and a route.
 type DisruptionRoute struct {
 	ID           int  `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	DisruptionID int  `gorm:"size:32;column:disruption_id;not null;uniqueIndex:uq_disruption_route_wide,where:stop_id IS NULL;uniqueIndex:uq_disruption_route_stop,where:stop_id IS NOT NULL" json:"disruption_id"`
@@ -11,6 +12,7 @@ type DisruptionRoute struct {
 	Stop       *Stop      `gorm:"foreignKey:StopID;references:ID;constraint:OnDelete:RESTRICT" json:"stop,omitempty"`
 }
 
+// TableName returns the database table used for DisruptionRoute records.
 func (DisruptionRoute) TableName() string {
 	return "disruption_routes"
 }

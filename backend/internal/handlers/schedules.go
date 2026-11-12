@@ -1,3 +1,4 @@
+// Package handlers translates transit service results into HTTP responses.
 package handlers
 
 import (
@@ -13,21 +14,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// ScheduleService defines the schedule operations required by HTTP handlers.
 type ScheduleService interface {
 	Timetable(context.Context, int, string) (transit.Timetable, error)
 	Departures(context.Context, transit.DepartureQuery) ([]transit.Departure, error)
 	Stop(context.Context, int, transit.DepartureQuery) (transit.StopDetails, error)
 }
 
+// ScheduleHandler serves timetable, departure, and stop HTTP requests.
 type ScheduleHandler struct {
 	service ScheduleService
 	now     func() time.Time
 }
 
+// NewScheduleHandler creates a schedule HTTP handler for the given service.
 func NewScheduleHandler(service ScheduleService) *ScheduleHandler {
 	return &ScheduleHandler{service: service, now: time.Now}
 }
 
+// Timetable returns scheduled trips for a route and service date.
 func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -46,6 +51,7 @@ func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Departures returns departures matching the requested filters and time window.
 func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 	q, err := h.departureQuery(r)
 	if err != nil {
@@ -60,6 +66,7 @@ func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Stop loads stop details and associated departures.
 func (h *ScheduleHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {

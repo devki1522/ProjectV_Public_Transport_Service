@@ -1,5 +1,6 @@
 package models
 
+// Trip represents a scheduled journey on a route.
 type Trip struct {
 	ID           int    `gorm:"size:32;primaryKey;generated:identity always;column:id;uniqueIndex:uq_trips_id_route" json:"id"`
 	RouteID      int    `gorm:"size:32;column:route_id;not null;index:idx_trips_route_id;uniqueIndex:uq_trips_id_route" json:"route_id"`
@@ -10,6 +11,7 @@ type Trip struct {
 	StopTimes []StopTime `gorm:"foreignKey:TripID,RouteID;references:ID,RouteID;constraint:fk_stop_times_trip_route,OnDelete:CASCADE" json:"stop_times,omitempty"`
 }
 
+// TableName returns the database table used for Trip records.
 func (Trip) TableName() string {
 	return "trips"
 }

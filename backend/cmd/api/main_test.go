@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestHealth verifies health.
 func TestHealth(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	recorder := httptest.NewRecorder()

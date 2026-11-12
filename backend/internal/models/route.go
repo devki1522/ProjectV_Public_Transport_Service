@@ -1,5 +1,7 @@
+// Package models defines the database records used by the transit API.
 package models
 
+// Route represents a transit route and its related schedule records.
 type Route struct {
 	ID        int     `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	Number    string  `gorm:"column:number;type:varchar(20);not null;uniqueIndex:uq_routes_number_direction" json:"number"`
@@ -15,6 +17,7 @@ type Route struct {
 	DisruptionRoutes []DisruptionRoute `gorm:"foreignKey:RouteID;constraint:OnDelete:RESTRICT" json:"disruption_routes,omitempty"`
 }
 
+// TableName returns the database table used for Route records.
 func (Route) TableName() string {
 	return "routes"
 }

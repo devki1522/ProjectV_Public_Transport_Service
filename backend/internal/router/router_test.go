@@ -26,22 +26,31 @@ type fakeTransitRoutes struct {
 	update services.UpdateTransitRouteInput
 }
 
+// List returns the transit routes available to clients.
 func (f *fakeTransitRoutes) List(context.Context) ([]models.Route, error) {
 	f.called = "list"
 	return nil, f.err
 }
+
+// Get returns one transit route by identifier.
 func (f *fakeTransitRoutes) Get(_ context.Context, id int) (models.Route, error) {
 	f.called, f.id = "get", id
 	return f.route, f.err
 }
+
+// Create validates and creates a transit route.
 func (f *fakeTransitRoutes) Create(_ context.Context, input services.CreateTransitRouteInput) (models.Route, error) {
 	f.called, f.create = "create", input
 	return f.route, f.err
 }
+
+// Update validates and updates a transit route.
 func (f *fakeTransitRoutes) Update(_ context.Context, id int, input services.UpdateTransitRouteInput) (models.Route, error) {
 	f.called, f.id, f.update = "update", id, input
 	return f.route, f.err
 }
+
+// Deactivate records a fake route deactivation.
 func (f *fakeTransitRoutes) Deactivate(_ context.Context, id int) error {
 	f.called, f.id = "deactivate", id
 	return f.err
@@ -55,6 +64,7 @@ func request(service *fakeTransitRoutes, method, path, body string) *httptest.Re
 	return recorder
 }
 
+// TestRouteEndpoints verifies route endpoints.
 func TestRouteEndpoints(t *testing.T) {
 	for _, tc := range []struct {
 		method, path, body, call string
@@ -99,6 +109,7 @@ func TestRouteEndpoints(t *testing.T) {
 	}
 }
 
+// TestRejectInvalidRouteRequests verifies reject invalid route requests.
 func TestRejectInvalidRouteRequests(t *testing.T) {
 	for _, tc := range []struct{ method, path, body string }{
 		{"GET", "/api/routes/0", ""}, {"GET", "/api/routes/nope", ""}, {"GET", "/api/routes/2147483648", ""},
@@ -115,6 +126,7 @@ func TestRejectInvalidRouteRequests(t *testing.T) {
 	}
 }
 
+// TestRouteErrorResponses verifies route error responses.
 func TestRouteErrorResponses(t *testing.T) {
 	for _, tc := range []struct {
 		err    error

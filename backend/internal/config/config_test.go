@@ -16,6 +16,7 @@ func setTestEnv(t *testing.T) {
 	t.Setenv("DATABASE_URL", testDSN)
 }
 
+// TestLoadDefaults verifies load defaults.
 func TestLoadDefaults(t *testing.T) {
 	setTestEnv(t)
 	got, err := Load()
@@ -33,6 +34,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadOverrides verifies load overrides.
 func TestLoadOverrides(t *testing.T) {
 	setTestEnv(t)
 	t.Setenv("PORT", "9090")
@@ -56,6 +58,7 @@ func TestLoadOverrides(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsInvalidConfiguration verifies load rejects invalid configuration.
 func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 	tests := []struct {
 		name, key, value, wantError string
@@ -87,6 +90,7 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsBoundaryValues verifies load accepts boundary values.
 func TestLoadAcceptsBoundaryValues(t *testing.T) {
 	for _, port := range []string{"1", "65535"} {
 		t.Run(port, func(t *testing.T) {

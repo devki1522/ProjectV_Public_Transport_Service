@@ -6,6 +6,7 @@ const (
 	WheelchairBoardingInaccessible = 2
 )
 
+// Stop represents a physical transit stop and its accessibility details.
 type Stop struct {
 	ID                 int     `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	Name               string  `gorm:"column:name;type:varchar(100);not null" json:"name"`
@@ -27,6 +28,7 @@ type Stop struct {
 	DisruptionRoutes  []DisruptionRoute  `gorm:"foreignKey:StopID;constraint:OnDelete:RESTRICT" json:"disruption_routes,omitempty"`
 }
 
+// TableName returns the database table used for Stop records.
 func (Stop) TableName() string {
 	return "stops"
 }

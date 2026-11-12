@@ -6,17 +6,20 @@ import (
 	"time"
 )
 
+// Service validates schedule requests and combines repository data with estimates.
 type Service struct {
 	repo      Repository
 	estimates EstimateProvider
 }
 
+// NewService creates a schedule service with its repository and optional estimate provider.
 func NewService(repo Repository, estimates EstimateProvider) *Service {
 	return &Service{repo: repo, estimates: estimates}
 }
 
 func validID(id int) bool { return id > 0 && int64(id) <= 2147483647 }
 
+// Timetable returns scheduled trips for a route and service date.
 func (s *Service) Timetable(ctx context.Context, routeID int, date string) (Timetable, error) {
 	if !validID(routeID) {
 		return Timetable{}, &InvalidInput{"route id must be a positive 32-bit integer"}
@@ -38,6 +41,7 @@ func (s *Service) Timetable(ctx context.Context, routeID int, date string) (Time
 	return Timetable{Route: route, ServiceDate: date, Timezone: AgencyTimezone, Trips: trips}, nil
 }
 
+// Departures returns departures matching the requested filters and time window.
 func (s *Service) Departures(ctx context.Context, q DepartureQuery) ([]Departure, error) {
 	if q.StopID == 0 && q.RouteID == 0 && q.TripID == 0 {
 		return nil, &InvalidInput{"provide stop_id, route_id, or trip_id"}
@@ -94,6 +98,7 @@ func (s *Service) Departures(ctx context.Context, q DepartureQuery) ([]Departure
 	return departures, nil
 }
 
+// Stop loads stop details and associated departures.
 func (s *Service) Stop(ctx context.Context, id int, q DepartureQuery) (StopDetails, error) {
 	if !validID(id) {
 		return StopDetails{}, &InvalidInput{"stop id must be a positive 32-bit integer"}

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// TestRouteUpdatesPreserveFalseAndOmittedFields verifies route updates preserve false and omitted fields.
 func TestRouteUpdatesPreserveFalseAndOmittedFields(t *testing.T) {
 	active := false
 	name := "  New name  "
@@ -25,6 +26,7 @@ func TestRouteUpdatesPreserveFalseAndOmittedFields(t *testing.T) {
 	}
 }
 
+// TestRouteValidation verifies route validation.
 func TestRouteValidation(t *testing.T) {
 	empty := " "
 	longNumber := strings.Repeat("7", 21)
@@ -49,6 +51,7 @@ func TestRouteValidation(t *testing.T) {
 	}
 }
 
+// TestCreateRejectsInvalidInputBeforeDatabaseAccess verifies create rejects invalid input before database access.
 func TestCreateRejectsInvalidInputBeforeDatabaseAccess(t *testing.T) {
 	service := NewTransitRouteService(nil)
 	for _, input := range []CreateTransitRouteInput{
@@ -62,6 +65,7 @@ func TestCreateRejectsInvalidInputBeforeDatabaseAccess(t *testing.T) {
 	}
 }
 
+// TestCompassDirectionsAreRejected verifies compass directions are rejected.
 func TestCompassDirectionsAreRejected(t *testing.T) {
 	service := NewTransitRouteService(nil)
 	for _, direction := range []string{"northbound", "southbound", "eastbound", "westbound", "0", "1"} {
@@ -82,6 +86,7 @@ func TestCompassDirectionsAreRejected(t *testing.T) {
 	}
 }
 
+// TestRouteDatabaseErrors verifies route database errors.
 func TestRouteDatabaseErrors(t *testing.T) {
 	if !errors.Is(transitRouteError(gorm.ErrRecordNotFound), ErrTransitRouteNotFound) {
 		t.Fatal("missing route not mapped")

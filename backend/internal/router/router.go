@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// New builds the API router with schedule and route handlers.
 func New(db *gorm.DB) http.Handler {
 	return NewWithEstimates(db, nil)
 }
@@ -29,6 +30,7 @@ func NewWithEstimates(db *gorm.DB, estimates transit.EstimateProvider) http.Hand
 	return router
 }
 
+// RegisterScheduleRoutes attaches timetable, departure, and stop endpoints to the router.
 func RegisterScheduleRoutes(router chi.Router, handler *handlers.ScheduleHandler) {
 	router.Get("/api/routes/{id}/schedule", handler.Timetable)
 	router.Get("/api/departures", handler.Departures)

@@ -1,5 +1,6 @@
 package models
 
+// RouteStop represents a stop occurrence within a route.
 type RouteStop struct {
 	ID           int `gorm:"size:32;primaryKey;generated:identity always;column:id;uniqueIndex:uq_route_stops_id_route" json:"id"`
 	RouteID      int `gorm:"size:32;column:route_id;not null;uniqueIndex:uq_route_stops_id_route;uniqueIndex:uq_route_stops_sequence" json:"route_id"`
@@ -11,6 +12,7 @@ type RouteStop struct {
 	StopTimes []StopTime `gorm:"foreignKey:RouteStopID,RouteID;references:ID,RouteID;constraint:fk_stop_times_route_stop_route,OnDelete:RESTRICT" json:"stop_times,omitempty"`
 }
 
+// TableName returns the database table used for RouteStop records.
 func (RouteStop) TableName() string {
 	return "route_stops"
 }

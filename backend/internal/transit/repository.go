@@ -9,8 +9,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// PostgresRepository reads transit schedule data from PostgreSQL.
 type PostgresRepository struct{ db *gorm.DB }
 
+// NewPostgresRepository creates a PostgreSQL-backed schedule repository.
 func NewPostgresRepository(db *gorm.DB) *PostgresRepository { return &PostgresRepository{db: db} }
 
 func resourceError(err error) error {
@@ -20,18 +22,21 @@ func resourceError(err error) error {
 	return err
 }
 
+// Route loads one route by identifier.
 func (p *PostgresRepository) Route(ctx context.Context, id int) (Route, error) {
 	var route Route
 	err := p.db.WithContext(ctx).Table("routes").Where("id = ?", id).Take(&route).Error
 	return route, resourceError(err)
 }
 
+// Stop loads stop details and associated departures.
 func (p *PostgresRepository) Stop(ctx context.Context, id int) (Stop, error) {
 	var stop Stop
 	err := p.db.WithContext(ctx).Table("stops").Where("id = ?", id).Take(&stop).Error
 	return stop, resourceError(err)
 }
 
+// TripExists checks whether a trip identifier exists.
 func (p *PostgresRepository) TripExists(ctx context.Context, id int) error {
 	var trip struct{ ID int }
 	return resourceError(p.db.WithContext(ctx).Table("trips").Select("id").Where("id = ?", id).Take(&trip).Error)
@@ -54,6 +59,7 @@ WHERE t.route_id = @route_id AND r.is_active AND t.is_active
        CASE WHEN EXTRACT(ISODOW FROM CAST(@date AS date)) IN (6, 7) THEN 'weekend' ELSE 'weekday' END)
 ORDER BY MIN(st.departure_time) OVER (PARTITION BY t.id) NULLS LAST, t.id, rs.stop_sequence`
 
+// Timetable returns scheduled trips for a route and service date.
 func (p *PostgresRepository) Timetable(ctx context.Context, routeID int, date string) ([]ScheduledTrip, error) {
 	var rows []struct {
 		TripID                               int
@@ -114,6 +120,7 @@ WHERE scheduled_departure >= @from AND scheduled_departure < @until
 ORDER BY scheduled_departure, route_id, trip_id, stop_sequence, route_stop_id
 LIMIT @limit`
 
+// Departures returns departures matching the requested filters and time window.
 func (p *PostgresRepository) Departures(ctx context.Context, q DepartureQuery) ([]Departure, error) {
 	filters := make([]string, 0, 3)
 	args := map[string]any{"from": q.From, "until": q.Until, "zone": AgencyTimezone, "limit": q.Limit}
