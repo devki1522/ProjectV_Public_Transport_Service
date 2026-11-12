@@ -48,6 +48,12 @@ func transitRouteResponse(route models.Route) TransitRouteResponse {
 }
 
 // List returns the transit routes available to clients.
+// @Summary List all routes, including inactive routes
+// @Tags routes
+// @Produce json
+// @Success 200 {array} TransitRouteResponse
+// @Failure 500 {object} map[string]string
+// @Router /api/routes [get]
 func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	routes, err := h.service.List(r.Context())
 	if err != nil {
@@ -62,6 +68,15 @@ func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get returns one transit route by identifier.
+// @Summary Get a route
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Success 200 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [get]
 func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -76,6 +91,16 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create validates and creates a transit route.
+// @Summary Create a route
+// @Tags routes
+// @Produce json
+// @Accept json
+// @Param body body services.CreateTransitRouteInput true "Route fields"
+// @Success 201 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes [post]
 func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input services.CreateTransitRouteInput
 	if !decodeTransitRouteInput(w, r, &input) {
@@ -91,6 +116,18 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update validates and updates a transit route.
+// @Summary Update route fields
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Accept json
+// @Param body body services.UpdateTransitRouteInput true "Route fields"
+// @Success 200 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [patch]
 func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -109,6 +146,15 @@ func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete deactivates a transit route without removing related data.
+// @Summary Deactivate a route while preserving related records
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Success 204 "Route deactivated"
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [delete]
 func (h *TransitRouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {

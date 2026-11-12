@@ -14,6 +14,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// @title Public Transport Service API
+// @version 1.0
+// @description Waterloo Region transit routes, timetables, and departures. Route writes currently have no authentication.
+// @BasePath /
+//
 // main loads configuration, connects to the database, and starts the HTTP server.
 func main() {
 	if err := godotenv.Load(); err != nil {
