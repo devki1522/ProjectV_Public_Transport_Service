@@ -24,12 +24,30 @@ func NewAdminHandler(dashboard DashboardReader) *AdminHandler {
 }
 
 // Health confirms administrator authentication and authorization succeeded.
+// @Summary Administrator health
+// @Tags administration
+// @Description Requires a valid administrator session cookie.
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/admin/health [get]
 func (h *AdminHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // Dashboard returns real route counts from PostgreSQL.
+// @Summary Administrator dashboard
+// @Tags administration
+// @Description Requires a valid administrator session cookie.
+// @Produce json
+// @Success 200 {object} services.DashboardSummary
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/admin/dashboard [get]
 func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	summary, err := h.dashboard.Summary(r.Context())

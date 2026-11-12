@@ -41,22 +41,31 @@ type fakeTransitRoutes struct {
 	update services.UpdateTransitRouteInput
 }
 
+// List returns the transit routes available to clients.
 func (f *fakeTransitRoutes) List(context.Context) ([]models.Route, error) {
 	f.called = "list"
 	return nil, f.err
 }
+
+// Get returns one transit route by identifier.
 func (f *fakeTransitRoutes) Get(_ context.Context, id int) (models.Route, error) {
 	f.called, f.id = "get", id
 	return f.route, f.err
 }
+
+// Create validates and creates a transit route.
 func (f *fakeTransitRoutes) Create(_ context.Context, input services.CreateTransitRouteInput) (models.Route, error) {
 	f.called, f.create = "create", input
 	return f.route, f.err
 }
+
+// Update validates and updates a transit route.
 func (f *fakeTransitRoutes) Update(_ context.Context, id int, input services.UpdateTransitRouteInput) (models.Route, error) {
 	f.called, f.id, f.update = "update", id, input
 	return f.route, f.err
 }
+
+// Deactivate records a fake route deactivation.
 func (f *fakeTransitRoutes) Deactivate(_ context.Context, id int) error {
 	f.called, f.id = "deactivate", id
 	return f.err
@@ -103,7 +112,7 @@ func newTestAuthEnv(t *testing.T, service *fakeTransitRoutes, dashboard *fakeDas
 
 	csrf := auth.NewCSRFProtector([]string{routerTestOrigin})
 	throttler := auth.NewLoginThrottler(20, time.Minute, false, now)
-	authHandler := auth.NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", false, now)
+	authHandler := auth.NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", false, "TransitAdministrator", now)
 	authMW := auth.NewMiddleware(sessions, validator, "transit_session", false)
 
 	var auditBuf bytes.Buffer
@@ -332,7 +341,7 @@ func TestFakeRegistrationServiceEndToEndFlow(t *testing.T) {
 
 	csrf := auth.NewCSRFProtector([]string{routerTestOrigin})
 	throttler := auth.NewLoginThrottler(10, time.Minute, false, nil)
-	authHandler := auth.NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", false, nil)
+	authHandler := auth.NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", false, "TransitAdministrator", nil)
 	authMW := auth.NewMiddleware(sessions, validator, "transit_session", false)
 	service := &fakeTransitRoutes{route: models.Route{ID: 10, Number: "10", Name: "Conestoga", Direction: "direction_0"}}
 	dashboard := &fakeDashboard{summary: services.DashboardSummary{TotalRoutes: 2, ActiveRoutes: 2, InactiveRoutes: 0}}
@@ -388,6 +397,7 @@ func TestRejectInvalidRouteRequests(t *testing.T) {
 	}
 }
 
+// TestRouteErrorResponses verifies route error responses.
 func TestRouteErrorResponses(t *testing.T) {
 	for _, tc := range []struct {
 		err    error

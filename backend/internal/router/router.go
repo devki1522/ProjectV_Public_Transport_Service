@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 
+	_ "github.com/devki1522/ProjectV_Public_Transport_Service/backend/docs"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"gorm.io/gorm"
 )
 
@@ -39,10 +41,8 @@ func NewWithEstimates(db *gorm.DB, estimates transit.EstimateProvider) http.Hand
 // protected route mutations, and administrator endpoints.
 func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 	r := chi.NewRouter()
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-	})
+	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("./doc.json")))
+	r.Get("/api/health", health)
 
 	RegisterTransitRoutes(
 		r,
@@ -97,9 +97,9 @@ func RegisterAdminRoutes(r chi.Router, handler *handlers.AdminHandler, authMiddl
 func RegisterScheduleRoutes(r chi.Router, handler *handlers.ScheduleHandler) {
 	r.Get("/api/routes/{id}/schedule", handler.Timetable)
 	r.Get("/api/departures", handler.Departures)
-	r.Get("/api/stops/{stopID}/departures", handler.Departures)
-	r.Get("/api/routes/{routeID}/departures", handler.Departures)
-	r.Get("/api/trips/{tripID}/departures", handler.Departures)
+	r.Get("/api/stops/{stopID}/departures", handler.StopDepartures)
+	r.Get("/api/routes/{routeID}/departures", handler.RouteDepartures)
+	r.Get("/api/trips/{tripID}/departures", handler.TripDepartures)
 	r.Get("/api/stops/{id}", handler.Stop)
 }
 
@@ -135,4 +135,16 @@ func failClosedAuthMiddleware(next http.Handler) http.Handler {
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "authentication required"})
 	})
+}
+
+// health confirms that the HTTP server is running without querying PostgreSQL.
+//
+// @Summary Check API health
+// @Tags health
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Router /api/health [get]
+func health(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

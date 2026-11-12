@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, ArrowLeft, BusFront, Lock } from 'lucide-react'
-import { hasAdminRole, useAuth } from '../auth/authState.js'
+import { canAdminister, useAuth } from '../auth/authState.js'
 import { Link } from '../lib/router.jsx'
 import { sanitizeRedirectPath, useRouter } from '../lib/routerState.js'
 
@@ -29,7 +29,7 @@ export function LoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (submitting) return
+    if (submitting || isInitializing) return
     const trimmedUser = username.trim()
     if (!trimmedUser || !password) {
       setError('Enter both your username and password.')
@@ -41,7 +41,7 @@ export function LoginPage() {
     try {
       const session = await login({ username: trimmedUser, password })
       setPassword('')
-      if (hasAdminRole(session.user)) {
+      if (canAdminister(session)) {
         navigate(targetPath, { replace: true })
       } else {
         navigate('/unauthorized', { replace: true })
@@ -69,7 +69,6 @@ export function LoginPage() {
           <div className="auth-card-header">
             <span className="auth-badge"><Lock size={18} aria-hidden="true" /></span>
             <div>
-              <p className="auth-eyebrow">Transit Administration</p>
               <h1 id="login-heading">Administrator sign in</h1>
             </div>
           </div>
@@ -95,7 +94,7 @@ export function LoginPage() {
                 autoComplete="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                disabled={submitting}
+                disabled={submitting || isInitializing}
                 required
               />
             </div>
@@ -109,13 +108,13 @@ export function LoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                disabled={submitting}
+                disabled={submitting || isInitializing}
                 required
               />
             </div>
 
             <div className="auth-actions">
-              <button className="button button-primary" type="submit" disabled={submitting}>
+              <button className="button button-primary" type="submit" disabled={submitting || isInitializing}>
                 {submitting ? 'Signing in…' : 'Sign in'}
               </button>
               <Link className="button button-secondary" to="/">Return to public schedules</Link>

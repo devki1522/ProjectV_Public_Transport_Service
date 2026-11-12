@@ -23,8 +23,8 @@ authorization. The frontend never receives the JWT or raw session identifier.
 
 | Endpoint | Auth / CSRF | Response |
 | --- | --- | --- |
-| `POST /api/auth/login` | Trusted `Origin`, JSON body, rate-limited | Sets opaque `HttpOnly` session cookie; returns `{ user, expiresAtUtc, csrfToken }` |
-| `GET /api/auth/me` | Valid session cookie | Returns `{ user, expiresAtUtc, csrfToken }` or `401` |
+| `POST /api/auth/login` | Trusted `Origin`, JSON body, rate-limited | Sets opaque `HttpOnly` session cookie; returns `{ user, expiresAtUtc, csrfToken, isAdmin }` |
+| `GET /api/auth/me` | Valid session cookie | Returns `{ user, expiresAtUtc, csrfToken, isAdmin }` or `401` |
 | `POST /api/auth/logout` | Trusted `Origin`; `X-CSRF-Token` when session active | Invalidates local session and clears cookie |
 | `GET /api/admin/health` | Session + `TransitAdministrator` | `200 { "status": "ok" }` |
 | `GET /api/admin/dashboard` | Session + `TransitAdministrator` | `200 { total_routes, active_routes, inactive_routes }` from PostgreSQL |
@@ -198,3 +198,62 @@ go test -count=1 -run TestPostgresSchedules ./internal/transit
 The API runs GORM AutoMigrate after connecting to PostgreSQL and before serving
 HTTP requests. Update the models to change the schema; add new models to the
 AutoMigrate call in `cmd/api/main.go`. Startup stops if AutoMigrate fails.
+
+## HTTP API documentation (Swag)
+
+Swagger UI is served by the backend at http://localhost:8080/swagger/index.html.
+Use the backend URL; the current Vite proxy forwards only `/api`.
+The UI serves bundled assets and loads its specification from `/swagger/doc.json`.
+No external CDN is required. Requests target the same host that serves the UI.
+
+From the repository root, regenerate the committed specification after changing
+HTTP annotations or request/response types:
+
+```bash
+npm run docs:api
+```
+
+This runs Swag v1.16.6 and produces `backend/docs/docs.go`, `swagger.json`, and
+`swagger.yaml`. Go must be on PATH; the first run downloads the pinned generator.
+Commit all three generated files with their source changes. CI regenerates them
+and rejects stale output. Docker builds use these committed files.
+
+Keep ordinary Go doc comments above Swag annotations. Swag documents the HTTP
+contract; the existing `npm run docs:build` pkgsite build documents Go packages,
+types and functions and remains independent. Swagger annotations may appear as
+text in pkgsite. Swag output uses Swagger 2.0.
+
+The interactive UI can execute real requests, including route writes. Those
+writes require an administrator session and CSRF protection; DELETE deactivates rather than removes
+a route. Use a development database when trying mutations.
+
+### Session capability and logout recovery
+
+Login and `/api/auth/me` return `isAdmin`, derived by the backend from the signed
+JWT roles and `AUTH_REQUIRED_ROLE`. The frontend uses this capability for page
+access; all administrative APIs still enforce the configured role independently.
+The frontend returns to sign-in at session expiration. If a logout request fails,
+it keeps the session and CSRF token available and shows an error so sign-out can
+be retried; it does not report successful logout before backend invalidation.
+
+Run `npm run auth:setup` from the repository root for local mock setup. It preserves
+existing nonempty environment values and database configuration. Mock passwords
+are stored only in the ignored `backend/.env`.
+
+### Registration Service source verification
+
+The supplied `CmRegistrationService-master.zip` was inspected directly:
+`LoginController.cs` issues HS256 tokens with configured issuer/audience, 15-minute
+expiration, and signed `role` claims. Its response's first-role field is ignored.
+`RememberMe` does not extend JWT lifetime. `DatabaseSeeder.cs` seeds only
+`Administrator` and `User`; the other team must create and assign
+`TransitAdministrator`. Its logout clears its own cookie without revoking JWTs.
+No refresh tokens are implemented. Automated fake-server tests verify our adapter,
+not a deployed Registration Service. Deployment URL, verification credentials,
+and an assigned administrator account are still required for live verification.
+
+Swagger UI remains at `/swagger/index.html`. The specification includes auth and
+admin endpoints and documents session/CSRF requirements on route writes. Swagger
+2.0 does not natively model cookie authentication: sign in via the portal on the
+same host, then supply the CSRF token and trusted Origin where needed. The server
+does not relax CSRF rules for Swagger. Use `npm run docs:api` after contract edits.

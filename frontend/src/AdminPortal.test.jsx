@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import App from './App.jsx'
@@ -6,14 +6,16 @@ import { sanitizeRedirectPath } from './lib/routerState.js'
 import { jsonResponse, routes as fixtureRoutes } from './test/fixtures.js'
 
 const adminSession = {
+  isAdmin: true,
   user: { id: 'dev-transit-admin-001', username: 'transit.admin', roles: ['TransitAdministrator'] },
-  expiresAtUtc: '2026-11-10T12:15:00Z',
+  expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
   csrfToken: 'csrf-admin-token-123',
 }
 
 const normalUserSession = {
+  isAdmin: false,
   user: { id: 'dev-transit-user-001', username: 'transit.user', roles: ['User'] },
-  expiresAtUtc: '2026-11-10T12:15:00Z',
+  expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
   csrfToken: 'csrf-user-token-456',
 }
 
@@ -76,6 +78,7 @@ it('signs in an administrator, reaches dashboard, and falls back safely on unsaf
   const user = userEvent.setup()
   render(<App initialPath="/login?next=https://evil.example" />)
 
+  await waitFor(() => expect(screen.getByLabelText('Username')).toBeEnabled())
   await user.type(screen.getByLabelText('Username'), 'transit.admin')
   await user.type(screen.getByLabelText('Password'), 'admin-password')
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -100,6 +103,7 @@ it('shows invalid credential and provider-unavailable messages on login without 
   render(<App initialPath="/login" />)
 
   const passwordInput = screen.getByLabelText('Password')
+  await waitFor(() => expect(screen.getByLabelText('Username')).toBeEnabled())
   await user.type(screen.getByLabelText('Username'), 'transit.admin')
   await user.type(passwordInput, 'wrong-pw')
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -128,6 +132,7 @@ it('routes a signed-in normal user to the unauthorized page', async () => {
   const user = userEvent.setup()
   render(<App initialPath="/login" />)
 
+  await waitFor(() => expect(screen.getByLabelText('Username')).toBeEnabled())
   await user.type(screen.getByLabelText('Username'), 'transit.user')
   await user.type(screen.getByLabelText('Password'), 'user-pw')
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -279,4 +284,94 @@ it('logs out with CSRF header, removes protected content, and returns to login',
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Administrator sign in' })).toBeVisible())
   expect(screen.queryByRole('heading', { name: 'Transit dashboard' })).not.toBeInTheDocument()
   expect(logoutCalls[0]['X-CSRF-Token']).toBe(adminSession.csrfToken)
+})
+
+for (const failure of ['network', 403, 500]) {
+  it(`keeps sign out retryable when logout fails with ${failure}`, async () => {
+    let fail = true
+    vi.stubGlobal('fetch', vi.fn(async (path) => {
+      if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
+      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+      if (path === '/api/auth/logout') {
+        if (fail && failure === 'network') throw new Error('offline')
+        return jsonResponse({}, fail ? failure : 200)
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    }))
+    const user = userEvent.setup()
+    render(<App initialPath="/admin" />)
+    await screen.findByRole('heading', { name: 'Transit dashboard' })
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    await screen.findByText(/Sign out could not be confirmed/)
+    expect(window.location.pathname).toBe('/admin')
+    expect(screen.getByRole('heading', { name: 'Transit dashboard' })).toBeVisible()
+    fail = false
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    await screen.findByRole('heading', { name: 'Administrator sign in' })
+  })
+}
+
+it('uses the backend capability for a configured administrator role', async () => {
+  const customSession = { ...adminSession, user: { ...adminSession.user, roles: ['TransportOperator'] } }
+  vi.stubGlobal('fetch', vi.fn(async (path) => {
+    if (path === '/api/auth/me') return jsonResponse(customSession, 200)
+    if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+    throw new Error(`Unexpected request: ${path}`)
+  }))
+  render(<App initialPath="/admin" />)
+  await screen.findByRole('heading', { name: 'Transit dashboard' })
+})
+
+it('denies the UI when the backend capability is false even if the default role is present', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ...adminSession, isAdmin: false }, 200)))
+  render(<App initialPath="/admin" />)
+  await screen.findByRole('heading', { name: 'Access denied' })
+})
+
+it('waits for session restoration before enabling the sign-in form', async () => {
+  let resolveMe
+  vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveMe = resolve })))
+  render(<App initialPath="/login" />)
+  expect(screen.getByLabelText('Username')).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+  resolveMe(jsonResponse({}, 401))
+  await waitFor(() => expect(screen.getByLabelText('Username')).toBeEnabled())
+})
+
+it('returns an expired administrator session to login without waiting for a mutation', async () => {
+  vi.useFakeTimers()
+  try {
+    const session = { ...adminSession, expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString() }
+    vi.stubGlobal('fetch', vi.fn(async (path) => {
+      if (path === '/api/auth/me') return jsonResponse(session, 200)
+      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+      throw new Error(`Unexpected request: ${path}`)
+    }))
+    await act(async () => { render(<App initialPath="/admin" />) })
+    expect(screen.getByRole('heading', { name: 'Transit dashboard' })).toBeVisible()
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60_000) })
+    expect(screen.getByRole('heading', { name: 'Administrator sign in' })).toBeVisible()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('keeps the resident page public when a previous administrator session expires', async () => {
+  vi.useFakeTimers()
+  try {
+    const session = { ...adminSession, expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString() }
+    vi.stubGlobal('fetch', vi.fn(async (path) => {
+      if (path === '/api/auth/me') return jsonResponse(session, 200)
+      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+      if (path === '/api/routes') return jsonResponse([], 200)
+      throw new Error(`Unexpected request: ${path}`)
+    }))
+    await act(async () => { render(<App initialPath="/admin" />) })
+    await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Public schedules' })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60_000) })
+    expect(window.location.pathname).toBe('/')
+    expect(screen.getByRole('heading', { name: 'Schedules & departures' })).toBeVisible()
+  } finally {
+    vi.useRealTimers()
+  }
 })

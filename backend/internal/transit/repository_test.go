@@ -31,6 +31,7 @@ func mockRepository(t *testing.T) (*PostgresRepository, sqlmock.Sqlmock) {
 	return NewPostgresRepository(gormDB), mock
 }
 
+// TestTimetableGroupsTripsAndRetainsRepeatedStops verifies timetable groups trips and retains repeated stops.
 func TestTimetableGroupsTripsAndRetainsRepeatedStops(t *testing.T) {
 	repo, mock := mockRepository(t)
 	arrival := time.Date(2026, 11, 11, 5, 10, 0, 0, time.UTC)
@@ -53,6 +54,7 @@ func TestTimetableGroupsTripsAndRetainsRepeatedStops(t *testing.T) {
 	}
 }
 
+// TestDepartureRowMappingAndBoundFilters verifies departure row mapping and bound filters.
 func TestDepartureRowMappingAndBoundFilters(t *testing.T) {
 	repo, mock := mockRepository(t)
 	q := testQuery()
@@ -74,6 +76,7 @@ func TestDepartureRowMappingAndBoundFilters(t *testing.T) {
 	}
 }
 
+// TestRepositoryMissingAndFailedReads verifies repository missing and failed reads.
 func TestRepositoryMissingAndFailedReads(t *testing.T) {
 	repo, mock := mockRepository(t)
 	mock.ExpectQuery(`SELECT \* FROM "routes"`).WithArgs(7, 1).WillReturnRows(sqlmock.NewRows([]string{"id"}))

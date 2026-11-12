@@ -13,19 +13,28 @@ type fakeRepository struct {
 	departures []Departure
 }
 
+// Route loads one route by identifier.
 func (f *fakeRepository) Route(context.Context, int) (Route, error) {
 	f.called = true
 	return Route{ID: 7, Direction: "direction_0"}, f.err
 }
+
+// Stop loads stop details and associated departures.
 func (f *fakeRepository) Stop(context.Context, int) (Stop, error) {
 	f.called = true
 	return Stop{ID: 1, Name: "Station", WheelchairBoarding: 1}, f.err
 }
+
+// TripExists checks whether a trip identifier exists.
 func (f *fakeRepository) TripExists(context.Context, int) error { f.called = true; return f.err }
+
+// Timetable returns scheduled trips for a route and service date.
 func (f *fakeRepository) Timetable(context.Context, int, string) ([]ScheduledTrip, error) {
 	f.called = true
 	return nil, f.err
 }
+
+// Departures returns departures matching the requested filters and time window.
 func (f *fakeRepository) Departures(context.Context, DepartureQuery) ([]Departure, error) {
 	f.called = true
 	return f.departures, f.err
@@ -36,6 +45,7 @@ type fakeEstimates struct {
 	err    error
 }
 
+// Estimates returns fake arrival estimates for service tests.
 func (f fakeEstimates) Estimates(context.Context, []Departure) (map[DepartureKey]time.Time, error) {
 	return f.values, f.err
 }
@@ -45,6 +55,7 @@ func testQuery() DepartureQuery {
 	return DepartureQuery{StopID: 1, From: from, Until: from.Add(time.Hour), Limit: 20}
 }
 
+// TestTimetableValidationAndEmptyResult verifies timetable validation and empty result.
 func TestTimetableValidationAndEmptyResult(t *testing.T) {
 	for _, tc := range []struct {
 		id   int
@@ -66,6 +77,7 @@ func TestTimetableValidationAndEmptyResult(t *testing.T) {
 	}
 }
 
+// TestDepartureValidationBeforeDatabase verifies departure validation before database.
 func TestDepartureValidationBeforeDatabase(t *testing.T) {
 	for name, mutate := range map[string]func(*DepartureQuery){
 		"no filter":    func(q *DepartureQuery) { q.StopID = 0 },
@@ -91,6 +103,7 @@ func TestDepartureValidationBeforeDatabase(t *testing.T) {
 	}
 }
 
+// TestMissingResourcesAndDatabaseFailures verifies missing resources and database failures.
 func TestMissingResourcesAndDatabaseFailures(t *testing.T) {
 	for _, failure := range []error{ErrNotFound, errors.New("database unavailable")} {
 		service := NewService(&fakeRepository{err: failure}, nil)
@@ -112,6 +125,7 @@ func TestMissingResourcesAndDatabaseFailures(t *testing.T) {
 	}
 }
 
+// TestEstimatesKeepScheduleAndMatchExactOccurrence verifies estimates keep schedule and match exact occurrence.
 func TestEstimatesKeepScheduleAndMatchExactOccurrence(t *testing.T) {
 	q := testQuery()
 	estimated := q.From.Add(10 * time.Minute)
@@ -152,6 +166,7 @@ func TestEstimatesKeepScheduleAndMatchExactOccurrence(t *testing.T) {
 	}
 }
 
+// TestEmptyDeparturesAndStopDetails verifies empty departures and stop details.
 func TestEmptyDeparturesAndStopDetails(t *testing.T) {
 	s := NewService(&fakeRepository{}, nil)
 	departures, err := s.Departures(context.Background(), testQuery())

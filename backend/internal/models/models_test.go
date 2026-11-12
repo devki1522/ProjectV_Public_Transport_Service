@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// TestTableNames verifies table names.
 func TestTableNames(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -35,6 +36,7 @@ func TestTableNames(t *testing.T) {
 	}
 }
 
+// TestJSONSerialization verifies JSON serialization.
 func TestJSONSerialization(t *testing.T) {
 	sourceID := "GRT-100"
 	routeType := 3
@@ -88,6 +90,7 @@ func TestJSONSerialization(t *testing.T) {
 	}
 }
 
+// TestRouteShapeGeometry verifies route shape geometry.
 func TestRouteShapeGeometry(t *testing.T) {
 	geomJSON := `{"type":"LineString","coordinates":[[-80.5,43.5],[-80.4,43.4]]}`
 	shape := RouteShape{
@@ -111,6 +114,7 @@ func TestRouteShapeGeometry(t *testing.T) {
 	}
 }
 
+// TestStopAccessibilityPreservesThreeStates verifies stop accessibility preserves three states.
 func TestStopAccessibilityPreservesThreeStates(t *testing.T) {
 	for _, state := range []int{WheelchairBoardingUnknown, WheelchairBoardingAccessible, WheelchairBoardingInaccessible} {
 		data, err := json.Marshal(Stop{WheelchairBoarding: state})

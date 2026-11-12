@@ -23,6 +23,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// @title Public Transport Service API
+// @version 1.0
+// @description Public resident schedules and cookie-authenticated transit administration. Mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me.
+// @BasePath /
+//
 // main loads configuration, connects to the database, wires authentication, and starts the HTTP server.
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -115,6 +120,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		throttler,
 		cfg.Auth.SessionCookie,
 		cfg.Auth.CookieSecure,
+		cfg.Auth.RequiredRole,
 		nil,
 	)
 	authMiddleware := auth.NewMiddleware(sessions, validator, cfg.Auth.SessionCookie, cfg.Auth.CookieSecure)

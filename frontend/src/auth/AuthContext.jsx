@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchSession, loginWithCredentials, logoutSession } from '../api/auth.js'
 import { sanitizeRedirectPath, useRouter } from '../lib/routerState.js'
-import { AuthContext, hasAdminRole } from './authState.js'
+import { AuthContext, canAdminister } from './authState.js'
 
 function needsAuthSession(pathname) {
   return pathname === '/login' || pathname === '/unauthorized' || pathname === '/admin' || pathname.startsWith('/admin/')
@@ -9,11 +9,14 @@ function needsAuthSession(pathname) {
 
 export function AuthProvider({ children }) {
   const { pathname, search, navigate } = useRouter()
+  const [logoutPending, setLogoutPending] = useState(false)
+  const [logoutError, setLogoutError] = useState(null)
   const [state, setState] = useState(() => ({
     status: needsAuthSession(pathname) ? 'initializing' : 'idle',
     user: null,
     expiresAtUtc: null,
     csrfToken: null,
+    isAdmin: false,
   }))
 
   const restoreSession = useCallback(async (signal) => {
@@ -24,6 +27,7 @@ export function AuthProvider({ children }) {
         user: data.user,
         expiresAtUtc: data.expiresAtUtc ?? null,
         csrfToken: data.csrfToken,
+        isAdmin: canAdminister(data),
       })
       return data
     } catch (error) {
@@ -33,6 +37,7 @@ export function AuthProvider({ children }) {
         user: null,
         expiresAtUtc: null,
         csrfToken: null,
+        isAdmin: false,
       })
       return null
     }
@@ -55,6 +60,7 @@ export function AuthProvider({ children }) {
           user: data.user,
           expiresAtUtc: data.expiresAtUtc ?? null,
           csrfToken: data.csrfToken,
+          isAdmin: canAdminister(data),
         })
       })
       .catch((error) => {
@@ -64,6 +70,7 @@ export function AuthProvider({ children }) {
           user: null,
           expiresAtUtc: null,
           csrfToken: null,
+          isAdmin: false,
         })
       })
     return () => {
@@ -79,6 +86,7 @@ export function AuthProvider({ children }) {
       user: data.user,
       expiresAtUtc: data.expiresAtUtc ?? null,
       csrfToken: data.csrfToken,
+      isAdmin: canAdminister(data),
     })
     return data
   }, [])
@@ -89,15 +97,24 @@ export function AuthProvider({ children }) {
       user: null,
       expiresAtUtc: null,
       csrfToken: null,
+      isAdmin: false,
     })
   }, [])
 
   const logout = useCallback(async () => {
-    const token = state.csrfToken
-    clearSession()
-    await logoutSession(token)
-    navigate('/login', { replace: true })
-  }, [state.csrfToken, clearSession, navigate])
+    if (logoutPending) return
+    setLogoutPending(true)
+    setLogoutError(null)
+    try {
+      await logoutSession(state.csrfToken)
+      clearSession()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setLogoutError(error.message)
+    } finally {
+      setLogoutPending(false)
+    }
+  }, [state.csrfToken, clearSession, navigate, logoutPending])
 
   const handleApiError = useCallback((error) => {
     if (!error) return
@@ -114,20 +131,38 @@ export function AuthProvider({ children }) {
     }
   }, [clearSession, navigate, pathname, search])
 
+  useEffect(() => {
+    if (state.status !== 'authenticated' || !state.expiresAtUtc) return undefined
+    const remaining = Date.parse(state.expiresAtUtc) - Date.now()
+    if (!Number.isFinite(remaining)) return undefined
+    const expire = () => {
+      if (needsAuthSession(pathname)) handleApiError({ status: 401 })
+      else clearSession()
+    }
+    if (remaining <= 0) {
+      expire()
+      return undefined
+    }
+    const timer = setTimeout(expire, Math.min(remaining, 2_147_483_647))
+    return () => clearTimeout(timer)
+  }, [state.status, state.expiresAtUtc, handleApiError, pathname, clearSession])
+
   const value = useMemo(() => ({
     status: state.status,
     isInitializing: state.status === 'initializing' || state.status === 'idle',
     isAuthenticated: state.status === 'authenticated' && state.user !== null,
-    isAdmin: state.status === 'authenticated' && hasAdminRole(state.user),
+    isAdmin: state.status === 'authenticated' && state.isAdmin,
     user: state.user,
     expiresAtUtc: state.expiresAtUtc,
     csrfToken: state.csrfToken,
     login,
     logout,
+    logoutPending,
+    logoutError,
     clearSession,
     restoreSession,
     handleApiError,
-  }), [state, login, logout, clearSession, restoreSession, handleApiError])
+  }), [state, login, logout, logoutPending, logoutError, clearSession, restoreSession, handleApiError])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

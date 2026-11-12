@@ -1,3 +1,4 @@
+// Package services validates and manages transit route data.
 package services
 
 import (
@@ -17,8 +18,10 @@ var (
 	ErrTransitRouteConflict = errors.New("a route with that number and direction already exists")
 )
 
+// ValidationError reports invalid route input to the application layer.
 type ValidationError struct{ Message string }
 
+// Error returns the validation error message.
 func (e *ValidationError) Error() string { return e.Message }
 
 // CreateTransitRouteInput contains the fields callers may set. Imported source metadata
@@ -37,22 +40,27 @@ type UpdateTransitRouteInput struct {
 	IsActive  *bool   `json:"is_active"`
 }
 
+// TransitRouteService manages transit route records and validates changes.
 type TransitRouteService struct{ db *gorm.DB }
 
+// NewTransitRouteService creates a route service backed by the given database.
 func NewTransitRouteService(db *gorm.DB) *TransitRouteService { return &TransitRouteService{db: db} }
 
+// List returns the transit routes available to clients.
 func (s *TransitRouteService) List(ctx context.Context) ([]models.Route, error) {
 	routes := make([]models.Route, 0)
 	err := s.db.WithContext(ctx).Order("id").Find(&routes).Error
 	return routes, err
 }
 
+// Get returns one transit route by identifier.
 func (s *TransitRouteService) Get(ctx context.Context, id int) (models.Route, error) {
 	var route models.Route
 	err := s.db.WithContext(ctx).First(&route, id).Error
 	return route, transitRouteError(err)
 }
 
+// Create validates and creates a transit route.
 func (s *TransitRouteService) Create(ctx context.Context, input CreateTransitRouteInput) (models.Route, error) {
 	route := models.Route{
 		Number: strings.TrimSpace(input.Number), Name: strings.TrimSpace(input.Name),
@@ -71,6 +79,7 @@ func (s *TransitRouteService) Create(ctx context.Context, input CreateTransitRou
 	return route, transitRouteError(err)
 }
 
+// Update validates and updates a transit route.
 func (s *TransitRouteService) Update(ctx context.Context, id int, input UpdateTransitRouteInput) (models.Route, error) {
 	updates, err := transitRouteUpdates(input)
 	if err != nil {

@@ -1,5 +1,6 @@
 package models
 
+// RoutePattern represents an ordered variant of a route.
 type RoutePattern struct {
 	ID        int    `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	SourceID  string `gorm:"column:source_id;type:text;not null;unique" json:"source_id"`
@@ -13,6 +14,7 @@ type RoutePattern struct {
 	PatternStops []RoutePatternStop `gorm:"foreignKey:PatternID;constraint:OnDelete:CASCADE" json:"pattern_stops,omitempty"`
 }
 
+// TableName returns the database table used for RoutePattern records.
 func (RoutePattern) TableName() string {
 	return "route_patterns"
 }

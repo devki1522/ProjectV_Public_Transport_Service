@@ -2,6 +2,7 @@ package models
 
 import "encoding/json"
 
+// RouteShape represents the geographic shape of a route.
 type RouteShape struct {
 	ID       int             `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	SourceID string          `gorm:"column:source_id;type:text;not null;unique" json:"source_id"`
@@ -10,6 +11,7 @@ type RouteShape struct {
 	RoutePatterns []RoutePattern `gorm:"foreignKey:ShapeID;constraint:OnDelete:RESTRICT" json:"route_patterns,omitempty"`
 }
 
+// TableName returns the database table used for RouteShape records.
 func (RouteShape) TableName() string {
 	return "route_shapes"
 }

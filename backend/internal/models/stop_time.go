@@ -1,5 +1,6 @@
 package models
 
+// StopTime represents the scheduled arrival and departure at a route stop.
 type StopTime struct {
 	ID            int    `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	TripID        int    `gorm:"size:32;column:trip_id;not null;uniqueIndex:uq_stop_times_trip_route_stop" json:"trip_id"`
@@ -14,6 +15,7 @@ type StopTime struct {
 	Route Route `gorm:"foreignKey:RouteID;references:ID;constraint:-" json:"route,omitempty"`
 }
 
+// TableName returns the database table used for StopTime records.
 func (StopTime) TableName() string {
 	return "stop_times"
 }

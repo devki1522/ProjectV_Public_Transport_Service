@@ -50,6 +50,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --prefix frontend
+      - name: Test development authentication setup
+        run: node --test scripts/setup-auth.test.mjs
       - name: Run frontend behavior tests
         run: npm test --prefix frontend
       - name: Build frontend
@@ -76,3 +78,21 @@ jobs:
           name: backend-pkgsite-documentation
           path: docs/backend/backend-documentation.zip
           if-no-files-found: error
+
+  swagger-documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+      - name: Generate Swagger specification
+        run: npm run docs:api
+      - name: Check committed specification is current
+        run: |
+          git diff --exit-code -- backend/docs
+          test -z "$(git ls-files --others --exclude-standard backend/docs)"

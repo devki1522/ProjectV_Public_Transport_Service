@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if command -v wsl.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+  repo_win="$(cygpath -w "$(git rev-parse --show-toplevel)")"
+  exec wsl.exe --cd "$repo_win" --exec sh -c 'exec /usr/bin/node node_modules/lefthook/bin/index.js run pre-commit "$@"' sh "$@"
+fi
+
+exec node node_modules/lefthook/bin/index.js run pre-commit "$@"

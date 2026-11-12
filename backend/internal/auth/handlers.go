@@ -15,14 +15,15 @@ const maxLoginBodyBytes = 64 * 1024
 
 // Handler serves authentication endpoints: login, me, and logout.
 type Handler struct {
-	provider   Provider
-	validator  *JWTValidator
-	sessions   SessionStore
-	csrf       *CSRFProtector
-	throttler  *LoginThrottler
-	cookieName string
-	secure     bool
-	now        func() time.Time
+	provider     Provider
+	validator    *JWTValidator
+	sessions     SessionStore
+	csrf         *CSRFProtector
+	throttler    *LoginThrottler
+	requiredRole string
+	cookieName   string
+	secure       bool
+	now          func() time.Time
 }
 
 // NewHandler creates an HTTP handler for /api/auth/* endpoints.
@@ -34,26 +35,29 @@ func NewHandler(
 	throttler *LoginThrottler,
 	cookieName string,
 	secure bool,
+	requiredRole string,
 	now func() time.Time,
 ) *Handler {
 	if now == nil {
 		now = time.Now
 	}
 	return &Handler{
-		provider:   provider,
-		validator:  validator,
-		sessions:   sessions,
-		csrf:       csrf,
-		throttler:  throttler,
-		cookieName: cookieName,
-		secure:     secure,
-		now:        now,
+		requiredRole: requiredRole,
+		provider:     provider,
+		validator:    validator,
+		sessions:     sessions,
+		csrf:         csrf,
+		throttler:    throttler,
+		cookieName:   cookieName,
+		secure:       secure,
+		now:          now,
 	}
 }
 
 // SessionResponse is the normalized user, expiration, and CSRF payload returned by login and /me.
 // It deliberately never includes the JWT access token or opaque session ID.
 type SessionResponse struct {
+	IsAdmin      bool      `json:"isAdmin"`
 	User         Principal `json:"user"`
 	ExpiresAtUTC string    `json:"expiresAtUtc"`
 	CSRFToken    string    `json:"csrfToken"`
@@ -61,6 +65,21 @@ type SessionResponse struct {
 
 // Login authenticates credentials through the configured provider, validates the JWT,
 // rotates any prior session, sets an HttpOnly session cookie, and returns user + CSRF metadata.
+// @Summary Sign in and establish an opaque cookie session
+// @Tags authentication
+// @Produce json
+// @Accept json
+// @Param body body LoginRequest true "Credentials"
+// @Description Requires a trusted Origin. Returns a CSRF token and backend-derived isAdmin capability; never returns the JWT.
+// @Success 200 {object} SessionResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 429 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
+// @Router /api/auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 
@@ -113,10 +132,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setSessionCookie(w, h.cookieName, rawSessionID, session.ExpiresAt, h.now(), h.secure)
-	writeAuthJSON(w, http.StatusOK, sessionResponseFrom(session))
+	writeAuthJSON(w, http.StatusOK, h.sessionResponseFrom(session))
 }
 
 // Me returns the active authenticated principal and CSRF token.
+// @Summary Restore the authenticated session
+// @Tags authentication
+// @Produce json
+// @Success 200 {object} SessionResponse
+// @Failure 401 {object} map[string]string
+// @Router /api/auth/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 	session, ok := SessionFromContext(r.Context())
@@ -124,11 +149,19 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	writeAuthJSON(w, http.StatusOK, sessionResponseFrom(session))
+	writeAuthJSON(w, http.StatusOK, h.sessionResponseFrom(session))
 }
 
 // Logout invalidates the local session and clears the browser session cookie.
 // If an active session exists, CSRF token validation is enforced.
+// @Summary Invalidate the local session and clear its cookie
+// @Tags authentication
+// @Produce json
+// @Param X-CSRF-Token header string false "Required for an active session"
+// @Description Requires a trusted Origin. Expired or missing sessions are cleared idempotently.
+// @Success 200 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Router /api/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 
@@ -151,8 +184,9 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	writeAuthJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }
 
-func sessionResponseFrom(session Session) SessionResponse {
+func (h *Handler) sessionResponseFrom(session Session) SessionResponse {
 	return SessionResponse{
+		IsAdmin:      h.requiredRole != "" && session.Principal.HasRole(h.requiredRole),
 		User:         session.Principal,
 		ExpiresAtUTC: session.ExpiresAt.UTC().Format(time.RFC3339),
 		CSRFToken:    session.CSRFToken,

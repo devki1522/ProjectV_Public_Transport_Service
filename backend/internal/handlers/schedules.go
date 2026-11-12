@@ -1,3 +1,4 @@
+// Package handlers translates transit service results into HTTP responses.
 package handlers
 
 import (
@@ -13,21 +14,35 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// ScheduleService defines the schedule operations required by HTTP handlers.
 type ScheduleService interface {
 	Timetable(context.Context, int, string) (transit.Timetable, error)
 	Departures(context.Context, transit.DepartureQuery) ([]transit.Departure, error)
 	Stop(context.Context, int, transit.DepartureQuery) (transit.StopDetails, error)
 }
 
+// ScheduleHandler serves timetable, departure, and stop HTTP requests.
 type ScheduleHandler struct {
 	service ScheduleService
 	now     func() time.Time
 }
 
+// NewScheduleHandler creates a schedule HTTP handler for the given service.
 func NewScheduleHandler(service ScheduleService) *ScheduleHandler {
 	return &ScheduleHandler{service: service, now: time.Now}
 }
 
+// Timetable returns scheduled trips for a route and service date.
+// @Tags schedules
+// @Produce json
+// @Summary Get a route timetable
+// @Param id path int true "Positive route ID" minimum(1)
+// @Param date query string true "Agency-local service date (YYYY-MM-DD)" example(2026-11-10)
+// @Success 200 {object} transit.Timetable
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id}/schedule [get]
 func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -46,6 +61,23 @@ func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Departures returns departures matching the requested filters and time window.
+// @Tags schedules
+// @Produce json
+// @Summary Get upcoming departures
+// @Description Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.
+// @Param stop_id query int false "Positive stop_id" minimum(1)
+// @Param route_id query int false "Positive route_id" minimum(1)
+// @Param trip_id query int false "Positive trip_id" minimum(1)
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 2 hours"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {array} transit.Departure
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+
+// @Router /api/departures [get]
 func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 	q, err := h.departureQuery(r)
 	if err != nil {
@@ -60,6 +92,23 @@ func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Stop loads stop details and associated departures.
+// @Tags schedules
+// @Produce json
+// @Summary Get stop details and upcoming departures
+// @Description Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.
+// @Param id path int true "Positive stop ID" minimum(1)
+// @Param stop_id query int false "Positive stop_id" minimum(1)
+// @Param route_id query int false "Positive route_id" minimum(1)
+// @Param trip_id query int false "Positive trip_id" minimum(1)
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 2 hours"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {object} transit.StopDetails
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/stops/{id} [get]
 func (h *ScheduleHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -173,4 +222,73 @@ func writeScheduleError(w http.ResponseWriter, err error) {
 		log.Printf("schedule operation failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unable to retrieve schedule information"})
 	}
+}
+
+// StopDepartures returns departures scoped to the resource in the path.
+//
+// @Tags schedules
+// @Produce json
+// @Summary Get upcoming departures
+// @Description Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.
+// @Param stop_id query int false "Positive stop_id" minimum(1)
+// @Param route_id query int false "Positive route_id" minimum(1)
+// @Param trip_id query int false "Positive trip_id" minimum(1)
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 2 hours"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {array} transit.Departure
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+
+// @Param stopID path int true "Positive resource ID" minimum(1)
+// @Router /api/stops/{stopID}/departures [get]
+func (h *ScheduleHandler) StopDepartures(w http.ResponseWriter, r *http.Request) {
+	h.Departures(w, r)
+}
+
+// RouteDepartures returns departures scoped to the resource in the path.
+//
+// @Tags schedules
+// @Produce json
+// @Summary Get upcoming departures
+// @Description Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.
+// @Param stop_id query int false "Positive stop_id" minimum(1)
+// @Param route_id query int false "Positive route_id" minimum(1)
+// @Param trip_id query int false "Positive trip_id" minimum(1)
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 2 hours"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {array} transit.Departure
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+
+// @Param routeID path int true "Positive resource ID" minimum(1)
+// @Router /api/routes/{routeID}/departures [get]
+func (h *ScheduleHandler) RouteDepartures(w http.ResponseWriter, r *http.Request) {
+	h.Departures(w, r)
+}
+
+// TripDepartures returns departures scoped to the resource in the path.
+//
+// @Tags schedules
+// @Produce json
+// @Summary Get upcoming departures
+// @Description Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.
+// @Param stop_id query int false "Positive stop_id" minimum(1)
+// @Param route_id query int false "Positive route_id" minimum(1)
+// @Param trip_id query int false "Positive trip_id" minimum(1)
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 2 hours"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {array} transit.Departure
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+
+// @Param tripID path int true "Positive resource ID" minimum(1)
+// @Router /api/trips/{tripID}/departures [get]
+func (h *ScheduleHandler) TripDepartures(w http.ResponseWriter, r *http.Request) {
+	h.Departures(w, r)
 }

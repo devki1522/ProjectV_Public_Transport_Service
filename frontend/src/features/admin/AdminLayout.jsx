@@ -5,7 +5,7 @@ import { Link } from '../../lib/router.jsx'
 import { useRouter } from '../../lib/routerState.js'
 
 export function AdminLayout({ title, children }) {
-  const { user, logout } = useAuth()
+  const { user, logout, logoutPending, logoutError } = useAuth()
   const { pathname } = useRouter()
 
   useEffect(() => {
@@ -46,14 +46,15 @@ export function AdminLayout({ title, children }) {
 
         <div className="admin-user-bar">
           <span className="admin-username" title="Signed-in administrator">{user?.username}</span>
-          <button className="button button-secondary admin-logout-btn" type="button" onClick={logout}>
+          <button className="button button-secondary admin-logout-btn" type="button" onClick={logout} disabled={logoutPending}>
             <LogOut size={16} aria-hidden="true" />
-            <span>Sign out</span>
+            <span>{logoutPending ? 'Signing out...' : 'Sign out'}</span>
           </button>
         </div>
       </header>
 
       <main id="admin-main-content" className="admin-main" tabIndex={-1}>
+        {logoutError && <p className="error-notice" role="alert">{logoutError}</p>}
         {children}
       </main>
 

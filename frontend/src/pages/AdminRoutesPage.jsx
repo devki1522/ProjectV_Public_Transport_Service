@@ -51,6 +51,7 @@ export function AdminRoutesPage() {
   const [deactivatePending, setDeactivatePending] = useState(false)
   const [actionNotice, setActionNotice] = useState(null)
   const [actionError, setActionError] = useState(null)
+  const mutationPending = createPending || editPending || deactivatePending
 
   useEffect(() => {
     if (catalog.error?.status === 401 || catalog.error?.status === 403) {
@@ -72,7 +73,7 @@ export function AdminRoutesPage() {
 
   async function handleCreateSubmit(event) {
     event.preventDefault()
-    if (createPending) return
+    if (mutationPending) return
 
     const validationError = validateRouteFields(createForm)
     if (validationError) {
@@ -108,6 +109,7 @@ export function AdminRoutesPage() {
   }
 
   function startEdit(route) {
+    if (mutationPending) return
     setEditingId(route.id)
     setEditForm({
       number: route.number,
@@ -123,13 +125,16 @@ export function AdminRoutesPage() {
 
   async function handleEditSubmit(event) {
     event.preventDefault()
-    if (editPending || editingId === null) return
+    if (mutationPending || editingId === null) return
 
     const validationError = validateRouteFields(editForm)
     if (validationError) {
       setEditError(validationError)
       return
     }
+
+    const current = routes.find((route) => route.id === editingId)
+    if (current?.is_active && !editForm.is_active && !window.confirm('Deactivate this route? It will be hidden from public schedules. Related schedules and stops are preserved.')) return
 
     setEditPending(true)
     setEditError(null)
@@ -161,7 +166,7 @@ export function AdminRoutesPage() {
   }
 
   async function handleConfirmDeactivate() {
-    if (!confirmDeactivate || deactivatePending) return
+    if (!confirmDeactivate || mutationPending) return
     setDeactivatePending(true)
     setActionError(null)
     setActionNotice(null)
@@ -239,7 +244,7 @@ export function AdminRoutesPage() {
                 value={createForm.number}
                 onChange={(event) => setCreateForm((f) => ({ ...f, number: event.target.value }))}
                 placeholder="e.g. 7"
-                disabled={createPending}
+                disabled={mutationPending}
                 required
               />
             </div>
@@ -253,7 +258,7 @@ export function AdminRoutesPage() {
                 value={createForm.name}
                 onChange={(event) => setCreateForm((f) => ({ ...f, name: event.target.value }))}
                 placeholder="e.g. King"
-                disabled={createPending}
+                disabled={mutationPending}
                 required
               />
             </div>
@@ -264,7 +269,7 @@ export function AdminRoutesPage() {
                 id="create-route-direction"
                 value={createForm.direction}
                 onChange={(event) => setCreateForm((f) => ({ ...f, direction: event.target.value }))}
-                disabled={createPending}
+                disabled={mutationPending}
               >
                 {DIRECTIONS.map((dir) => (
                   <option key={dir.value} value={dir.value}>{dir.label}</option>
@@ -272,7 +277,7 @@ export function AdminRoutesPage() {
               </select>
             </div>
 
-            <button className="button button-primary" type="submit" disabled={createPending}>
+            <button className="button button-primary" type="submit" disabled={mutationPending}>
               <Plus size={16} aria-hidden="true" />
               {createPending ? 'Creating route…' : 'Create route'}
             </button>
@@ -324,7 +329,7 @@ export function AdminRoutesPage() {
                   className="button button-danger"
                   type="button"
                   onClick={handleConfirmDeactivate}
-                  disabled={deactivatePending}
+                  disabled={mutationPending}
                 >
                   {deactivatePending ? 'Deactivating…' : 'Confirm deactivate'}
                 </button>
@@ -332,7 +337,7 @@ export function AdminRoutesPage() {
                   className="button button-secondary"
                   type="button"
                   onClick={() => setConfirmDeactivate(null)}
-                  disabled={deactivatePending}
+                  disabled={mutationPending}
                 >
                   Cancel
                 </button>
@@ -344,7 +349,7 @@ export function AdminRoutesPage() {
             <form className="admin-edit-panel" onSubmit={handleEditSubmit} noValidate aria-label="Edit selected route">
               <div className="admin-edit-header">
                 <h3>Edit route #{editingId}</h3>
-                <button className="text-button" type="button" onClick={() => setEditingId(null)} disabled={editPending}>
+                <button className="text-button" type="button" onClick={() => setEditingId(null)} disabled={mutationPending}>
                   Cancel editing
                 </button>
               </div>
@@ -365,7 +370,7 @@ export function AdminRoutesPage() {
                     maxLength={20}
                     value={editForm.number}
                     onChange={(event) => setEditForm((f) => ({ ...f, number: event.target.value }))}
-                    disabled={editPending}
+                    disabled={mutationPending}
                     required
                   />
                 </div>
@@ -377,7 +382,7 @@ export function AdminRoutesPage() {
                     maxLength={100}
                     value={editForm.name}
                     onChange={(event) => setEditForm((f) => ({ ...f, name: event.target.value }))}
-                    disabled={editPending}
+                    disabled={mutationPending}
                     required
                   />
                 </div>
@@ -387,7 +392,7 @@ export function AdminRoutesPage() {
                     id="edit-route-direction"
                     value={editForm.direction}
                     onChange={(event) => setEditForm((f) => ({ ...f, direction: event.target.value }))}
-                    disabled={editPending}
+                    disabled={mutationPending}
                   >
                     {DIRECTIONS.map((dir) => (
                       <option key={dir.value} value={dir.value}>{dir.label}</option>
@@ -400,7 +405,7 @@ export function AdminRoutesPage() {
                     id="edit-route-status"
                     value={editForm.is_active ? 'active' : 'inactive'}
                     onChange={(event) => setEditForm((f) => ({ ...f, is_active: event.target.value === 'active' }))}
-                    disabled={editPending}
+                    disabled={mutationPending}
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -409,7 +414,7 @@ export function AdminRoutesPage() {
               </div>
 
               <div className="admin-edit-actions">
-                <button className="button button-primary" type="submit" disabled={editPending}>
+                <button className="button button-primary" type="submit" disabled={mutationPending}>
                   {editPending ? 'Saving changes…' : 'Save changes'}
                 </button>
               </div>
@@ -466,6 +471,7 @@ export function AdminRoutesPage() {
                             className="button button-secondary button-compact"
                             type="button"
                             onClick={() => startEdit(route)}
+                            disabled={mutationPending}
                           >
                             <Edit3 size={14} aria-hidden="true" />Edit
                           </button>
@@ -473,7 +479,9 @@ export function AdminRoutesPage() {
                             <button
                               className="button button-secondary button-compact"
                               type="button"
+                              disabled={mutationPending}
                               onClick={() => {
+                                if (mutationPending) return
                                 setConfirmDeactivate(route)
                                 setActionError(null)
                                 setActionNotice(null)

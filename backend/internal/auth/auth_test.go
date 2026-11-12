@@ -398,7 +398,7 @@ func TestSessionStoreExpiryRotationAndAuthHandlers(t *testing.T) {
 
 	csrf := NewCSRFProtector([]string{testTrustedOrigin})
 	throttler := NewLoginThrottler(3, time.Minute, false, clock.Now)
-	handler := NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", true, clock.Now)
+	handler := NewHandler(provider, validator, sessions, csrf, throttler, "transit_session", true, "TransitAdministrator", clock.Now)
 	mw := NewMiddleware(sessions, validator, "transit_session", true)
 
 	mux := http.NewServeMux()

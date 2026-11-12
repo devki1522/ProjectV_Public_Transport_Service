@@ -26,6 +26,7 @@ function validateSessionPayload(data) {
     !data.user ||
     typeof data.user.username !== 'string' ||
     !Array.isArray(data.user.roles) ||
+    typeof data.isAdmin !== 'boolean' ||
     typeof data.csrfToken !== 'string' ||
     !data.csrfToken
   ) {
@@ -110,13 +111,17 @@ export async function logoutSession(csrfToken) {
   if (csrfToken) {
     headers['X-CSRF-Token'] = csrfToken
   }
+  let response
   try {
-    await fetch('/api/auth/logout', {
+    response = await fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'same-origin',
       headers,
     })
   } catch {
-    // Clearing local auth state still proceeds so the user can sign in again.
+    throw new AuthApiError('Sign out could not be confirmed. Check your connection and try again.', 0, 'network')
+  }
+  if (!response.ok) {
+    throw new AuthApiError('Sign out could not be confirmed. Please try again.', response.status, 'logout_failed')
   }
 }

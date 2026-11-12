@@ -90,3 +90,16 @@ The build writes static files to `dist/`. Vitest and React Testing Library
 cover resident interactions, API filters, date/time boundaries, estimate
 fallback, retries and stale-response protection. Root `npm test` runs both Go
 and frontend suites. CI checks frontend tests and the production build.
+
+### Session capability and logout recovery
+
+Login and `/api/auth/me` return `isAdmin`, derived by the backend from the signed
+JWT roles and `AUTH_REQUIRED_ROLE`. The frontend uses this capability for page
+access; all administrative APIs still enforce the configured role independently.
+The frontend returns to sign-in at session expiration. If a logout request fails,
+it keeps the session and CSRF token available and shows an error so sign-out can
+be retried; it does not report successful logout before backend invalidation.
+
+Run `npm run auth:setup` from the repository root for local mock setup. It preserves
+existing nonempty environment values and database configuration. Mock passwords
+are stored only in the ignored `backend/.env`.

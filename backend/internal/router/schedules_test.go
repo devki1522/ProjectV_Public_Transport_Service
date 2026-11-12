@@ -23,14 +23,19 @@ type fakeSchedules struct {
 	called bool
 }
 
+// Timetable returns scheduled trips for a route and service date.
 func (f *fakeSchedules) Timetable(_ context.Context, id int, date string) (transit.Timetable, error) {
 	f.id, f.date, f.called = id, date, true
 	return transit.Timetable{ServiceDate: date, Trips: []transit.ScheduledTrip{}}, f.err
 }
+
+// Departures returns departures matching the requested filters and time window.
 func (f *fakeSchedules) Departures(_ context.Context, q transit.DepartureQuery) ([]transit.Departure, error) {
 	f.query, f.called = q, true
 	return []transit.Departure{{TripID: 9, Route: transit.Route{ID: 7, Direction: "direction_0"}, ScheduledDeparture: q.From}}, f.err
 }
+
+// Stop loads stop details and associated departures.
 func (f *fakeSchedules) Stop(_ context.Context, id int, q transit.DepartureQuery) (transit.StopDetails, error) {
 	f.id, f.query, f.called = id, q, true
 	return transit.StopDetails{Stop: transit.Stop{ID: id}, Departures: []transit.Departure{}}, f.err
@@ -44,6 +49,7 @@ func scheduleRequest(f *fakeSchedules, path string) *httptest.ResponseRecorder {
 	return recorder
 }
 
+// TestScheduleRoutes verifies schedule routes.
 func TestScheduleRoutes(t *testing.T) {
 	for _, tc := range []struct {
 		path              string
@@ -86,6 +92,7 @@ func TestScheduleRoutes(t *testing.T) {
 	}
 }
 
+// TestExplicitDepartureWindow verifies explicit departure window.
 func TestExplicitDepartureWindow(t *testing.T) {
 	f := &fakeSchedules{}
 	response := scheduleRequest(f, "/api/departures?stop_id=1&from=2026-11-10T12:00:00Z&until=2026-11-10T13:00:00Z&limit=5")
@@ -94,6 +101,7 @@ func TestExplicitDepartureWindow(t *testing.T) {
 	}
 }
 
+// TestInvalidScheduleRequests verifies invalid schedule requests.
 func TestInvalidScheduleRequests(t *testing.T) {
 	for _, path := range []string{
 		"/api/routes/0/schedule?date=2026-11-10", "/api/routes/abc/schedule", "/api/routes/2147483648/schedule",
@@ -113,6 +121,7 @@ func TestInvalidScheduleRequests(t *testing.T) {
 	}
 }
 
+// TestScheduleHTTPErrorMapping verifies schedule HTTP error mapping.
 func TestScheduleHTTPErrorMapping(t *testing.T) {
 	for _, tc := range []struct {
 		err    error

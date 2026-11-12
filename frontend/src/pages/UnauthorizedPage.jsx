@@ -4,7 +4,7 @@ import { useAuth } from '../auth/authState.js'
 import { Link } from '../lib/router.jsx'
 
 export function UnauthorizedPage() {
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, logout, logoutPending, logoutError } = useAuth()
 
   useEffect(() => {
     document.title = 'Access denied · Transit Administration'
@@ -25,22 +25,22 @@ export function UnauthorizedPage() {
           <div className="auth-card-header">
             <span className="auth-badge auth-badge-error"><ShieldAlert size={18} aria-hidden="true" /></span>
             <div>
-              <p className="auth-eyebrow">Transit Administration</p>
               <h1 id="unauthorized-heading">Access denied</h1>
             </div>
           </div>
 
           <p className="auth-description">
             {isAuthenticated && user
-              ? `Signed in as ${user.username}, which does not have the TransitAdministrator role required for administrator access.`
+              ? `Signed in as ${user.username}, which does not have permission to access transit administration.`
               : 'You do not have permission to view the Transit Administration portal.'}
           </p>
 
+          {logoutError && <p className="error-notice" role="alert">{logoutError}</p>}
           <div className="auth-actions">
             <Link className="button button-primary" to="/">Return to public schedules</Link>
             {isAuthenticated ? (
-              <button className="button button-secondary" type="button" onClick={logout}>
-                <LogOut size={16} aria-hidden="true" />Sign out
+              <button className="button button-secondary" type="button" onClick={logout} disabled={logoutPending}>
+                <LogOut size={16} aria-hidden="true" />{logoutPending ? 'Signing out...' : 'Sign out'}
               </button>
             ) : (
               <Link className="button button-secondary" to="/login">Administrator sign in</Link>

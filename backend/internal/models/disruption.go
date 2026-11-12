@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+// Disruption represents a service disruption and its affected routes.
 type Disruption struct {
 	ID            int        `gorm:"size:32;primaryKey;generated:identity always;column:id" json:"id"`
 	Type          string     `gorm:"column:type;type:varchar(30);not null;check:type IN ('delay', 'detour', 'cancellation', 'stop_closure', 'road_closure', 'construction', 'emergency', 'traffic_restriction', 'accessibility')" json:"type"`
@@ -15,6 +16,7 @@ type Disruption struct {
 	DisruptionRoutes []DisruptionRoute `gorm:"foreignKey:DisruptionID;constraint:OnDelete:CASCADE" json:"disruption_routes,omitempty"`
 }
 
+// TableName returns the database table used for Disruption records.
 func (Disruption) TableName() string {
 	return "disruptions"
 }

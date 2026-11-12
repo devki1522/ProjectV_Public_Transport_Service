@@ -33,17 +33,17 @@ if (-not (Test-Path backend/.env)) { Copy-Item backend/.env.example backend/.env
 
 Use `cp -n` in bash (`cp -n .env.example .env && cp -n backend/.env.example backend/.env`). Keep existing `.env` files when updating a checkout, and never commit real secrets.
 
-Before starting the backend in mock development mode (`APP_ENV=development`, `AUTH_PROVIDER=mock`), generate a 32+ byte `MOCK_JWT_SECRET` and choose local passwords for `MOCK_ADMIN_PASSWORD` and `MOCK_USER_PASSWORD` in `backend/.env`:
+Configure local mock authentication without overwriting existing database settings:
 
 ```powershell
-# PowerShell: print a random 32-byte base64url secret (paste into MOCK_JWT_SECRET in backend/.env)
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '\+','-' -replace '/','_' -replace '=',''
+npm run auth:setup
 ```
 
-```bash
-# bash / WSL: print a random 32-byte hex secret
-openssl rand -hex 32
-```
+This creates missing environment files, fills missing development auth settings,
+and generates cryptographically random local passwords and a signing secret.
+Existing nonempty values are preserved. Read `MOCK_ADMIN_PASSWORD` or
+`MOCK_USER_PASSWORD` in your local `backend/.env` to sign in. No credentials are
+printed or committed. The command refuses non-development/non-mock settings.
 
 Development mock usernames (passwords come from `backend/.env`):
 - `transit.admin` (`TransitAdministrator` role — can view `/admin` and manage routes)
@@ -130,3 +130,30 @@ included, not private implementation symbols.
 
 GitHub Actions runs the same build and uploads the
 `backend-pkgsite-documentation` artifact containing the ZIP.
+
+## HTTP API documentation (Swag)
+
+Swagger UI is served by the backend at http://localhost:8080/swagger/index.html.
+Use the backend URL; the current Vite proxy forwards only `/api`.
+The UI serves bundled assets and loads its specification from `/swagger/doc.json`.
+No external CDN is required. Requests target the same host that serves the UI.
+
+From the repository root, regenerate the committed specification after changing
+HTTP annotations or request/response types:
+
+```bash
+npm run docs:api
+```
+
+This runs Swag v1.16.6 and produces `backend/docs/docs.go`, `swagger.json`, and
+`swagger.yaml`. Go must be on PATH; the first run downloads the pinned generator.
+Commit all three generated files with their source changes. CI regenerates them
+and rejects stale output. Docker builds use these committed files.
+
+Keep ordinary Go doc comments above Swag annotations. Swag documents the HTTP
+contract; the existing `npm run docs:build` pkgsite build documents Go packages,
+types and functions and remains independent. Swagger annotations may appear as
+text in pkgsite. Swag output uses Swagger 2.0.
+
+The interactive UI can execute real requests, including route writes. Route writes require an administrator session, a trusted Origin, and
+a CSRF token; DELETE deactivates rather than removes a route. Use a development database when trying mutations.

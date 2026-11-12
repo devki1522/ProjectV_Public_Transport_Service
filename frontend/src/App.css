@@ -154,7 +154,7 @@
 .admin-main { padding-bottom: 24px; }
 .admin-page-heading { align-items: center; }
 
-.admin-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+.admin-panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
 .admin-panel-header { margin-bottom: 18px; }
 .admin-panel-header h2 { font-size: 18px; }
 .admin-panel-header p { margin-top: 5px; font-size: 13px; color: var(--muted); }
@@ -248,6 +248,7 @@
 @media (max-width: 767px) {
   .app-shell { padding: 0 max(18px, env(safe-area-inset-left)); }
   .site-header { height: 80px; }
+  .site-header.admin-header { height: auto; }
   .header-location { display: none; }
   .brand { font-size: 17px; }
   .brand-mark { width: 40px; height: 40px; }

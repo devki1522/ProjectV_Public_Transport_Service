@@ -33,6 +33,7 @@ type TransitRouteHandler struct {
 	audit   *slog.Logger
 }
 
+// NewTransitRouteHandler creates a route HTTP handler for the given service.
 func NewTransitRouteHandler(service TransitRouteService) *TransitRouteHandler {
 	return &TransitRouteHandler{
 		service: service,
@@ -63,6 +64,13 @@ func transitRouteResponse(route models.Route) TransitRouteResponse {
 	return TransitRouteResponse{route.ID, route.Number, route.Name, route.Direction, route.IsActive, route.SourceID, route.RouteType}
 }
 
+// List returns the transit routes available to clients.
+// @Summary List all routes, including inactive routes
+// @Tags routes
+// @Produce json
+// @Success 200 {array} TransitRouteResponse
+// @Failure 500 {object} map[string]string
+// @Router /api/routes [get]
 func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	routes, err := h.service.List(r.Context())
 	if err != nil {
@@ -76,6 +84,16 @@ func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+// Get returns one transit route by identifier.
+// @Summary Get a route
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Success 200 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [get]
 func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -89,6 +107,21 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, transitRouteResponse(route))
 }
 
+// Create validates and creates a transit route.
+// @Summary Create a route
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Tags routes
+// @Produce json
+// @Accept json
+// @Param body body services.CreateTransitRouteInput true "Route fields"
+// @Success 201 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes [post]
 func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	var input services.CreateTransitRouteInput
@@ -107,6 +140,23 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, transitRouteResponse(route))
 }
 
+// Update validates and updates a transit route.
+// @Summary Update route fields
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Accept json
+// @Param body body services.UpdateTransitRouteInput true "Route fields"
+// @Success 200 {object} TransitRouteResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [patch]
 func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)
@@ -129,6 +179,20 @@ func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, transitRouteResponse(route))
 }
 
+// Delete deactivates a transit route without removing related data.
+// @Summary Deactivate a route while preserving related records
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Tags routes
+// @Produce json
+// @Param id path int true "Positive route ID" minimum(1)
+// @Success 204 "Route deactivated"
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/routes/{id} [delete]
 func (h *TransitRouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)
