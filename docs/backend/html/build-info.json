@@ -1,0 +1,15 @@
+{
+  "pkgsiteVersion": "v0.6.0",
+  "module": "github.com/devki1522/ProjectV_Public_Transport_Service/backend",
+  "packages": [
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/cmd/api",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services",
+    "github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
+  ],
+  "go": "go version go1.27.3 linux/amd64"
+}
