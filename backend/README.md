@@ -12,7 +12,44 @@ The Go API connects to PostgreSQL before starting its HTTP server. Use the
 ```
 
 The health handler confirms that the server is running without querying the
-database. Route CRUD is available at `/api/routes` and `/api/routes/{id}`.
+database. Public route reads are available at `GET /api/routes` and
+`GET /api/routes/{id}`; route mutations (`POST`, `PATCH`, `DELETE`) require an
+authenticated `TransitAdministrator` session and CSRF validation.
+
+### Authentication and administrator portal
+
+The backend owns browser sessions, HS256 JWT validation, CSRF verification, and
+authorization. The frontend never receives the JWT or raw session identifier.
+
+| Endpoint | Auth / CSRF | Response |
+| --- | --- | --- |
+| `POST /api/auth/login` | Trusted `Origin`, JSON body, rate-limited | Sets opaque `HttpOnly` session cookie; returns `{ user, expiresAtUtc, csrfToken }` |
+| `GET /api/auth/me` | Valid session cookie | Returns `{ user, expiresAtUtc, csrfToken }` or `401` |
+| `POST /api/auth/logout` | Trusted `Origin`; `X-CSRF-Token` when session active | Invalidates local session and clears cookie |
+| `GET /api/admin/health` | Session + `TransitAdministrator` | `200 { "status": "ok" }` |
+| `GET /api/admin/dashboard` | Session + `TransitAdministrator` | `200 { total_routes, active_routes, inactive_routes }` from PostgreSQL |
+| `POST /api/routes` | Session + `TransitAdministrator` + CSRF | Creates a route (`201`) and logs a structured audit event |
+| `PATCH /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Updates a route (`200`) and logs a structured audit event |
+| `DELETE /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Soft-deactivates a route (`204`, schedules preserved) and logs a structured audit event |
+
+Auth and admin responses include `Cache-Control: no-store`. Error codes use JSON:
+`400` invalid request, `401` invalid credentials or missing/expired session,
+`403` missing role or CSRF/origin failure, `429` throttled login, `502` invalid
+upstream response, `503` provider unavailable, and `504` upstream timeout.
+
+#### Session, CSRF, and expiration rules
+
+- **Session store**: In-memory store (`internal/auth.InMemorySessionStore`) behind a `SessionStore` interface ready for Redis. Backend restarts invalidate active sessions, and multiple backend instances require a shared store.
+- **Fifteen-minute expiration**: Both providers issue 15-minute JWTs. Session expiration is bounded by the JWT `exp` claim and never slides or extends (`rememberMe` is ignored).
+- **Cookie attributes**: `HttpOnly=true`, `SameSite=Lax`, `Path=/api`, no `Domain` attribute. Use `AUTH_COOKIE_SECURE=false` only for local `http://localhost`; `AUTH_COOKIE_SECURE=true` is enforced outside development.
+- **CSRF protection**: Login and all authenticated mutations require an `Origin` matching `AUTH_TRUSTED_ORIGINS`. Authenticated mutations (and logout when a session exists) also require the `X-CSRF-Token` header returned by `/api/auth/login` and `/api/auth/me`.
+- **Audit logging**: Route mutations emit structured JSON events (`timestamp`, `subject`, `operation`, `resource_type`, `resource_id`, `outcome`) to stdout without credentials or tokens. Application logs are not a durable compliance audit store.
+
+#### Providers and Registration Service integration
+
+- **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`): Authenticates `transit.admin` (`TransitAdministrator`) and `transit.user` (`User`) against `MOCK_ADMIN_PASSWORD` and `MOCK_USER_PASSWORD` and signs real 15-minute `HS256` JWTs with `MOCK_JWT_SECRET` (>= 32 bytes). Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
+- **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate`, validates the returned `HS256` JWT locally against `REGISTRATION_JWT_ISSUER`, `REGISTRATION_JWT_AUDIENCE`, and `REGISTRATION_JWT_SECRET`, and reads authorization exclusively from the signed `role` claim (string or array), ignoring top-level `role`. HTTPS is required outside explicit local development.
+- **External team dependency**: Inspected source (`CmRegistrationService`) seeds only `Administrator` and `User` roles. The Registration Service team must create and assign `TransitAdministrator` and provide production URL/issuer/audience/secret values before live integration verification.
 
 ### Resident schedules and departures
 
@@ -133,7 +170,8 @@ are listed in [`.env.example`](.env.example).
 - `internal/config/`: environment parsing and validation.
 - `internal/database/`: database connection and pool setup.
 - `internal/models/`: GORM models defining the database tables and constraints.
-- `internal/handlers/` and `internal/router/`: HTTP validation, responses and routing.
+- `internal/auth/`: authentication providers (`mock`, `registration`), HS256 JWT validation, session store, CSRF, throttling, and HTTP middleware/handlers.
+- `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, and routing.
 - `internal/transit/`: resident schedule logic, PostgreSQL reads, and estimate-provider interface.
 
 Keep startup small. As endpoints grow, separate HTTP handling, application

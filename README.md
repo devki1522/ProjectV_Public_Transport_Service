@@ -24,16 +24,30 @@ npm ci
 npm ci --prefix frontend
 ```
 
-For a new checkout, copy the environment examples in PowerShell:
+For a new checkout, copy the environment examples in PowerShell without overwriting existing files:
 
 ```powershell
-Copy-Item .env.example .env
-Copy-Item backend/.env.example backend/.env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+if (-not (Test-Path backend/.env)) { Copy-Item backend/.env.example backend/.env }
 ```
 
-Use `cp` instead of `Copy-Item` in bash. Keep existing `.env` files when updating
-a checkout, and never commit them. The examples contain matching local settings;
-see the [database guide](database/README.md#configuration) if you change credentials.
+Use `cp -n` in bash (`cp -n .env.example .env && cp -n backend/.env.example backend/.env`). Keep existing `.env` files when updating a checkout, and never commit real secrets.
+
+Before starting the backend in mock development mode (`APP_ENV=development`, `AUTH_PROVIDER=mock`), generate a 32+ byte `MOCK_JWT_SECRET` and choose local passwords for `MOCK_ADMIN_PASSWORD` and `MOCK_USER_PASSWORD` in `backend/.env`:
+
+```powershell
+# PowerShell: print a random 32-byte base64url secret (paste into MOCK_JWT_SECRET in backend/.env)
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '\+','-' -replace '/','_' -replace '=',''
+```
+
+```bash
+# bash / WSL: print a random 32-byte hex secret
+openssl rand -hex 32
+```
+
+Development mock usernames (passwords come from `backend/.env`):
+- `transit.admin` (`TransitAdministrator` role — can view `/admin` and manage routes)
+- `transit.user` (`User` role — can sign in, receives `403` from administrator APIs and `/unauthorized` in the UI)
 
 Start the app:
 
@@ -41,9 +55,11 @@ Start the app:
 docker compose up --build -d
 ```
 
-Open the UI at http://localhost:3000. Follow the
+Open the resident UI at http://localhost:3000 and the administrator sign-in at http://localhost:3000/login. Follow the
 [database seed instructions](database/README.md#seed-the-database) to load GRT data.
 To stop the app while keeping the database volume, run `docker compose down`.
+
+See [Backend Authentication](backend/README.md#authentication-and-administrator-portal) and [Design](docs/design.md) for session architecture, CSRF rules, and switching to the Registration Service.
 
 ## Shared checks
 

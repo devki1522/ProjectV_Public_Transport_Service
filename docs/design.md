@@ -11,9 +11,11 @@ resident timetables, upcoming departures, and stop detail endpoints. See the
 
 | Component | Responsibility | Implementation |
 | --- | --- | --- |
-| Frontend | Resident timetable and departure workflows | `frontend/src/App.jsx`, `frontend/src/features/` |
+| Frontend | Resident workflows and Transit Administrator portal | `frontend/src/App.jsx`, `frontend/src/auth/`, `frontend/src/pages/`, `frontend/src/features/` |
 | Development proxy | Forward `/api` requests to port 8080 | `frontend/vite.config.js` |
-| Backend | Register HTTP routes and serve JSON | `backend/cmd/api/main.go`, `backend/internal/router/` |
+| Backend | Register HTTP routes, auth/admin wiring, and serve JSON | `backend/cmd/api/main.go`, `backend/internal/router/` |
+| Authentication & CSRF | Provider abstraction (`mock`/`registration`), HS256 JWT validation, in-memory sessions, origin & CSRF token checks, login throttling | `backend/internal/auth/`, `backend/internal/config/` |
+| Admin & Transit writes | Dashboard route inventory counts and audited route mutations | `backend/internal/handlers/admin.go`, `backend/internal/handlers/transit_route.go`, `backend/internal/services/` |
 | Transit reads | Validate schedule queries, select recurring service, enrich optional estimates | `backend/internal/transit/` |
 | Database | Persist transit data | PostgreSQL and `backend/internal/models/` |
 
@@ -43,6 +45,14 @@ The health endpoint remains available without querying the database.
 ```json
 {"status":"ok"}
 ```
+
+## Authentication and administrator portal
+
+- **Backend-owned sessions**: `POST /api/auth/login` authenticates credentials via a startup-selected `auth.Provider` (`mock` in `APP_ENV=development` or `registration` outside development), validates the returned `HS256` JWT strictly against a single active trust configuration, creates an in-memory session keyed by SHA-256 hash of a 32+ byte opaque ID, sets an `HttpOnly`, `SameSite=Lax`, `Path=/api` cookie (`Secure=true` outside development), and returns `{ user, expiresAtUtc, csrfToken }` without ever returning the JWT.
+- **Expiration and revalidation**: Session expiration is bounded by the signed 15-minute JWT `exp` claim (`rememberMe` does not extend lifetime). Authenticated requests revalidate the stored JWT against the fixed trust configuration and clock.
+- **Authorization and CSRF**: Resident reads (`GET /api/routes`, `GET /api/routes/{id}`, schedules, departures, stops) remain public. `POST`/`PATCH`/`DELETE /api/routes*` and `/api/admin/*` require `RequireAuthenticated` and `RequireRole("TransitAdministrator")`; all state-changing browser session requests require a trusted `Origin` (`AUTH_TRUSTED_ORIGINS`) and constant-time `X-CSRF-Token` validation.
+- **In-memory & audit limitations**: `InMemorySessionStore` is isolated behind `SessionStore` for future Redis migration; backend restarts invalidate sessions and multi-instance deployments require a shared store. Route mutations emit structured JSON audit events to stdout without sensitive bodies/secrets, which is not a durable compliance audit store.
+- **Registration Service status**: Implemented and verified against `CmRegistrationService` contract and fake HTTP servers (`POST /api/Login/authenticate`, `HS256`, string/array `role` claims, ignoring top-level `role`). Live verification against the deployed Registration Service remains pending until the Registration Service team creates and assigns `TransitAdministrator` and supplies deployment credentials/URL.
 
 ## Documentation maintenance
 
