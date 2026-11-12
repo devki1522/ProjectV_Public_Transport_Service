@@ -52,16 +52,26 @@ Ensure the backend is running. Stop the Compose frontend first to free port
 3000. In bash, use `API_PROXY_TARGET=http://localhost:8080 npm run dev -- --port 3000`.
 The default remains the Compose backend hostname.
 
+## Client routes and administrator portal
+
+- `/`: public resident timetable and departure workspace (no login required).
+- `/login`: administrator sign-in page (`rememberMe=false`, CSRF-protected same-origin login).
+- `/admin`: protected administrator dashboard showing live route inventory counts.
+- `/admin/transit`: protected route management (list including inactive routes, create, edit, activate/deactivate with confirmation).
+- `/unauthorized`: access-denied page for authenticated users lacking `TransitAdministrator`.
+
+Authentication restores via `GET /api/auth/me` using same-origin `HttpOnly` cookies. The `csrfToken` is kept in React memory only (never `localStorage` or `sessionStorage`), and `X-CSRF-Token` is sent on route mutations and logout. Backend `401` clears session state and returns to `/login`; `403` navigates to `/unauthorized`.
+
 ## Files and checks
 
 - `src/main.jsx`: React entry point.
-- `src/App.jsx`: application shell and selected route/date/view state.
-- `src/api/transit.js`: REST requests, response checks and safe request errors.
+- `src/App.jsx`: client route dispatch, router provider, and auth provider.
+- `src/auth/`: `AuthProvider` and `useAuth` state/error handling.
+- `src/api/`: `transit.js` (public reads), `auth.js`, and `admin.js`.
 - `src/hooks/useResource.js`: keyed requests, cancellation, retries and refresh.
-- `src/features/schedule/`: date-based timetable, paging and trip stop times.
-- `src/features/departures/`: departure board, filters and estimate presentation.
-- `src/components/`: shared route picker, loading, empty and error states.
-- `src/lib/transit.js`: agency-local dates, grouping, time filters and estimates.
+- `src/features/resident/` and `src/features/admin/`: resident workspace and administrator layout/guards.
+- `src/pages/`: `LoginPage`, `UnauthorizedPage`, `AdminDashboardPage`, `AdminRoutesPage`.
+- `src/lib/`: `transit.js`, `router.jsx`, and `routerState.js` (including open-redirect sanitization).
 - `src/App.css` and `src/index.css`: layout, components and shared design tokens.
 - [DESIGN.md](DESIGN.md): visual system and frontend design scope.
 
@@ -80,3 +90,16 @@ The build writes static files to `dist/`. Vitest and React Testing Library
 cover resident interactions, API filters, date/time boundaries, estimate
 fallback, retries and stale-response protection. Root `npm test` runs both Go
 and frontend suites. CI checks frontend tests and the production build.
+
+### Session capability and logout recovery
+
+Login and `/api/auth/me` return `isAdmin`, derived by the backend from the signed
+JWT roles and `AUTH_REQUIRED_ROLE`. The frontend uses this capability for page
+access; all administrative APIs still enforce the configured role independently.
+The frontend returns to sign-in at session expiration. If a logout request fails,
+it keeps the session and CSRF token available and shows an error so sign-out can
+be retried; it does not report successful logout before backend invalidation.
+
+Run `npm run auth:setup` from the repository root for local mock setup. It preserves
+existing nonempty environment values and database configuration. Mock passwords
+are stored only in the ignored `backend/.env`.

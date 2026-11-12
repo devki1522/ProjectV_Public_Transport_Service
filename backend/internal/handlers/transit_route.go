@@ -7,9 +7,13 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
 	"github.com/go-chi/chi/v5"
@@ -24,12 +28,25 @@ type TransitRouteService interface {
 	Deactivate(context.Context, int) error
 }
 
-// TransitRouteHandler serves HTTP requests for transit route management.
-type TransitRouteHandler struct{ service TransitRouteService }
+type TransitRouteHandler struct {
+	service TransitRouteService
+	audit   *slog.Logger
+}
 
 // NewTransitRouteHandler creates a route HTTP handler for the given service.
 func NewTransitRouteHandler(service TransitRouteService) *TransitRouteHandler {
-	return &TransitRouteHandler{service: service}
+	return &TransitRouteHandler{
+		service: service,
+		audit:   slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+	}
+}
+
+// NewTransitRouteHandlerWithAudit creates a TransitRouteHandler with an explicit structured audit logger.
+func NewTransitRouteHandlerWithAudit(service TransitRouteService, audit *slog.Logger) *TransitRouteHandler {
+	if audit == nil {
+		audit = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	}
+	return &TransitRouteHandler{service: service, audit: audit}
 }
 
 // TransitRouteResponse intentionally excludes GORM associations from API responses.
@@ -92,6 +109,10 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Create validates and creates a transit route.
 // @Summary Create a route
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
 // @Tags routes
 // @Produce json
 // @Accept json
@@ -102,21 +123,29 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/routes [post]
 func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var input services.CreateTransitRouteInput
 	if !decodeTransitRouteInput(w, r, &input) {
+		h.auditRouteMutation(r.Context(), "create", 0, "invalid_request")
 		return
 	}
 	route, err := h.service.Create(r.Context(), input)
 	if err != nil {
+		h.auditRouteMutation(r.Context(), "create", 0, auditOutcome(err))
 		writeTransitRouteError(w, err)
 		return
 	}
+	h.auditRouteMutation(r.Context(), "create", route.ID, "success")
 	w.Header().Set("Location", "/api/routes/"+strconv.Itoa(route.ID))
 	writeJSON(w, http.StatusCreated, transitRouteResponse(route))
 }
 
 // Update validates and updates a transit route.
 // @Summary Update route fields
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
 // @Tags routes
 // @Produce json
 // @Param id path int true "Positive route ID" minimum(1)
@@ -129,24 +158,33 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/routes/{id} [patch]
 func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)
 	if !ok {
+		h.auditRouteMutation(r.Context(), "update", 0, "invalid_request")
 		return
 	}
 	var input services.UpdateTransitRouteInput
 	if !decodeTransitRouteInput(w, r, &input) {
+		h.auditRouteMutation(r.Context(), "update", id, "invalid_request")
 		return
 	}
 	route, err := h.service.Update(r.Context(), id, input)
 	if err != nil {
+		h.auditRouteMutation(r.Context(), "update", id, auditOutcome(err))
 		writeTransitRouteError(w, err)
 		return
 	}
+	h.auditRouteMutation(r.Context(), "update", route.ID, "success")
 	writeJSON(w, http.StatusOK, transitRouteResponse(route))
 }
 
 // Delete deactivates a transit route without removing related data.
 // @Summary Deactivate a route while preserving related records
+// @Description Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
 // @Tags routes
 // @Produce json
 // @Param id path int true "Positive route ID" minimum(1)
@@ -156,15 +194,54 @@ func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/routes/{id} [delete]
 func (h *TransitRouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)
 	if !ok {
+		h.auditRouteMutation(r.Context(), "deactivate", 0, "invalid_request")
 		return
 	}
 	if err := h.service.Deactivate(r.Context(), id); err != nil {
+		h.auditRouteMutation(r.Context(), "deactivate", id, auditOutcome(err))
 		writeTransitRouteError(w, err)
 		return
 	}
+	h.auditRouteMutation(r.Context(), "deactivate", id, "success")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TransitRouteHandler) auditRouteMutation(ctx context.Context, operation string, resourceID int, outcome string) {
+	if h.audit == nil {
+		return
+	}
+	subject := "unknown"
+	if principal, ok := auth.PrincipalFromContext(ctx); ok && principal.Subject != "" {
+		subject = principal.Subject
+	}
+	attrs := []slog.Attr{
+		slog.String("timestamp", time.Now().UTC().Format(time.RFC3339Nano)),
+		slog.String("subject", subject),
+		slog.String("operation", operation),
+		slog.String("resource_type", "route"),
+		slog.String("outcome", outcome),
+	}
+	if resourceID > 0 {
+		attrs = append(attrs, slog.Int("resource_id", resourceID))
+	}
+	h.audit.LogAttrs(ctx, slog.LevelInfo, "admin_route_mutation", attrs...)
+}
+
+func auditOutcome(err error) string {
+	var validation *services.ValidationError
+	switch {
+	case errors.As(err, &validation):
+		return "validation_error"
+	case errors.Is(err, services.ErrTransitRouteNotFound):
+		return "not_found"
+	case errors.Is(err, services.ErrTransitRouteConflict):
+		return "conflict"
+	default:
+		return "internal_error"
+	}
 }
 
 func transitRouteID(w http.ResponseWriter, r *http.Request) (int, bool) {

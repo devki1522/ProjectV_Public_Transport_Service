@@ -26,6 +26,11 @@ func TestSwaggerDocumentation(t *testing.T) {
 			t.Fatal(err)
 		}
 		for route, methods := range map[string][]string{
+			"/api/auth/login":                  {"post"},
+			"/api/auth/me":                     {"get"},
+			"/api/auth/logout":                 {"post"},
+			"/api/admin/health":                {"get"},
+			"/api/admin/dashboard":             {"get"},
 			"/api/health":                      {"get"},
 			"/api/routes":                      {"get", "post"},
 			"/api/routes/{id}":                 {"get", "patch", "delete"},

@@ -15,6 +15,268 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/admin/dashboard": {
+            "get": {
+                "description": "Requires a valid administrator session cookie.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "administration"
+                ],
+                "summary": "Administrator dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.DashboardSummary"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/health": {
+            "get": {
+                "description": "Requires a valid administrator session cookie.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "administration"
+                ],
+                "summary": "Administrator health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "description": "Requires a trusted Origin. Returns a CSRF token and backend-derived isAdmin capability; never returns the JWT.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authentication"
+                ],
+                "summary": "Sign in and establish an opaque cookie session",
+                "parameters": [
+                    {
+                        "description": "Credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.SessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "description": "Requires a trusted Origin. Expired or missing sessions are cleared idempotently.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authentication"
+                ],
+                "summary": "Invalidate the local session and clear its cookie",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Required for an active session",
+                        "name": "X-CSRF-Token",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authentication"
+                ],
+                "summary": "Restore the authenticated session",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.SessionResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/departures": {
             "get": {
                 "responses": {}
@@ -73,6 +335,7 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "description": "Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.",
                 "consumes": [
                     "application/json"
                 ],
@@ -84,6 +347,13 @@ const docTemplate = `{
                 ],
                 "summary": "Create a route",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
                     {
                         "description": "Route fields",
                         "name": "body",
@@ -103,6 +373,24 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -187,6 +475,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "description": "Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.",
                 "produces": [
                     "application/json"
                 ],
@@ -195,6 +484,13 @@ const docTemplate = `{
                 ],
                 "summary": "Deactivate a route while preserving related records",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
                     {
                         "minimum": 1,
                         "type": "integer",
@@ -210,6 +506,24 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -238,6 +552,7 @@ const docTemplate = `{
                 }
             },
             "patch": {
+                "description": "Requires an administrator session cookie, trusted Origin, and the CSRF token from login or /auth/me.",
                 "consumes": [
                     "application/json"
                 ],
@@ -249,6 +564,13 @@ const docTemplate = `{
                 ],
                 "summary": "Update route fields",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
                     {
                         "minimum": 1,
                         "type": "integer",
@@ -276,6 +598,24 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -523,6 +863,54 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "auth.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "rememberMe": {
+                    "type": "boolean"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.Principal": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.SessionResponse": {
+            "type": "object",
+            "properties": {
+                "csrfToken": {
+                    "type": "string"
+                },
+                "expiresAtUtc": {
+                    "type": "string"
+                },
+                "isAdmin": {
+                    "type": "boolean"
+                },
+                "user": {
+                    "$ref": "#/definitions/auth.Principal"
+                }
+            }
+        },
         "handlers.TransitRouteResponse": {
             "type": "object",
             "properties": {
@@ -560,6 +948,20 @@ const docTemplate = `{
                 },
                 "number": {
                     "type": "string"
+                }
+            }
+        },
+        "services.DashboardSummary": {
+            "type": "object",
+            "properties": {
+                "active_routes": {
+                    "type": "integer"
+                },
+                "inactive_routes": {
+                    "type": "integer"
+                },
+                "total_routes": {
+                    "type": "integer"
                 }
             }
         },
@@ -742,7 +1144,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Public Transport Service API",
-	Description:      "Waterloo Region transit routes, timetables, and departures. Route writes currently have no authentication.",
+	Description:      "Public resident schedules and cookie-authenticated transit administration. Mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

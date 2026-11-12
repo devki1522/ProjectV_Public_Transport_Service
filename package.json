@@ -11,7 +11,8 @@
     "docs:build": "node scripts/build-backend-docs.mjs",
     "test": "node scripts/check-go.mjs test",
     "db:seed": "node scripts/seed-grt.mjs",
-    "docs:api": "node scripts/generate-swagger.mjs"
+    "docs:api": "node scripts/generate-swagger.mjs",
+    "auth:setup": "node scripts/setup-auth.mjs"
   },
   "devDependencies": {
     "cheerio": "1.1.2",

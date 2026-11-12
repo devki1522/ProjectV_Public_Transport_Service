@@ -39,3 +39,4 @@ lefthook-local.yml
 # Logs from tools run at the repository root or in the backend
 *.log
 npm-debug.log*
+/docs/

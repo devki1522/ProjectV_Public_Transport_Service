@@ -24,16 +24,30 @@ npm ci
 npm ci --prefix frontend
 ```
 
-For a new checkout, copy the environment examples in PowerShell:
+For a new checkout, copy the environment examples in PowerShell without overwriting existing files:
 
 ```powershell
-Copy-Item .env.example .env
-Copy-Item backend/.env.example backend/.env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+if (-not (Test-Path backend/.env)) { Copy-Item backend/.env.example backend/.env }
 ```
 
-Use `cp` instead of `Copy-Item` in bash. Keep existing `.env` files when updating
-a checkout, and never commit them. The examples contain matching local settings;
-see the [database guide](database/README.md#configuration) if you change credentials.
+Use `cp -n` in bash (`cp -n .env.example .env && cp -n backend/.env.example backend/.env`). Keep existing `.env` files when updating a checkout, and never commit real secrets.
+
+Configure local mock authentication without overwriting existing database settings:
+
+```powershell
+npm run auth:setup
+```
+
+This creates missing environment files, fills missing development auth settings,
+and generates cryptographically random local passwords and a signing secret.
+Existing nonempty values are preserved. Read `MOCK_ADMIN_PASSWORD` or
+`MOCK_USER_PASSWORD` in your local `backend/.env` to sign in. No credentials are
+printed or committed. The command refuses non-development/non-mock settings.
+
+Development mock usernames (passwords come from `backend/.env`):
+- `transit.admin` (`TransitAdministrator` role — can view `/admin` and manage routes)
+- `transit.user` (`User` role — can sign in, receives `403` from administrator APIs and `/unauthorized` in the UI)
 
 Start the app:
 
@@ -41,9 +55,11 @@ Start the app:
 docker compose up --build -d
 ```
 
-Open the UI at http://localhost:3000. Follow the
+Open the resident UI at http://localhost:3000 and the administrator sign-in at http://localhost:3000/login. Follow the
 [database seed instructions](database/README.md#seed-the-database) to load GRT data.
 To stop the app while keeping the database volume, run `docker compose down`.
+
+See [Backend Authentication](backend/README.md#authentication-and-administrator-portal) and [Design](docs/design.md) for session architecture, CSRF rules, and switching to the Registration Service.
 
 ## Shared checks
 
@@ -139,6 +155,5 @@ contract; the existing `npm run docs:build` pkgsite build documents Go packages,
 types and functions and remains independent. Swagger annotations may appear as
 text in pkgsite. Swag output uses Swagger 2.0.
 
-The interactive UI can execute real requests, including route writes. Those
-writes currently have no authentication; DELETE deactivates rather than removes
-a route. Use a development database when trying mutations.
+The interactive UI can execute real requests, including route writes. Route writes require an administrator session, a trusted Origin, and
+a CSRF token; DELETE deactivates rather than removes a route. Use a development database when trying mutations.
