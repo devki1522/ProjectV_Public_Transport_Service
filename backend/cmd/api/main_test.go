@@ -52,7 +52,6 @@ func TestBuildRouterSelectsConfiguredProvider(t *testing.T) {
 			},
 			Mock: config.MockAuthConfig{
 				AdminPassword: "admin-pw",
-				UserPassword:  "user-pw",
 			},
 		},
 	}

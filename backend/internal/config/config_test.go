@@ -14,7 +14,6 @@ const (
 	testShortSecret   = "too-short-secret"
 	testRegSecret     = "fedcba9876543210fedcba9876543210"
 	testAdminPassword = "dev-admin-password"
-	testUserPassword  = "dev-user-password"
 )
 
 func clearAuthEnv(t *testing.T) {
@@ -24,7 +23,7 @@ func clearAuthEnv(t *testing.T) {
 		"APP_ENV", "AUTH_PROVIDER", "AUTH_REQUIRED_ROLE", "AUTH_SESSION_COOKIE",
 		"AUTH_COOKIE_SECURE", "AUTH_TRUSTED_ORIGINS", "AUTH_TRUSTED_PROXY",
 		"MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_JWT_SECRET",
-		"MOCK_ADMIN_PASSWORD", "MOCK_USER_PASSWORD",
+		"MOCK_ADMIN_PASSWORD",
 		"REGISTRATION_SERVICE_URL", "REGISTRATION_JWT_ISSUER",
 		"REGISTRATION_JWT_AUDIENCE", "REGISTRATION_JWT_SECRET",
 	} {
@@ -41,7 +40,6 @@ func setMockDevEnv(t *testing.T) {
 	t.Setenv("MOCK_JWT_AUDIENCE", "transit-api")
 	t.Setenv("MOCK_JWT_SECRET", testValidSecret)
 	t.Setenv("MOCK_ADMIN_PASSWORD", testAdminPassword)
-	t.Setenv("MOCK_USER_PASSWORD", testUserPassword)
 }
 
 func setRegistrationProdEnv(t *testing.T) {
@@ -81,7 +79,6 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 			},
 			Mock: MockAuthConfig{
 				AdminPassword: testAdminPassword,
-				UserPassword:  testUserPassword,
 			},
 		},
 	}
@@ -205,7 +202,7 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 	})
 
 	t.Run("mock settings rejected in production", func(t *testing.T) {
-		for _, key := range []string{"MOCK_JWT_SECRET", "MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_ADMIN_PASSWORD", "MOCK_USER_PASSWORD"} {
+		for _, key := range []string{"MOCK_JWT_SECRET", "MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_ADMIN_PASSWORD"} {
 			setRegistrationProdEnv(t)
 			t.Setenv(key, "some-value")
 			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "MOCK_*") {
@@ -276,8 +273,8 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		}
 	})
 
-	t.Run("missing mock passwords rejected", func(t *testing.T) {
-		for _, key := range []string{"MOCK_ADMIN_PASSWORD", "MOCK_USER_PASSWORD"} {
+	t.Run("missing mock administrator password rejected", func(t *testing.T) {
+		for _, key := range []string{"MOCK_ADMIN_PASSWORD"} {
 			setMockDevEnv(t)
 			t.Setenv(key, "")
 			if _, err := Load(); err == nil || !strings.Contains(err.Error(), key) {
@@ -318,7 +315,7 @@ func TestSecretsAreRedactedWhenFormatted(t *testing.T) {
 		t.Fatal(err)
 	}
 	formatted := fmt.Sprintf("%+v", cfg.Auth)
-	for _, secret := range []string{testValidSecret, testAdminPassword, testUserPassword} {
+	for _, secret := range []string{testValidSecret, testAdminPassword} {
 		if strings.Contains(formatted, secret) {
 			t.Fatalf("secret %q leaked into formatted config: %s", secret, formatted)
 		}

@@ -41,13 +41,11 @@ npm run auth:setup
 
 This creates missing environment files, fills missing development auth settings,
 and generates cryptographically random local passwords and a signing secret.
-Existing nonempty values are preserved. Read `MOCK_ADMIN_PASSWORD` or
-`MOCK_USER_PASSWORD` in your local `backend/.env` to sign in. No credentials are
+Existing nonempty values are preserved. Read `MOCK_ADMIN_PASSWORD` in your local `backend/.env` to sign in. No credentials are
 printed or committed. The command refuses non-development/non-mock settings.
 
-Development mock usernames (passwords come from `backend/.env`):
+Development mock administrator (password comes from `backend/.env`):
 - `transit.admin` (`TransitAdministrator` role — can view `/admin` and manage routes)
-- `transit.user` (`User` role — can sign in, receives `403` from administrator APIs and `/unauthorized` in the UI)
 
 Start the app:
 
