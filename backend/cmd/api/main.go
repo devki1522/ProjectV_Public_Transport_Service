@@ -1,3 +1,4 @@
+// Package main starts the public transport service API.
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// main loads configuration, connects to the database, and starts the HTTP server.
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Printf("No .env file found, using environment variables")
