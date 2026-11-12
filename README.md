@@ -58,18 +58,12 @@ Lint checks frontend code, Go formatting and `go vet`. Tests cover the backend
 and resident frontend behavior without a running server. Source files use LF line endings;
 Windows `.bat` and `.cmd` files use CRLF, as defined in `.gitattributes`.
 
-<<<<<<< HEAD
-`npm ci` installs the Git hooks. Reinstall them with `npm run hooks:install`
-if needed. The hooks run relevant checks before commits; GitHub Actions also
-runs lint, backend/frontend tests, and the frontend build on pushes and pull requests.
-=======
 The pre-commit hook runs both categories as separate jobs: `frontend-lint`,
 `go-format`, `go-vet`, and `go-test`. On every commit, the full unit suite runs;
 frontend lint and Go format/vet checks run when relevant files are staged and
 inspect their entire component. Checks inspect the working tree, including
 unstaged edits, and do not rewrite files. Fix formatting with `gofmt -w <file>`
 and stage the resulting changes.
->>>>>>> 65cdf30001e17cac43cf25f416a62479b8468472
 
 GitHub Actions runs independent `lint` and `test` jobs on every push and pull
 request. The `lint` job runs `npm run lint`; the `test` job runs
