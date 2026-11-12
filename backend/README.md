@@ -47,7 +47,7 @@ upstream response, `503` provider unavailable, and `504` upstream timeout.
 
 #### Providers and Registration Service integration
 
-- **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`): Authenticates `transit.admin` (`TransitAdministrator`) and `transit.user` (`User`) against `MOCK_ADMIN_PASSWORD` and `MOCK_USER_PASSWORD` and signs real 15-minute `HS256` JWTs with `MOCK_JWT_SECRET` (>= 32 bytes). Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
+- **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`): Authenticates `transit.admin` (`TransitAdministrator`) against `MOCK_ADMIN_PASSWORD` and signs real 15-minute `HS256` JWTs with `MOCK_JWT_SECRET` (>= 32 bytes). Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
 - **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate`, validates the returned `HS256` JWT locally against `REGISTRATION_JWT_ISSUER`, `REGISTRATION_JWT_AUDIENCE`, and `REGISTRATION_JWT_SECRET`, and reads authorization exclusively from the signed `role` claim (string or array), ignoring top-level `role`. HTTPS is required outside explicit local development.
 - **External team dependency**: Inspected source (`CmRegistrationService`) seeds only `Administrator` and `User` roles. The Registration Service team must create and assign `TransitAdministrator` and provide production URL/issuer/audience/secret values before live integration verification.
 
@@ -257,3 +257,7 @@ admin endpoints and documents session/CSRF requirements on route writes. Swagger
 2.0 does not natively model cookie authentication: sign in via the portal on the
 same host, then supply the CSRF token and trusted Origin where needed. The server
 does not relax CSRF rules for Swagger. Use `npm run docs:api` after contract edits.
+
+The development mock provider accepts only `transit.admin`. Non-administrator
+identities are isolated automated-test fixtures used to verify access denial;
+they are not development login accounts. Resident pages remain public.

@@ -40,8 +40,8 @@ func NewMockProvider(trust config.JWTTrustConfig, mockCfg config.MockAuthConfig,
 	if len(trust.Secret) < config.MinJWTSecretBytes {
 		return nil, fmt.Errorf("mock jwt secret must be at least %d bytes", config.MinJWTSecretBytes)
 	}
-	if mockCfg.AdminPassword == "" || mockCfg.UserPassword == "" {
-		return nil, fmt.Errorf("mock user passwords are required")
+	if mockCfg.AdminPassword == "" {
+		return nil, fmt.Errorf("mock administrator password is required")
 	}
 	if now == nil {
 		now = time.Now
@@ -61,12 +61,6 @@ func NewMockProvider(trust config.JWTTrustConfig, mockCfg config.MockAuthConfig,
 				username:     "transit.admin",
 				role:         "TransitAdministrator",
 				passwordHash: sha256.Sum256([]byte(mockCfg.AdminPassword)),
-			},
-			"transit.user": {
-				subject:      "dev-transit-user-001",
-				username:     "transit.user",
-				role:         "User",
-				passwordHash: sha256.Sum256([]byte(mockCfg.UserPassword)),
 			},
 		},
 	}, nil

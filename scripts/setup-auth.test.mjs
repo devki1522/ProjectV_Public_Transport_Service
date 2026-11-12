@@ -30,7 +30,7 @@ test('setup creates secrets without exposing them and preserves configuration on
   const contents = await read()
   const settings = parseEnv(contents)
   assert.equal(settings.DATABASE_URL, 'preserved-database')
-  for (const key of ['MOCK_JWT_SECRET', 'MOCK_ADMIN_PASSWORD', 'MOCK_USER_PASSWORD']) {
+  for (const key of ['MOCK_JWT_SECRET', 'MOCK_ADMIN_PASSWORD']) {
     assert(settings[key].length >= 32)
     assert(!first.stdout.includes(settings[key]))
   }

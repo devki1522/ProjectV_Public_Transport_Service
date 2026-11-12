@@ -60,12 +60,11 @@ func (c JWTTrustConfig) String() string {
 // MockAuthConfig holds development-only mock user credentials.
 type MockAuthConfig struct {
 	AdminPassword string // Password for the mock TransitAdministrator user.
-	UserPassword  string // Password for the mock normal User.
 }
 
 // String redacts mock passwords when formatted.
 func (c MockAuthConfig) String() string {
-	return "MockAuthConfig{AdminPassword:[REDACTED], UserPassword:[REDACTED]}"
+	return "MockAuthConfig{AdminPassword:[REDACTED]}"
 }
 
 // RegistrationAuthConfig holds settings for the external Registration Service provider.
@@ -224,7 +223,6 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 		audience := strings.TrimSpace(os.Getenv("MOCK_JWT_AUDIENCE"))
 		secret := os.Getenv("MOCK_JWT_SECRET")
 		adminPassword := os.Getenv("MOCK_ADMIN_PASSWORD")
-		userPassword := os.Getenv("MOCK_USER_PASSWORD")
 
 		if issuer == "" || audience == "" {
 			return AuthConfig{}, fmt.Errorf("MOCK_JWT_ISSUER and MOCK_JWT_AUDIENCE are required when AUTH_PROVIDER=mock")
@@ -232,8 +230,8 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 		if len(secret) < MinJWTSecretBytes {
 			return AuthConfig{}, fmt.Errorf("MOCK_JWT_SECRET must be at least %d bytes", MinJWTSecretBytes)
 		}
-		if adminPassword == "" || userPassword == "" {
-			return AuthConfig{}, fmt.Errorf("MOCK_ADMIN_PASSWORD and MOCK_USER_PASSWORD are required when AUTH_PROVIDER=mock")
+		if adminPassword == "" {
+			return AuthConfig{}, fmt.Errorf("MOCK_ADMIN_PASSWORD is required when AUTH_PROVIDER=mock")
 		}
 
 		cfg.JWTTrust = JWTTrustConfig{
@@ -243,7 +241,6 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 		}
 		cfg.Mock = MockAuthConfig{
 			AdminPassword: adminPassword,
-			UserPassword:  userPassword,
 		}
 
 	case AuthProviderRegistration:
@@ -281,7 +278,6 @@ func hasAnyMockSetting() bool {
 		"MOCK_JWT_AUDIENCE",
 		"MOCK_JWT_SECRET",
 		"MOCK_ADMIN_PASSWORD",
-		"MOCK_USER_PASSWORD",
 	} {
 		if os.Getenv(key) != "" {
 			return true

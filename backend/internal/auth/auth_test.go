@@ -23,7 +23,6 @@ const (
 	testSecret        = "0123456789abcdef0123456789abcdef"
 	testOtherSecret   = "fedcba9876543210fedcba9876543210"
 	testAdminPass     = "admin-secret-pw"
-	testUserPass      = "user-secret-pw"
 	testTrustedOrigin = "http://localhost:3000"
 )
 
@@ -50,7 +49,6 @@ func testTrust() config.JWTTrustConfig {
 func testMockCfg() config.MockAuthConfig {
 	return config.MockAuthConfig{
 		AdminPassword: testAdminPass,
-		UserPassword:  testUserPass,
 	}
 }
 
@@ -99,25 +97,11 @@ func TestMockProviderAuthenticationAndJWTClaims(t *testing.T) {
 		t.Fatalf("unexpected principal: %+v", principal)
 	}
 
-	userRes, err := provider.Authenticate(context.Background(), LoginRequest{
-		Username: "transit.user",
-		Password: testUserPass,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	userPrincipal, err := validator.Validate(userRes.AccessToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if userPrincipal.Subject != "dev-transit-user-001" || !userPrincipal.HasRole("User") || userPrincipal.HasRole("TransitAdministrator") {
-		t.Fatalf("unexpected user principal: %+v", userPrincipal)
-	}
-
 	// Wrong password and unknown user return ErrInvalidCredentials
 	for _, req := range []LoginRequest{
 		{Username: "transit.admin", Password: "wrong"},
 		{Username: "unknown.user", Password: testAdminPass},
+		{Username: "transit.user", Password: testAdminPass},
 		{Username: "transit.admin", Password: ""},
 	} {
 		if _, err := provider.Authenticate(context.Background(), req); !errors.Is(err, ErrInvalidCredentials) {

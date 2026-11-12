@@ -28,7 +28,6 @@ const (
 	routerTestAudience = "transit-api"
 	routerTestSecret   = "0123456789abcdef0123456789abcdef"
 	routerAdminPass    = "admin-pass-123"
-	routerUserPass     = "user-pass-123"
 )
 
 // An in-memory service keeps HTTP tests independent of a running database.
@@ -98,7 +97,6 @@ func newTestAuthEnv(t *testing.T, service *fakeTransitRoutes, dashboard *fakeDas
 	}
 	provider, err := auth.NewMockProvider(trust, config.MockAuthConfig{
 		AdminPassword: routerAdminPass,
-		UserPassword:  routerUserPass,
 	}, now)
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +240,26 @@ func TestRouteWritesEnforceAuthRoleAndCSRF(t *testing.T) {
 	dashboard := &fakeDashboard{summary: services.DashboardSummary{TotalRoutes: 5, ActiveRoutes: 4, InactiveRoutes: 1}}
 	env := newTestAuthEnv(t, service, dashboard)
 
-	userCookie, userCSRF := loginAs(t, env.mux, "transit.user", routerUserPass)
+	// Non-admin sessions exist only as signed authorization fixtures, never as
+	// development login accounts.
+	expires := time.Now().Add(15 * time.Minute)
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": "test-non-admin", "role": "User", "iss": routerTestIssuer,
+		"aud": routerTestAudience, "exp": expires.Unix(),
+	}).SignedString([]byte(routerTestSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := env.validator.Validate(signed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionID, session, err := env.sessions.Create(principal, signed, expires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userCookie := &http.Cookie{Name: "transit_session", Value: sessionID}
+	userCSRF := session.CSRFToken
 	adminCookie, _ := loginAs(t, env.mux, "transit.admin", routerAdminPass)
 
 	// Unauthenticated writes return 401

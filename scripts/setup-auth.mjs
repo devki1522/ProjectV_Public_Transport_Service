@@ -38,7 +38,6 @@ const values = {
   MOCK_JWT_AUDIENCE: 'transit-api',
   MOCK_JWT_SECRET: randomBytes(32).toString('base64url'),
   MOCK_ADMIN_PASSWORD: randomBytes(24).toString('base64url'),
-  MOCK_USER_PASSWORD: randomBytes(24).toString('base64url'),
 }
 
 for (const [key, value] of Object.entries(values)) {
@@ -50,4 +49,4 @@ for (const [key, value] of Object.entries(values)) {
 }
 await writeFile(new URL('backend/.env', root), contents, { mode: 0o600 })
 console.log('Local mock authentication configured in backend/.env. Existing nonempty settings were preserved.')
-console.log('Use transit.admin or transit.user with the corresponding password in backend/.env. Secrets are not printed.')
+console.log('Use transit.admin with MOCK_ADMIN_PASSWORD in backend/.env. Secrets are not printed.')
