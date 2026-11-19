@@ -4,6 +4,7 @@ import { ResidentPage } from './features/resident/ResidentPage.jsx'
 import { useRouter } from './lib/routerState.js'
 import { RouterProvider } from './lib/router.jsx'
 import { AdminDashboardPage } from './pages/AdminDashboardPage.jsx'
+import { AdminDisruptionsPage } from './pages/AdminDisruptionsPage.jsx'
 import { AdminRoutesPage } from './pages/AdminRoutesPage.jsx'
 import { AdminVehiclesPage } from './pages/AdminVehiclesPage.jsx'
 import { LoginPage } from './pages/LoginPage.jsx'
@@ -34,6 +35,12 @@ function AppRoutes() {
       return (
         <ProtectedAdminRoute>
           <AdminVehiclesPage />
+        </ProtectedAdminRoute>
+      )
+    case '/admin/disruptions':
+      return (
+        <ProtectedAdminRoute>
+          <AdminDisruptionsPage />
         </ProtectedAdminRoute>
       )
     default:

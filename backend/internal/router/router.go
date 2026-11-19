@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/devki1522/ProjectV_Public_Transport_Service/backend/docs"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
@@ -18,13 +19,14 @@ import (
 
 // Dependencies supplies optional and required services to the HTTP router.
 type Dependencies struct {
-	Estimates      transit.EstimateProvider
-	AuthHandler    *auth.Handler
-	AuthMiddleware *auth.Middleware
-	CSRF           *auth.CSRFProtector
-	RequiredRole   string
-	AdminHandler   *handlers.AdminHandler
-	VehicleHandler *handlers.VehicleHandler
+	Estimates         transit.EstimateProvider
+	AuthHandler       *auth.Handler
+	AuthMiddleware    *auth.Middleware
+	CSRF              *auth.CSRFProtector
+	RequiredRole      string
+	AdminHandler      *handlers.AdminHandler
+	VehicleHandler    *handlers.VehicleHandler
+	DisruptionHandler *handlers.DisruptionHandler
 }
 
 // New builds the HTTP router with default dependencies.
@@ -40,7 +42,7 @@ func NewWithEstimates(db *gorm.DB, estimates transit.EstimateProvider) http.Hand
 }
 
 // NewWithDependencies registers public resident routes, authentication routes,
-// protected route mutations, and administrator endpoints.
+// protected route mutations, disruption and external incident endpoints, and administrator endpoints.
 func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("./doc.json")))
@@ -64,6 +66,12 @@ func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 		vehicleHandler = handlers.NewVehicleHandler(vehicles.NewService(vehicles.NewPostgresRepository(db)), nil)
 	}
 	RegisterVehicleRoutes(r, vehicleHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
+
+	disruptionHandler := deps.DisruptionHandler
+	if disruptionHandler == nil {
+		disruptionHandler = handlers.NewDisruptionHandler(disruptions.NewService(disruptions.NewPostgresRepository(db)))
+	}
+	RegisterDisruptionRoutes(r, disruptionHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
 
 	if deps.AuthHandler != nil && deps.AuthMiddleware != nil {
 		RegisterAuthRoutes(r, deps.AuthHandler, deps.AuthMiddleware)
@@ -167,6 +175,50 @@ func RegisterVehicleRoutes(
 		protected.Post("/api/admin/vehicles/simulator/stop", handler.StopSimulator)
 		protected.Post("/api/admin/vehicles/simulator/step", handler.StepSimulator)
 		protected.Post("/api/admin/vehicles/simulator/reset", handler.ResetSimulator)
+	})
+}
+
+// RegisterDisruptionRoutes registers public disruption and operational status read endpoints,
+// protected enterprise service-status reads, and CSRF-protected admin/integration disruption mutations.
+func RegisterDisruptionRoutes(
+	r chi.Router,
+	handler *handlers.DisruptionHandler,
+	authMiddleware *auth.Middleware,
+	csrf *auth.CSRFProtector,
+	requiredRole string,
+) {
+	r.Get("/api/disruptions", handler.List)
+	r.Get("/api/disruptions/active", handler.ListActive)
+	r.Get("/api/disruptions/affected", handler.AffectedServices)
+	r.Get("/api/disruptions/{id}", handler.Get)
+	r.Get("/api/service-status", handler.ServiceStatus)
+	r.Get("/api/routes/{id}/status", handler.RouteStatus)
+	r.Get("/api/stops/{id}/status", handler.StopStatus)
+	r.Get("/api/trips/{id}/status", handler.TripStatus)
+
+	r.Group(func(protectedRead chi.Router) {
+		if authMiddleware == nil || requiredRole == "" {
+			protectedRead.Use(failClosedAuthMiddleware)
+		} else {
+			protectedRead.Use(authMiddleware.RequireAuthenticated)
+			protectedRead.Use(authMiddleware.RequireRole(requiredRole))
+		}
+		protectedRead.Get("/api/integrations/service-status", handler.EnterpriseServiceStatus)
+	})
+
+	r.Group(func(protectedMutation chi.Router) {
+		if authMiddleware == nil || csrf == nil || requiredRole == "" {
+			protectedMutation.Use(failClosedAuthMiddleware)
+		} else {
+			protectedMutation.Use(authMiddleware.RequireAuthenticated)
+			protectedMutation.Use(authMiddleware.RequireRole(requiredRole))
+			protectedMutation.Use(csrf.RequireMutationCSRF)
+		}
+		protectedMutation.Post("/api/disruptions", handler.Create)
+		protectedMutation.Patch("/api/disruptions/{id}", handler.Update)
+		protectedMutation.Post("/api/integrations/utilities/notices", handler.IngestUtilitiesNotice)
+		protectedMutation.Post("/api/integrations/emergency/incidents", handler.IngestEmergencyIncident)
+		protectedMutation.Post("/api/integrations/security/traffic-alerts", handler.IngestSecurityTrafficAlert)
 	})
 }
 

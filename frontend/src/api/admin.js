@@ -166,3 +166,63 @@ export function resetVehicleSimulator(csrfToken) {
     csrfToken,
   })
 }
+
+export async function getAllDisruptions({ status, type } = {}, signal) {
+  const params = new URLSearchParams()
+  if (typeof status === 'string' && status.trim() && status !== 'all') params.set('status', status.trim())
+  if (typeof type === 'string' && type.trim() && type !== 'all') params.set('type', type.trim())
+  const query = params.toString()
+  const data = await adminRequest(query ? `/api/disruptions?${query}` : '/api/disruptions', { signal })
+  if (!Array.isArray(data)) {
+    throw new AdminApiError('Disruption list returned unexpected data.', 502)
+  }
+  return data
+}
+
+export function createDisruption(input, csrfToken) {
+  return adminRequest('/api/disruptions', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function updateDisruption(id, input, csrfToken) {
+  return adminRequest(`/api/disruptions/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitUtilitiesNotice(input, csrfToken) {
+  return adminRequest('/api/integrations/utilities/notices', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitEmergencyIncident(input, csrfToken) {
+  return adminRequest('/api/integrations/emergency/incidents', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitSecurityTrafficAlert(input, csrfToken) {
+  return adminRequest('/api/integrations/security/traffic-alerts', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export async function getEnterpriseServiceStatus(signal) {
+  const data = await adminRequest('/api/integrations/service-status', { signal })
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
+    throw new AdminApiError('Enterprise service status returned unexpected data.', 502)
+  }
+  return data
+}

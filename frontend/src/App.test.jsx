@@ -89,13 +89,17 @@ vi.mock('leaflet', () => ({ default: leafletSpies.L }))
 
 import App from './App.jsx'
 import {
+  activeDisruptions,
   activeVehicles,
+  affectedServicesSummary,
   departures,
   estimatedArrivals,
   journeyResult,
   jsonResponse,
+  routeOperationalStatus,
   routeShape,
   routes,
+  serviceStatusResponse,
   simulatorStatus,
   stopsCatalog,
   timetable,
@@ -121,12 +125,42 @@ function mockTransit({
   vehicles = activeVehicles,
   simulator = simulatorStatus(),
   arrivalsByTrip = null,
+  disruptions = [],
+  serviceStatus = null,
 } = {}) {
   const fetch = vi.fn(async (path) => {
     const url = new URL(path, 'https://transit.test')
     if (url.pathname === '/api/routes') return jsonResponse(routes)
     if (url.pathname === '/api/stops') return jsonResponse(stopsCatalog)
     if (url.pathname === '/api/vehicles/simulator') return jsonResponse(simulator)
+    if (url.pathname === '/api/service-status') {
+      return jsonResponse(
+        serviceStatus ?? serviceStatusResponse({ disruptions: empty ? [] : disruptions }),
+      )
+    }
+    if (url.pathname === '/api/disruptions/active') {
+      const type = url.searchParams.get('type')
+      const routeId = url.searchParams.get('route_id')
+      const stopId = url.searchParams.get('stop_id')
+      const list = (empty ? [] : disruptions).filter((item) => {
+        if (item.status !== 'active') return false
+        if (type && item.type !== type) return false
+        if (routeId && !item.affected_routes?.some((r) => r.route_id === Number(routeId))) return false
+        if (stopId && !item.affected_stops?.some((s) => s.stop_id === Number(stopId))) return false
+        return true
+      })
+      return jsonResponse(list)
+    }
+    if (url.pathname === '/api/disruptions/affected') {
+      return jsonResponse(affectedServicesSummary({ disruptions: empty ? [] : disruptions }))
+    }
+    if (url.pathname.startsWith('/api/routes/') && url.pathname.endsWith('/status')) {
+      return jsonResponse(
+        routeOperationalStatus(url.pathname.split('/')[3], {
+          disruptions: empty ? [] : disruptions,
+        }),
+      )
+    }
     if (url.pathname === '/api/vehicles') {
       const routeId = url.searchParams.get('route_id')
       const list = empty ? [] : routeId
@@ -363,7 +397,7 @@ it('validates missing or identical origin and destination before requesting jour
   await user.keyboard('{ArrowLeft}')
   expect(screen.getByRole('tab', { name: 'Schedules & Departures' })).toHaveFocus()
   await user.keyboard('{End}')
-  expect(screen.getByRole('tab', { name: 'Live Map' })).toHaveFocus()
+  expect(screen.getByRole('tab', { name: 'Service Alerts' })).toHaveFocus()
   await user.keyboard('{Home}')
   expect(screen.getByRole('tab', { name: 'Schedules & Departures' })).toHaveFocus()
   await user.keyboard('{ArrowRight}')
@@ -548,4 +582,81 @@ it('opens Live Map pre-filtered from the route Live buses shortcut and builds XS
   expect(popupNode.querySelector('script')).toBeNull()
   expect(popupNode.textContent).toContain('<img src=x onerror=alert(1)>')
   expect(popupNode.textContent).toContain('<script>alert(1)</script>King')
+})
+
+it('shows route operational status banner in Schedules and opens Service Alerts pre-filtered to that route (US 192)', async () => {
+  mockTransit({ disruptions: activeDisruptions })
+  const user = userEvent.setup()
+  render(<App />)
+
+  await screen.findByRole('heading', { name: 'Queen-River' })
+  const banner = await screen.findByRole('status', { name: 'Route service disruption notice' })
+  expect(banner).toHaveTextContent('Route 1 status: Closed')
+  expect(banner).toHaveTextContent('Central Station platform closure for emergency response')
+
+  await user.click(within(banner).getByRole('button', { name: 'View service alerts' }))
+  await screen.findByRole('heading', { name: 'Service Alerts' })
+  expect(screen.getByLabelText('Route')).toHaveValue('1')
+
+  const activeList = screen.getByRole('region', { name: 'Active disruptions' })
+  expect(within(activeList).getByText('Central Station platform closure for emergency response')).toBeVisible()
+  expect(within(activeList).queryByText('King St N watermain construction detour')).not.toBeInTheDocument()
+})
+
+it('filters active disruptions by type and route, lists affected routes and stops, and jumps to route schedule or live map (US 194, US 195)', async () => {
+  mockTransit({ disruptions: activeDisruptions })
+  const user = userEvent.setup()
+  render(<App />)
+
+  await screen.findByText('Trip 100')
+  await user.click(screen.getByRole('tab', { name: 'Service Alerts' }))
+  await screen.findByRole('heading', { name: 'Service Alerts' })
+
+  const activeSection = await screen.findByRole('region', { name: 'Active disruptions' })
+  expect(within(activeSection).getByText('King St N watermain construction detour')).toBeVisible()
+  expect(within(activeSection).getByText('Central Station platform closure for emergency response')).toBeVisible()
+  expect(within(activeSection).getByText('Utilities')).toBeVisible()
+  expect(within(activeSection).getByText('Emergency Services')).toBeVisible()
+
+  const affectedSection = screen.getByRole('region', { name: 'Affected routes and stops' })
+  expect(within(affectedSection).getByText('Affected routes (2)')).toBeVisible()
+  expect(within(affectedSection).getByText('Affected stops (2)')).toBeVisible()
+  expect(within(affectedSection).getByText('University Terminal')).toBeVisible()
+  expect(within(affectedSection).getByText('Central Station')).toBeVisible()
+
+  // Filter by disruption type: Detour
+  await user.selectOptions(screen.getByLabelText('Disruption type'), 'detour')
+  expect(within(activeSection).getByText('King St N watermain construction detour')).toBeVisible()
+  expect(within(activeSection).queryByText('Central Station platform closure for emergency response')).not.toBeInTheDocument()
+  expect(within(affectedSection).getByText('Affected routes (1)')).toBeVisible()
+
+  // Filter to a type with no matches and use "Show all disruptions"
+  await user.selectOptions(screen.getByLabelText('Disruption type'), 'cancellation')
+  await screen.findByRole('heading', { name: 'No disruptions match this filter' })
+  await user.click(screen.getByRole('button', { name: 'Show all disruptions' }))
+  expect(within(activeSection).getByText('King St N watermain construction detour')).toBeVisible()
+  expect(within(activeSection).getByText('Central Station platform closure for emergency response')).toBeVisible()
+
+  // Jump from Affected routes -> Route 7 schedule
+  const route7Item = within(affectedSection).getByText('King').closest('li')
+  await user.click(within(route7Item).getByRole('button', { name: 'View schedule' }))
+  await screen.findByRole('heading', { name: 'King' })
+
+  // Return to Service Alerts and jump from Route 7 -> Live map
+  await user.click(screen.getByRole('tab', { name: 'Service Alerts' }))
+  const affectedAgain = await screen.findByRole('region', { name: 'Affected routes and stops' })
+  const route7Again = within(affectedAgain).getByText('King').closest('li')
+  await user.click(within(route7Again).getByRole('button', { name: 'Live map' }))
+  await screen.findByRole('heading', { name: 'Live Map' })
+  expect(screen.getByLabelText('Route')).toHaveValue('7')
+})
+
+it('shows the all-services-normal empty state in Service Alerts when there are no active disruptions', async () => {
+  mockTransit({ disruptions: [] })
+  const user = userEvent.setup()
+  render(<App />)
+
+  await screen.findByText('Trip 100')
+  await user.click(screen.getByRole('tab', { name: 'Service Alerts' }))
+  await screen.findByRole('heading', { name: 'All services operating normally' })
 })

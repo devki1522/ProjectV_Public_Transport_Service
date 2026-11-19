@@ -466,3 +466,208 @@ export function estimatedArrivals(tripId = 100) {
     },
   ]
 }
+
+export const activeDisruptions = [
+  {
+    id: 301,
+    type: 'detour',
+    title: 'King St N watermain construction detour',
+    description: 'Route 7 buses detour via Weber St N due to watermain replacement near University Ave.',
+    affected_area: 'King St N & University Ave, Waterloo',
+    start_time: '2026-11-10T11:00:00Z',
+    end_time: '2026-11-10T18:00:00Z',
+    status: 'active',
+    source_service: 'utilities',
+    external_reference: 'UTIL-WR-2026-101',
+    received_at: '2026-11-10T11:02:00Z',
+    affected_routes: [
+      { route_id: 7, route_number: '7', route_name: 'King', direction: 'direction_0' },
+    ],
+    affected_stops: [
+      { stop_id: 23, stop_name: 'University Terminal', route_id: 7 },
+    ],
+    affected_trips: [200],
+    affected_vehicles: [507],
+    affected_segments: ['King St N between University Ave and Columbia St'],
+  },
+  {
+    id: 302,
+    type: 'stop_closure',
+    title: 'Central Station platform closure for emergency response',
+    description: 'Emergency crews staging on King St W; board Route 1 at temporary stop on Victoria St.',
+    affected_area: 'Central Station, Kitchener',
+    start_time: '2026-11-10T12:15:00Z',
+    end_time: null,
+    status: 'active',
+    source_service: 'emergency_services',
+    external_reference: 'EMS-WR-2026-201',
+    received_at: '2026-11-10T12:16:00Z',
+    affected_routes: [
+      { route_id: 1, route_number: '1', route_name: 'Queen-River', direction: 'direction_0' },
+    ],
+    affected_stops: [
+      { stop_id: 21, stop_name: 'Central Station', route_id: 1 },
+    ],
+    affected_trips: [100],
+    affected_vehicles: [501],
+    affected_segments: ['King St W at Victoria St'],
+  },
+]
+
+export const allDisruptions = [
+  ...activeDisruptions,
+  {
+    id: 303,
+    type: 'construction',
+    title: 'Fairway Station overnight resurfacing',
+    description: 'Scheduled overnight lane restrictions near Fairway Station.',
+    affected_area: 'Fairway Rd S, Kitchener',
+    start_time: '2026-11-11T03:00:00Z',
+    end_time: '2026-11-11T09:00:00Z',
+    status: 'scheduled',
+    source_service: 'transit',
+    external_reference: null,
+    received_at: '2026-11-10T10:00:00Z',
+    affected_routes: [
+      { route_id: 1, route_number: '1', route_name: 'Queen-River', direction: 'direction_0' },
+    ],
+    affected_stops: [
+      { stop_id: 22, stop_name: 'Fairway Station', route_id: 1 },
+    ],
+    affected_trips: [],
+    affected_vehicles: [],
+    affected_segments: ['Fairway Rd S terminal loop'],
+  },
+]
+
+export function affectedServicesSummary({ disruptions = activeDisruptions } = {}) {
+  const active = disruptions.filter((item) => item.status === 'active')
+  const routeMap = new Map()
+  const stopMap = new Map()
+  const tripMap = new Map()
+  const vehicleMap = new Map()
+  const segments = []
+
+  for (const d of active) {
+    const opStatus =
+      d.type === 'detour'
+        ? 'detoured'
+        : d.type === 'stop_closure'
+          ? 'closed'
+          : d.type === 'delay'
+            ? 'delayed'
+            : 'disrupted'
+
+    for (const r of d.affected_routes ?? []) {
+      if (!routeMap.has(r.route_id)) {
+        routeMap.set(r.route_id, {
+          route_id: r.route_id,
+          route_number: r.route_number,
+          route_name: r.route_name,
+          direction: r.direction,
+          operational_status: opStatus,
+          disruption_ids: [d.id],
+        })
+      } else {
+        routeMap.get(r.route_id).disruption_ids.push(d.id)
+      }
+    }
+
+    for (const s of d.affected_stops ?? []) {
+      if (!stopMap.has(s.stop_id)) {
+        stopMap.set(s.stop_id, {
+          stop_id: s.stop_id,
+          stop_name: s.stop_name,
+          operational_status: d.type === 'stop_closure' ? 'closed' : opStatus,
+          disruption_ids: [d.id],
+        })
+      } else {
+        stopMap.get(s.stop_id).disruption_ids.push(d.id)
+      }
+    }
+
+    for (const tripId of d.affected_trips ?? []) {
+      if (!tripMap.has(tripId)) {
+        tripMap.set(tripId, {
+          trip_id: tripId,
+          route_id: d.affected_routes?.[0]?.route_id ?? 1,
+          operational_status: opStatus,
+          disruption_ids: [d.id],
+        })
+      }
+    }
+
+    for (const vehicleId of d.affected_vehicles ?? []) {
+      if (!vehicleMap.has(vehicleId)) {
+        const vehicle = activeVehicles.find((v) => v.vehicle_id === vehicleId)
+        vehicleMap.set(vehicleId, {
+          vehicle_id: vehicleId,
+          vehicle_number: vehicle?.vehicle_number ?? String(vehicleId),
+          operational_status: opStatus,
+          disruption_ids: [d.id],
+        })
+      }
+    }
+
+    for (const seg of d.affected_segments ?? []) {
+      segments.push({
+        disruption_id: d.id,
+        route_id: d.affected_routes?.[0]?.route_id ?? null,
+        segment: seg,
+        operational_status: opStatus,
+      })
+    }
+  }
+
+  return {
+    generated_at: '2026-11-10T13:15:00Z',
+    active_disruption_count: active.length,
+    affected_routes: [...routeMap.values()],
+    affected_stops: [...stopMap.values()],
+    affected_trips: [...tripMap.values()],
+    affected_vehicles: [...vehicleMap.values()],
+    affected_segments: segments,
+  }
+}
+
+export function serviceStatusResponse({ disruptions = activeDisruptions } = {}) {
+  const active = disruptions.filter((item) => item.status === 'active')
+  const summary = affectedServicesSummary({ disruptions: active })
+  return {
+    generated_at: summary.generated_at,
+    overall_status: active.length > 0 ? 'disrupted' : 'normal',
+    active_disruption_count: active.length,
+    active_disruptions: active,
+    detours: active.filter((item) => item.type === 'detour'),
+    affected_routes: summary.affected_routes,
+    affected_stops: summary.affected_stops,
+    affected_trips: summary.affected_trips,
+    affected_vehicles: summary.affected_vehicles,
+    affected_segments: summary.affected_segments,
+  }
+}
+
+export function routeOperationalStatus(routeId = 7, { disruptions = activeDisruptions } = {}) {
+  const id = Number(routeId)
+  const matching = disruptions.filter(
+    (item) =>
+      item.status === 'active' &&
+      Array.isArray(item.affected_routes) &&
+      item.affected_routes.some((r) => r.route_id === id),
+  )
+  const firstType = matching[0]?.type
+  const opStatus =
+    matching.length === 0
+      ? 'normal'
+      : firstType === 'detour'
+        ? 'detoured'
+        : firstType === 'delay'
+          ? 'delayed'
+          : 'disrupted'
+  return {
+    entity_type: 'route',
+    entity_id: id,
+    operational_status: opStatus,
+    active_disruptions: matching,
+  }
+}

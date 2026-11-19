@@ -4,9 +4,12 @@ import { expect, it, vi } from 'vitest'
 import App from './App.jsx'
 import { sanitizeRedirectPath } from './lib/routerState.js'
 import {
+  activeDisruptions as fixtureActiveDisruptions,
   activeVehicles as fixtureVehicles,
+  allDisruptions as fixtureAllDisruptions,
   jsonResponse,
   routes as fixtureRoutes,
+  serviceStatusResponse,
   simulatorStatus,
 } from './test/fixtures.js'
 
@@ -499,6 +502,194 @@ it('supports /admin/vehicles US 177 location updates with presets, validation, C
     is_accessible: true,
   })
   expect(mutationCalls[1].body).toEqual({ speed_multiplier: 2 })
+  for (const call of mutationCalls) {
+    expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
+  }
+})
+
+it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187/188 external incident feeds with CSRF, and US 196 enterprise service status', async () => {
+  let disruptionsCatalog = [...fixtureAllDisruptions]
+  const mutationCalls = []
+
+  const fetchMock = vi.fn(async (path, options = {}) => {
+    const method = options.method || 'GET'
+    const url = new URL(path, 'https://transit.test')
+    if (url.pathname === '/api/auth/me') return jsonResponse(adminSession, 200)
+    if (url.pathname === '/api/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
+    if (url.pathname === '/api/disruptions' && method === 'GET') {
+      return jsonResponse(disruptionsCatalog, 200)
+    }
+    if (url.pathname === '/api/integrations/service-status' && method === 'GET') {
+      return jsonResponse(serviceStatusResponse({ disruptions: disruptionsCatalog }), 200)
+    }
+    if (url.pathname === '/api/disruptions' && method === 'POST') {
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
+      const created = {
+        id: 410,
+        type: body.type,
+        title: body.title,
+        description: body.description || '',
+        affected_area: body.affected_area || '',
+        start_time: body.start_time || '2026-11-10T14:00:00Z',
+        end_time: body.end_time || null,
+        status: body.status || 'active',
+        source_service: 'admin',
+        external_reference: null,
+        received_at: '2026-11-10T14:00:00Z',
+        affected_routes: (body.route_ids ?? []).map((id) => {
+          const r = fixtureRoutes.find((item) => item.id === id) ?? fixtureRoutes[0]
+          return { route_id: r.id, route_number: r.number, route_name: r.name, direction: r.direction }
+        }),
+        affected_stops: (body.stop_ids ?? []).map((stopId) => ({
+          stop_id: stopId,
+          stop_name: `Stop #${stopId}`,
+          route_id: body.route_ids?.[0] ?? 1,
+        })),
+        affected_trips: body.trip_ids ?? [],
+        affected_vehicles: body.vehicle_ids ?? [],
+        affected_segments: body.affected_segments ?? [],
+      }
+      disruptionsCatalog = [created, ...disruptionsCatalog]
+      return jsonResponse(created, 201)
+    }
+    if (url.pathname.startsWith('/api/disruptions/') && method === 'PATCH') {
+      const id = Number(url.pathname.split('/')[3])
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
+      disruptionsCatalog = disruptionsCatalog.map((item) =>
+        item.id === id ? { ...item, ...body } : item,
+      )
+      return jsonResponse(disruptionsCatalog.find((item) => item.id === id), 200)
+    }
+    if (
+      (url.pathname === '/api/integrations/utilities/notices' ||
+        url.pathname === '/api/integrations/emergency/incidents' ||
+        url.pathname === '/api/integrations/security/traffic-alerts') &&
+      method === 'POST'
+    ) {
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
+      const sourceService = url.pathname.includes('utilities')
+        ? 'utilities'
+        : url.pathname.includes('emergency')
+          ? 'emergency_services'
+          : 'security_police'
+      const disruption = {
+        id: 500 + mutationCalls.length,
+        type: body.notice_type || body.incident_type || body.alert_type || 'road_closure',
+        title: body.title,
+        description: body.description || '',
+        affected_area: body.affected_area || '',
+        start_time: '2026-11-10T14:05:00Z',
+        end_time: null,
+        status: body.status || 'active',
+        source_service: sourceService,
+        external_reference: body.external_id || null,
+        received_at: '2026-11-10T14:05:00Z',
+        affected_routes: [
+          { route_id: 7, route_number: '7', route_name: 'King', direction: 'direction_0' },
+        ],
+        affected_stops: [
+          { stop_id: 23, stop_name: 'University Terminal', route_id: 7 },
+        ],
+        affected_trips: body.trip_ids ?? [],
+        affected_vehicles: [],
+        affected_segments: body.affected_segments ?? [],
+      }
+      disruptionsCatalog = [disruption, ...disruptionsCatalog]
+      return jsonResponse(
+        {
+          created: true,
+          disruption,
+          matched_route_ids: body.route_ids ?? [7],
+          matched_stop_ids: body.stop_ids ?? [23],
+          transit_impact: `Impacts Route 7 and University Terminal via ${sourceService}`,
+        },
+        201,
+      )
+    }
+    throw new Error(`Unexpected request: ${method} ${path}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<App initialPath="/admin/disruptions" />)
+
+  await screen.findByRole('heading', { name: 'Transit disruptions & incident feeds' })
+  expect(screen.getByRole('link', { name: 'Disruptions' })).toHaveAttribute('aria-current', 'page')
+
+  // US 196 Enterprise service status snapshot is loaded from GET /api/integrations/service-status
+  const enterprisePanel = screen.getByRole('region', {
+    name: 'Enterprise service status snapshot (US 196)',
+  })
+  expect(await within(enterprisePanel).findByText('Disrupted')).toBeVisible()
+  expect(
+    within(enterprisePanel).getByText(/Route 7 \(King\) · Detoured/),
+  ).toBeVisible()
+  await screen.findByText('King St N watermain construction detour')
+  expect(fixtureActiveDisruptions).toHaveLength(2)
+
+  // Validation blocks creating a disruption without a title
+  await user.click(screen.getByRole('button', { name: 'Create disruption' }))
+  expect(screen.getByRole('alert')).toHaveTextContent(/Disruption title is required/i)
+
+  // US 190, 191, 192: Create a disruption with affected route, stop, trip, vehicle, and segment
+  await user.selectOptions(screen.getByLabelText('Disruption type'), 'delay')
+  await user.type(screen.getByLabelText('Title'), 'Route 7 signal delay at University')
+  await user.type(screen.getByLabelText('Description'), 'Expect 10 minute delays due to signal repair.')
+  await user.type(screen.getByLabelText('Affected area'), 'University Ave & King St N')
+  await user.click(screen.getByLabelText(/Route 7 · King/))
+  await user.type(screen.getByLabelText('Affected stop IDs (optional)'), '23')
+  await user.type(screen.getByLabelText('Affected trip IDs (optional)'), '200')
+  await user.type(screen.getByLabelText('Affected vehicle IDs (optional)'), '507')
+  await user.type(
+    screen.getByLabelText('Affected route segments (optional)'),
+    'King St N at University Ave',
+  )
+  await user.click(screen.getByRole('button', { name: 'Create disruption' }))
+
+  await screen.findByText(/Created delay disruption "Route 7 signal delay at University"/i)
+  expect(screen.getByText('Route 7 signal delay at University')).toBeVisible()
+
+  // Resolve an active disruption from the table
+  const createdRow = screen.getByText('Route 7 signal delay at University').closest('tr')
+  await user.click(within(createdRow).getByRole('button', { name: 'Resolve' }))
+  await screen.findByText(/Marked disruption #410 .* as Resolved/i)
+
+  // US 186 Utilities notice submission with 1-click Waterloo Region template
+  await user.click(screen.getByRole('button', { name: 'Weber St Hydro Closure' }))
+  expect(screen.getByLabelText('External reference ID')).toHaveValue('UTIL-WR-2026-102')
+  await user.click(screen.getByRole('button', { name: 'Submit utilities notice' }))
+  const integrationResult = await screen.findByRole('status', {
+    name: 'External integration result',
+  })
+  expect(integrationResult).toHaveTextContent('Impacts Route 7 and University Terminal via utilities')
+
+  // US 187 Emergency Services incident submission
+  await user.click(screen.getByRole('tab', { name: 'Emergency Services (US 187)' }))
+  await user.click(screen.getByRole('button', { name: 'Central Station Fire Response' }))
+  await user.click(screen.getByRole('button', { name: 'Submit emergency incident' }))
+  await within(integrationResult).findByText(
+    'Impacts Route 7 and University Terminal via emergency_services',
+  )
+
+  // US 188 Security / Police traffic alert submission
+  await user.click(screen.getByRole('tab', { name: 'Security / Police (US 188)' }))
+  await user.click(screen.getByRole('button', { name: 'Uptown Waterloo Traffic Restriction' }))
+  await user.click(screen.getByRole('button', { name: 'Submit security traffic alert' }))
+  await within(integrationResult).findByText(
+    'Impacts Route 7 and University Terminal via security_police',
+  )
+
+  expect(mutationCalls).toHaveLength(5)
+  expect(mutationCalls.map((c) => `${c.method} ${c.path}`)).toEqual([
+    'POST /api/disruptions',
+    'PATCH /api/disruptions/410',
+    'POST /api/integrations/utilities/notices',
+    'POST /api/integrations/emergency/incidents',
+    'POST /api/integrations/security/traffic-alerts',
+  ])
   for (const call of mutationCalls) {
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }

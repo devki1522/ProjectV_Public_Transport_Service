@@ -22,6 +22,7 @@ func TestTableNames(t *testing.T) {
 		{"VehicleLocation", VehicleLocation{}, "vehicle_locations"},
 		{"Disruption", Disruption{}, "disruptions"},
 		{"DisruptionRoute", DisruptionRoute{}, "disruption_routes"},
+		{"DisruptionImpact", DisruptionImpact{}, "disruption_impacts"},
 		{"RouteShape", RouteShape{}, "route_shapes"},
 		{"RoutePattern", RoutePattern{}, "route_patterns"},
 		{"RoutePatternStop", RoutePatternStop{}, "route_pattern_stops"},
@@ -67,13 +68,18 @@ func TestJSONSerialization(t *testing.T) {
 		t.Errorf("unmarshaled Route mismatch: got %+v, want %+v", unmarshaled, route)
 	}
 
+	affectedArea := "King St & University Ave"
+	externalRef := "UTIL-2026-101"
 	disruption := Disruption{
-		ID:            10,
-		Type:          "detour",
-		Title:         "Construction Detour",
-		StartTime:     now,
-		Status:        "active",
-		SourceService: "transit",
+		ID:                10,
+		Type:              "detour",
+		Title:             "Construction Detour",
+		AffectedArea:      &affectedArea,
+		StartTime:         now,
+		Status:            "active",
+		SourceService:     "utilities",
+		ExternalReference: &externalRef,
+		ReceivedAt:        now,
 	}
 
 	dData, err := json.Marshal(disruption)
@@ -86,8 +92,40 @@ func TestJSONSerialization(t *testing.T) {
 		t.Fatalf("failed to unmarshal Disruption: %v", err)
 	}
 
-	if unmarshaledD.Title != disruption.Title || unmarshaledD.Status != disruption.Status {
+	if unmarshaledD.Title != disruption.Title ||
+		unmarshaledD.Status != disruption.Status ||
+		unmarshaledD.AffectedArea == nil || *unmarshaledD.AffectedArea != affectedArea ||
+		unmarshaledD.ExternalReference == nil || *unmarshaledD.ExternalReference != externalRef ||
+		!unmarshaledD.ReceivedAt.Equal(now) {
 		t.Errorf("unmarshaled Disruption mismatch: got %+v, want %+v", unmarshaledD, disruption)
+	}
+
+	impactTripID := 42
+	impactVehID := 11
+	segment := "King St between University Ave and Columbia St"
+	impact := DisruptionImpact{
+		ID:                 5,
+		DisruptionID:       10,
+		TripID:             &impactTripID,
+		VehicleID:          &impactVehID,
+		SegmentDescription: &segment,
+	}
+
+	impData, err := json.Marshal(impact)
+	if err != nil {
+		t.Fatalf("failed to marshal DisruptionImpact: %v", err)
+	}
+
+	var unmarshaledImp DisruptionImpact
+	if err := json.Unmarshal(impData, &unmarshaledImp); err != nil {
+		t.Fatalf("failed to unmarshal DisruptionImpact: %v", err)
+	}
+
+	if unmarshaledImp.DisruptionID != impact.DisruptionID ||
+		unmarshaledImp.TripID == nil || *unmarshaledImp.TripID != impactTripID ||
+		unmarshaledImp.VehicleID == nil || *unmarshaledImp.VehicleID != impactVehID ||
+		unmarshaledImp.SegmentDescription == nil || *unmarshaledImp.SegmentDescription != segment {
+		t.Errorf("unmarshaled DisruptionImpact mismatch: got %+v, want %+v", unmarshaledImp, impact)
 	}
 
 	tripID := 42

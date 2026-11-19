@@ -15,6 +15,7 @@ import (
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
@@ -62,6 +63,7 @@ func main() {
 		&models.VehicleLocation{},
 		&models.Disruption{},
 		&models.DisruptionRoute{},
+		&models.DisruptionImpact{},
 		&models.RouteShape{},
 		&models.RoutePattern{},
 		&models.RoutePatternStop{},
@@ -131,6 +133,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 
 	var simulator *vehicles.Simulator
 	var vehicleHandler *handlers.VehicleHandler
+	var disruptionHandler *handlers.DisruptionHandler
 	var estimates transit.EstimateProvider
 	if db != nil {
 		vehicleService := vehicles.NewService(vehicles.NewPostgresRepository(db))
@@ -145,16 +148,18 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 			}
 		}
 		vehicleHandler = handlers.NewVehicleHandler(vehicleService, simulator)
+		disruptionHandler = handlers.NewDisruptionHandler(disruptions.NewService(disruptions.NewPostgresRepository(db)))
 	}
 
 	h := router.NewWithDependencies(db, router.Dependencies{
-		Estimates:      estimates,
-		AuthHandler:    authHandler,
-		AuthMiddleware: authMiddleware,
-		CSRF:           csrf,
-		RequiredRole:   cfg.Auth.RequiredRole,
-		AdminHandler:   adminHandler,
-		VehicleHandler: vehicleHandler,
+		Estimates:         estimates,
+		AuthHandler:       authHandler,
+		AuthMiddleware:    authMiddleware,
+		CSRF:              csrf,
+		RequiredRole:      cfg.Auth.RequiredRole,
+		AdminHandler:      adminHandler,
+		VehicleHandler:    vehicleHandler,
+		DisruptionHandler: disruptionHandler,
 	})
 
 	cleanup := func() {

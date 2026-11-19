@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, BusFront, CalendarDays, Map as MapIcon, MapPin } from 'lucide-react'
-import { getRoutes } from '../../api/transit.js'
+import { AlertTriangle, ArrowRightLeft, BusFront, CalendarDays, Map as MapIcon, MapPin } from 'lucide-react'
+import { getRoutes, getServiceStatus } from '../../api/transit.js'
 import { useResource } from '../../hooks/useResource.js'
 import { formatDate, groupRoutes, serviceDate } from '../../lib/transit.js'
 import { Link } from '../../lib/router.jsx'
@@ -9,8 +9,9 @@ import { EmptyState, ErrorNotice, LoadingRows } from '../../components/DataState
 import { TransitWorkspace } from '../TransitWorkspace.jsx'
 import { JourneyView } from '../journey/JourneyView.jsx'
 import { LiveMapView } from '../live/LiveMapView.jsx'
+import { ServiceAlertsView } from '../alerts/ServiceAlertsView.jsx'
 
-const RESIDENT_SECTIONS = ['schedules', 'journey', 'map']
+const RESIDENT_SECTIONS = ['schedules', 'journey', 'map', 'alerts']
 
 export function ResidentPage() {
   const routes = useResource('routes', getRoutes)
@@ -18,17 +19,62 @@ export function ResidentPage() {
   const [section, setSection] = useState('schedules')
   const [routeId, setRouteId] = useState(null)
   const [mapRouteId, setMapRouteId] = useState('')
+  const [alertsRouteId, setAlertsRouteId] = useState('')
   const [today, setToday] = useState(serviceDate)
   const [date, setDate] = useState(serviceDate)
   const [view, setView] = useState('schedule')
   const selectedRoute = routes.data?.find((route) => route.id === routeId) ?? groups[0]?.directions[0]
   const selectedGroup = groups.find((group) => group.number === selectedRoute?.number)
 
+  const serviceStatusKey =
+    section === 'alerts' || (Array.isArray(routes.data) && routes.data.length > 0)
+      ? 'service-status'
+      : null
+  const serviceStatus = useResource(serviceStatusKey, getServiceStatus)
+  const validServiceStatus =
+    serviceStatus.data &&
+    typeof serviceStatus.data === 'object' &&
+    !Array.isArray(serviceStatus.data) &&
+    Array.isArray(serviceStatus.data.active_disruptions)
+      ? serviceStatus.data
+      : null
+
+  const activeDisruptionCount =
+    validServiceStatus?.active_disruption_count ??
+    validServiceStatus?.active_disruptions?.length ??
+    0
+
+  const selectedRouteAffected = useMemo(
+    () =>
+      selectedRoute && Array.isArray(validServiceStatus?.affected_routes)
+        ? validServiceStatus.affected_routes.find((item) => item.route_id === selectedRoute.id) ?? null
+        : null,
+    [selectedRoute, validServiceStatus],
+  )
+
+  const selectedRouteDisruptions = useMemo(
+    () =>
+      selectedRoute && Array.isArray(validServiceStatus?.active_disruptions)
+        ? validServiceStatus.active_disruptions.filter(
+            (disruption) =>
+              Array.isArray(disruption.affected_routes) &&
+              disruption.affected_routes.some((route) => route.route_id === selectedRoute.id),
+          )
+        : [],
+    [selectedRoute, validServiceStatus],
+  )
+
+  const selectedRouteOperationalStatus =
+    selectedRouteAffected?.operational_status ??
+    (selectedRouteDisruptions.length > 0 ? 'disrupted' : validServiceStatus ? 'normal' : null)
+
   useEffect(() => {
     if (section === 'journey') {
       document.title = 'Journey Search · Public Transport Waterloo Region'
     } else if (section === 'map') {
       document.title = 'Live Map · Public Transport Waterloo Region'
+    } else if (section === 'alerts') {
+      document.title = 'Service Alerts · Public Transport Waterloo Region'
     } else {
       document.title = 'Schedules & Departures · Public Transport Waterloo Region'
     }
@@ -47,7 +93,7 @@ export function ResidentPage() {
     if (event.key === 'Home') {
       next = 'schedules'
     } else if (event.key === 'End') {
-      next = 'map'
+      next = 'alerts'
     } else if (event.key === 'ArrowRight') {
       next = RESIDENT_SECTIONS[(currentIndex + 1) % RESIDENT_SECTIONS.length]
     } else if (event.key === 'ArrowLeft') {
@@ -60,6 +106,19 @@ export function ResidentPage() {
   function handleOpenLiveMap(targetRouteId) {
     setMapRouteId(targetRouteId ? String(targetRouteId) : '')
     setSection('map')
+  }
+
+  function handleOpenRouteSchedule(targetRouteId) {
+    if (targetRouteId) {
+      setRouteId(Number(targetRouteId))
+    }
+    setView('schedule')
+    setSection('schedules')
+  }
+
+  function handleOpenAlerts(targetRouteId) {
+    setAlertsRouteId(targetRouteId ? String(targetRouteId) : '')
+    setSection('alerts')
   }
 
   return (
@@ -111,6 +170,24 @@ export function ResidentPage() {
             <MapIcon size={16} aria-hidden="true" />
             <span>Live Map</span>
           </button>
+          <button
+            id="section-tab-alerts"
+            type="button"
+            role="tab"
+            className="resident-nav-tab"
+            aria-selected={section === 'alerts'}
+            aria-controls="section-panel-alerts"
+            tabIndex={section === 'alerts' ? 0 : -1}
+            onClick={() => setSection('alerts')}
+          >
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span>Service Alerts</span>
+            {activeDisruptionCount > 0 && (
+              <span className="nav-alert-badge" aria-hidden="true">
+                {activeDisruptionCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="header-location"><MapPin size={16} aria-hidden="true" /> Waterloo Region, Ontario</div>
@@ -121,6 +198,8 @@ export function ResidentPage() {
           <div><h1>Journey Search</h1><p>Find transit routes and walking connections between two locations.</p></div>
         ) : section === 'map' ? (
           <div><h1>Live Map</h1><p>Track active buses across Waterloo Region and view upcoming stop arrivals.</p></div>
+        ) : section === 'alerts' ? (
+          <div><h1>Service Alerts</h1><p>View active transit disruptions, detours, and affected routes and stops across Waterloo Region.</p></div>
         ) : (
           <div><h1>Schedules &amp; Departures</h1><p>A little planning. A smoother journey.</p></div>
         )}
@@ -141,7 +220,10 @@ export function ResidentPage() {
                 : !selectedRoute ? <EmptyState title="No routes available" description="There are no active routes to show right now. Try again in a moment." onRetry={routes.retry} />
                   : <TransitWorkspace route={selectedRoute} group={selectedGroup}
                     onDirectionChange={setRouteId} today={today} date={date} onDateChange={setDate} view={view} onViewChange={setView}
-                    onViewLiveMap={() => handleOpenLiveMap(selectedRoute.id)} />}
+                    onViewLiveMap={() => handleOpenLiveMap(selectedRoute.id)}
+                    operationalStatus={selectedRouteOperationalStatus}
+                    activeDisruptions={selectedRouteDisruptions}
+                    onViewServiceAlerts={() => handleOpenAlerts(selectedRoute.id)} />}
           </main>
         </div>
       ) : section === 'journey' ? (
@@ -156,7 +238,7 @@ export function ResidentPage() {
             </div>
           </main>
         </div>
-      ) : (
+      ) : section === 'map' ? (
         <div
           id="section-panel-map"
           role="tabpanel"
@@ -168,6 +250,25 @@ export function ResidentPage() {
                 routes={routes.data ?? []}
                 selectedRouteId={mapRouteId}
                 onSelectedRouteChange={setMapRouteId}
+              />
+            </div>
+          </main>
+        </div>
+      ) : (
+        <div
+          id="section-panel-alerts"
+          role="tabpanel"
+          aria-labelledby="section-tab-alerts"
+        >
+          <main id="main-content" className="main-content alerts-main" tabIndex={-1}>
+            <div className="view-panel">
+              <ServiceAlertsView
+                routes={routes.data ?? []}
+                serviceStatusResource={serviceStatus}
+                selectedRouteId={alertsRouteId}
+                onSelectedRouteChange={setAlertsRouteId}
+                onSelectRouteSchedule={handleOpenRouteSchedule}
+                onSelectRouteLiveMap={handleOpenLiveMap}
               />
             </div>
           </main>

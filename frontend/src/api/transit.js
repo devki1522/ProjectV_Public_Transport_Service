@@ -125,3 +125,49 @@ export async function getStopArrivals(stopId, routeId, signal) {
   const path = `/api/stops/${encodeURIComponent(stopId)}/arrivals${query ? `?${query}` : ''}`
   return requireArray(await getJSON(path, signal))
 }
+
+export async function getActiveDisruptions({ type, routeId, stopId } = {}, signal) {
+  const params = new URLSearchParams()
+  if (typeof type === 'string' && type.trim()) params.set('type', type.trim())
+  if (routeId) params.set('route_id', String(routeId))
+  if (stopId) params.set('stop_id', String(stopId))
+  const query = params.toString()
+  const path = query ? `/api/disruptions/active?${query}` : '/api/disruptions/active'
+  return requireArray(await getJSON(path, signal))
+}
+
+export async function getServiceStatus(signal) {
+  const data = await getJSON('/api/service-status', signal)
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
+    throw new TransitApiError('Service status is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getAffectedServices(signal) {
+  const data = await getJSON('/api/disruptions/affected', signal)
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    !Array.isArray(data.affected_routes) ||
+    !Array.isArray(data.affected_stops)
+  ) {
+    throw new TransitApiError('Affected service information is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getRouteStatus(routeId, signal) {
+  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/status`, signal)
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    typeof data.operational_status !== 'string' ||
+    !Array.isArray(data.active_disruptions)
+  ) {
+    throw new TransitApiError('Route status is unavailable. Please try again.')
+  }
+  return data
+}

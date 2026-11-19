@@ -36,6 +36,12 @@ authorization. The frontend never receives the JWT or raw session identifier.
 | `POST /api/admin/vehicles/simulator/stop` | Session + `TransitAdministrator` + CSRF | Pauses periodic bus simulation ticks |
 | `POST /api/admin/vehicles/simulator/step` | Session + `TransitAdministrator` + CSRF | Advances all simulated buses by one tick immediately |
 | `POST /api/admin/vehicles/simulator/reset` | Session + `TransitAdministrator` + CSRF | Clears simulated vehicle locations and resets simulator progress |
+| `POST /api/disruptions` | Session + `TransitAdministrator` + CSRF | Creates a transit disruption (`201`) linking affected routes, stops, trips, vehicles, and segments; logs structured audit event |
+| `PATCH /api/disruptions/{id}` | Session + `TransitAdministrator` + CSRF | Updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200`); logs structured audit event |
+| `POST /api/integrations/utilities/notices` | Session + `TransitAdministrator` + CSRF | Ingests a Utilities road closure or construction notice (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `POST /api/integrations/emergency/incidents` | Session + `TransitAdministrator` + CSRF | Ingests an Emergency Services incident or road restriction (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `POST /api/integrations/security/traffic-alerts` | Session + `TransitAdministrator` + CSRF | Ingests a Security / Police traffic restriction or road closure (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `GET /api/integrations/service-status` | Session + `TransitAdministrator` | Returns the enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
 
 Auth and admin responses include `Cache-Control: no-store`. Error codes use JSON:
 `400` invalid request, `401` invalid credentials or missing/expired session,
@@ -215,6 +221,42 @@ variables:
 | `SIMULATE_VEHICLES_COUNT` | `24` (range 1–200) | Number of simulated vehicles distributed across active routes |
 | `SIMULATE_TICK_INTERVAL` | `3s` (range `500ms`–`60s`) | Interval between simulated GPS updates |
 
+### Transit disruptions, affected services, operational statuses, and external incident feeds
+
+These endpoints implement User Stories 186 (Utilities Road Closures and
+Construction / PT-FR-018), 187 (Emergency Incidents and Road Restrictions /
+PT-FR-019), 188 (Security and Police Traffic Alerts / PT-FR-020), 190 (Create
+and Update Disruptions / PT-FR-014), 191 (Identify Affected Transit Services /
+PT-FR-015), 192 (Update Operational Statuses / PT-FR-016), 194 (View Active
+Disruptions / PT-FR-017), 195 (View Affected Routes and Stops), and 196
+(Enterprise Retrieve Disruption and Service Status Information / PT-FR-021), as
+well as PT-NFR-005 through PT-NFR-008.
+
+| Endpoint | Access | Response |
+| --- | --- | --- |
+| `GET /api/disruptions` | Public | All disruptions (`[]disruptions.DisruptionResponse`) filtered by optional `status`, `type`, `route_id`, `stop_id`, `trip_id`, `vehicle_id`, `source_service` |
+| `GET /api/disruptions/active` | Public | Strictly active disruptions (`status='active'`), optionally filtered by `type`, `route_id`, `stop_id`, `trip_id` |
+| `GET /api/disruptions/affected` | Public | Consolidated `AffectedServicesSummary` with derived operational statuses for all currently affected routes, stops, trips, vehicles, and corridor segments |
+| `GET /api/disruptions/{id}` | Public | Single hydrated `DisruptionResponse` (`404` if unknown) |
+| `GET /api/service-status` | Public | Resident network status (`overall_status`: `"normal"` or `"disrupted"`), active disruptions, active detours, and affected services summary |
+| `GET /api/routes/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="route"`, derived `operational_status`, `active_disruptions`; `404` if unknown route) |
+| `GET /api/stops/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="stop"`, derived `operational_status`, `active_disruptions`; `404` if unknown stop) |
+| `GET /api/trips/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="trip"`, derived `operational_status`, `active_disruptions` including parent-route disruptions; `404` if unknown trip) |
+| `POST /api/disruptions` | Admin + CSRF | Creates a disruption (`201 Created`) and links routes, stops (auto-resolving serving routes via `route_stops`), trips, vehicles, and segments |
+| `PATCH /api/disruptions/{id}` | Admin + CSRF | Partially updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200 OK`) |
+| `POST /api/integrations/utilities/notices` | Admin + CSRF | Ingests Utilities notice (`source_service="utilities"`, types `road_closure` \| `construction`) with optional Haversine radius matching (`50`–`5000m`, default `400m`) |
+| `POST /api/integrations/emergency/incidents` | Admin + CSRF | Ingests Emergency Services incident (`source_service="emergency_services"`, types `emergency` \| `road_closure`) with severity and spatial matching |
+| `POST /api/integrations/security/traffic-alerts` | Admin + CSRF | Ingests Security / Police traffic alert (`source_service="security_police"`, types `traffic_restriction` \| `road_closure`) with spatial matching |
+| `GET /api/integrations/service-status` | Admin session | Authenticated enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
+
+All external notices retain `source_service`, `external_reference`, and server
+`received_at` timestamps (PT-NFR-007), and upsert idempotently on
+`(source_service, external_reference)` (`201 Created` on insert, `200 OK` on
+update). Stop-level impacts automatically resolve serving active routes from
+`route_stops` and persist `(disruption_id, route_id, stop_id)` in
+`disruption_routes`, so `/api/journeys` (US 174) immediately routes around
+newly ingested closures, emergencies, and detours.
+
 ## Develop outside Docker
 
 After project setup, leave the database running and stop the containerized API
@@ -246,6 +288,7 @@ are listed in [`.env.example`](.env.example).
 - `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, live vehicles/arrivals, and routing.
 - `internal/transit/`: resident schedule logic, journey planner, PostgreSQL reads, and estimate-provider interface.
 - `internal/vehicles/`: live vehicle location ingestion, route geometry lookup, built-in bus simulator, upcoming arrival ETA projections, and `LiveEstimateProvider`.
+- `internal/disruptions/`: transit disruption lifecycle management, spatial stop/route impact matching, operational status derivation, and external Utilities/Emergency/Security notice ingestion.
 
 Keep startup small. As endpoints grow, separate HTTP handling, application
 logic and database access under `internal/`, passing dependencies explicitly.
