@@ -52,3 +52,38 @@ export async function getDepartures({ routeId, stopId, tripId, hours = 2 }, sign
   if (tripId) params.set('trip_id', tripId)
   return requireArray(await getJSON(`/api/departures?${params}`, signal))
 }
+
+export async function getStopsCatalog(query = '', signal) {
+  const params = new URLSearchParams({ limit: '100' })
+  if (typeof query === 'string' && query.trim()) params.set('q', query.trim())
+  return requireArray(await getJSON(`/api/stops?${params}`, signal))
+}
+
+export async function getJourneys({
+  origin,
+  destination,
+  originStopId,
+  destinationStopId,
+  hours = 6,
+  maxTransfers = 3,
+  maxWalkMeters = 600,
+}, signal) {
+  const from = new Date()
+  const until = new Date(from.getTime() + hours * 60 * 60 * 1000)
+  const params = new URLSearchParams({
+    from: from.toISOString(),
+    until: until.toISOString(),
+    limit: '5',
+    max_transfers: String(maxTransfers),
+    max_walk_meters: String(maxWalkMeters),
+  })
+  if (originStopId) params.set('origin_stop_id', originStopId)
+  else if (origin?.trim()) params.set('origin', origin.trim())
+  if (destinationStopId) params.set('destination_stop_id', destinationStopId)
+  else if (destination?.trim()) params.set('destination', destination.trim())
+  const data = await getJSON(`/api/journeys?${params}`, signal)
+  if (!data || !Array.isArray(data.itineraries)) {
+    throw new TransitApiError('Journey results are unavailable. Please try again.')
+  }
+  return data
+}

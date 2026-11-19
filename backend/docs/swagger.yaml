@@ -98,6 +98,118 @@ definitions:
       trip_id:
         type: integer
     type: object
+  transit.DisruptionNotice:
+    properties:
+      end_time:
+        type: string
+      id:
+        type: integer
+      start_time:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  transit.Itinerary:
+    properties:
+      destination_stop:
+        $ref: '#/definitions/transit.Stop'
+      duration_minutes:
+        type: integer
+      estimated_arrival_time:
+        type: string
+      estimated_departure_time:
+        type: string
+      legs:
+        items:
+          $ref: '#/definitions/transit.JourneyLeg'
+        type: array
+      origin_stop:
+        $ref: '#/definitions/transit.Stop'
+      scheduled_arrival_time:
+        type: string
+      scheduled_departure_time:
+        type: string
+      transfers:
+        type: integer
+      walking_minutes:
+        type: integer
+    type: object
+  transit.JourneyLeg:
+    properties:
+      distance_meters:
+        type: integer
+      duration_minutes:
+        type: integer
+      estimated_arrival_time:
+        type: string
+      estimated_departure_time:
+        type: string
+      from_stop_id:
+        type: integer
+      from_stop_name:
+        type: string
+      from_stop_sequence:
+        type: integer
+      mode:
+        type: string
+      route:
+        $ref: '#/definitions/transit.Route'
+      scheduled_arrival_time:
+        type: string
+      scheduled_departure_time:
+        type: string
+      service_date:
+        type: string
+      stop_count:
+        type: integer
+      stops:
+        items:
+          $ref: '#/definitions/transit.StopTime'
+        type: array
+      to_stop_id:
+        type: integer
+      to_stop_name:
+        type: string
+      to_stop_sequence:
+        type: integer
+      trip_id:
+        type: integer
+    type: object
+  transit.JourneySearchResult:
+    properties:
+      destination:
+        type: string
+      destination_stops:
+        items:
+          $ref: '#/definitions/transit.Stop'
+        type: array
+      excluded_disruptions:
+        items:
+          $ref: '#/definitions/transit.DisruptionNotice'
+        type: array
+      from:
+        type: string
+      itineraries:
+        items:
+          $ref: '#/definitions/transit.Itinerary'
+        type: array
+      message:
+        type: string
+      origin:
+        type: string
+      origin_stops:
+        items:
+          $ref: '#/definitions/transit.Stop'
+        type: array
+      timezone:
+        type: string
+      until:
+        type: string
+    type: object
   transit.Route:
     properties:
       direction:
@@ -375,6 +487,90 @@ paths:
       summary: Check API health
       tags:
       - health
+  /api/journeys:
+    get:
+      description: Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id
+        and/or destination). Returns direct, multi-transfer (up to 3 transfers), and
+        walking-connected itinerary options with ordered leg stops, optional live
+        estimates, and exclusion of cancelled trips, closed stops, and disrupted route
+        segments, or a meaningful message when no itinerary is found.
+      parameters:
+      - description: Positive origin stop ID
+        in: query
+        minimum: 1
+        name: origin_stop_id
+        type: integer
+      - description: Positive destination stop ID
+        in: query
+        minimum: 1
+        name: destination_stop_id
+        type: integer
+      - description: Origin stop or location name
+        in: query
+        name: origin
+        type: string
+      - description: Destination stop or location name
+        in: query
+        name: destination
+        type: string
+      - description: RFC3339 timestamp; defaults to now
+        in: query
+        name: from
+        type: string
+      - description: RFC3339 timestamp; defaults to from plus 6 hours
+        in: query
+        name: until
+        type: string
+      - default: 5
+        description: Maximum itineraries
+        in: query
+        maximum: 20
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 3
+        description: Maximum transit transfers
+        in: query
+        maximum: 3
+        minimum: 0
+        name: max_transfers
+        type: integer
+      - default: 600
+        description: Maximum straight-line walking distance per walk leg in meters
+          (0 disables walking)
+        in: query
+        maximum: 1500
+        minimum: 0
+        name: max_walk_meters
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transit.JourneySearchResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Search transit journeys between two locations
+      tags:
+      - schedules
   /api/routes:
     get:
       produces:
@@ -664,6 +860,44 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/stops:
+    get:
+      parameters:
+      - description: Case-insensitive stop name filter
+        in: query
+        name: q
+        type: string
+      - default: 20
+        description: Maximum results
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/transit.Stop'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Search or list active stops
+      tags:
+      - schedules
   /api/stops/{id}:
     get:
       description: Filters combine with AND. Path IDs fix their filter; conflicting

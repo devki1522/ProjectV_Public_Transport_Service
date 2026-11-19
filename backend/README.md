@@ -64,7 +64,9 @@ No authentication is required for resident reads.
 | `/api/stops/{id}/departures`                | Upcoming departures at a stop                                                    |
 | `/api/routes/{id}/departures`               | Upcoming stop departures along a route                                           |
 | `/api/trips/{id}/departures`                | Upcoming stop departures for a recurring trip                                    |
+| `/api/stops`                                | Search or list active stops (`q` substring filter, `limit` 1–100)                |
 | `/api/stops/{id}`                           | Stop details (coordinates, accessibility, active status) and upcoming departures |
+| `/api/journeys`                             | Direct, multi-transfer (up to 3), and disruption-aware itinerary options        |
 
 Timetables require a valid `date` in `YYYY-MM-DD` format. They return
 `{ "route": {...}, "service_date": "2026-11-10", "timezone": "America/Toronto", "trips": [...] }`.
@@ -121,6 +123,25 @@ direction required by PT-FR-007; GTFS direction codes are not compass directions
 Loop stops retain their distinct `route_stop_id` and sequence. Stop details use
 `{ "stop": {...}, "departures": [...] }`; accessibility uses
 `wheelchair_boarding` (0 unknown, 1 accessible, 2 inaccessible).
+
+`GET /api/journeys` implements User Stories 170 (Journey Search), 172 (View Transit
+Itinerary Options), and 174 (Avoid Disrupted Itineraries). It accepts
+`origin` / `origin_stop_id` and `destination` / `destination_stop_id`, plus
+optional `from` (default now), `until` (default `from` + 6 hours, max 24 hours),
+`limit` (1–20, default 5), `max_transfers` (0–3, default 3), and `max_walk_meters`
+(0–1500, default 600). It returns `{ origin, destination, origin_stops,
+destination_stops, from, until, timezone, itineraries, excluded_disruptions,
+message }` containing direct and multi-transfer itineraries (up to 60 minutes
+transfer wait across distinct routes, plus access/transfer/egress `"walk"` legs
+between nearby stops using a 1.25 street-detour factor at 75 m/min), where each
+leg specifies `mode` (`"transit"` or `"walk"`), ordered intermediate `stops` for
+transit legs, and nullable `estimated_departure_time` / `estimated_arrival_time`
+from `EstimateProvider` while always retaining scheduled times. Active and
+scheduled disruptions from `disruptions` / `disruption_routes` (`cancellation`,
+`stop_closure`, `road_closure`, `emergency`, and stop-level `detour`) are
+excluded from routing and surfaced in `excluded_disruptions`, or an empty
+`itineraries` array with a descriptive `message` when no matching stops or
+valid itineraries exist.
 
 Missing resources return 404, invalid input returns 400, and database failures
 return a generic 500 JSON error without database details. Existing resources

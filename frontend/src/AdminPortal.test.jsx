@@ -370,7 +370,7 @@ it('keeps the resident page public when a previous administrator session expires
     await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Public schedules' })) })
     await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60_000) })
     expect(window.location.pathname).toBe('/')
-    expect(screen.getByRole('heading', { name: 'Schedules & departures' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Schedules & Departures' })).toBeVisible()
   } finally {
     vi.useRealTimers()
   }

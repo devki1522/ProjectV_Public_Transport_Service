@@ -304,6 +304,120 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/journeys": {
+            "get": {
+                "description": "Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id and/or destination). Returns direct, multi-transfer (up to 3 transfers), and walking-connected itinerary options with ordered leg stops, optional live estimates, and exclusion of cancelled trips, closed stops, and disrupted route segments, or a meaningful message when no itinerary is found.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedules"
+                ],
+                "summary": "Search transit journeys between two locations",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive origin stop ID",
+                        "name": "origin_stop_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive destination stop ID",
+                        "name": "destination_stop_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Origin stop or location name",
+                        "name": "origin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Destination stop or location name",
+                        "name": "destination",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 timestamp; defaults to now",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 timestamp; defaults to from plus 6 hours",
+                        "name": "until",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 20,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Maximum itineraries",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Maximum transit transfers",
+                        "name": "max_transfers",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1500,
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 600,
+                        "description": "Maximum straight-line walking distance per walk leg in meters (0 disables walking)",
+                        "name": "max_walk_meters",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transit.JourneySearchResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/routes": {
             "get": {
                 "produces": [
@@ -732,6 +846,63 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/stops": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schedules"
+                ],
+                "summary": "Search or list active stops",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Case-insensitive stop name filter",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Maximum results",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/transit.Stop"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/stops/{id}": {
             "get": {
                 "description": "Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.",
@@ -1011,6 +1182,176 @@ const docTemplate = `{
                 },
                 "trip_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "transit.DisruptionNotice": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "transit.Itinerary": {
+            "type": "object",
+            "properties": {
+                "destination_stop": {
+                    "$ref": "#/definitions/transit.Stop"
+                },
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "estimated_arrival_time": {
+                    "type": "string"
+                },
+                "estimated_departure_time": {
+                    "type": "string"
+                },
+                "legs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.JourneyLeg"
+                    }
+                },
+                "origin_stop": {
+                    "$ref": "#/definitions/transit.Stop"
+                },
+                "scheduled_arrival_time": {
+                    "type": "string"
+                },
+                "scheduled_departure_time": {
+                    "type": "string"
+                },
+                "transfers": {
+                    "type": "integer"
+                },
+                "walking_minutes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transit.JourneyLeg": {
+            "type": "object",
+            "properties": {
+                "distance_meters": {
+                    "type": "integer"
+                },
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "estimated_arrival_time": {
+                    "type": "string"
+                },
+                "estimated_departure_time": {
+                    "type": "string"
+                },
+                "from_stop_id": {
+                    "type": "integer"
+                },
+                "from_stop_name": {
+                    "type": "string"
+                },
+                "from_stop_sequence": {
+                    "type": "integer"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "route": {
+                    "$ref": "#/definitions/transit.Route"
+                },
+                "scheduled_arrival_time": {
+                    "type": "string"
+                },
+                "scheduled_departure_time": {
+                    "type": "string"
+                },
+                "service_date": {
+                    "type": "string"
+                },
+                "stop_count": {
+                    "type": "integer"
+                },
+                "stops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.StopTime"
+                    }
+                },
+                "to_stop_id": {
+                    "type": "integer"
+                },
+                "to_stop_name": {
+                    "type": "string"
+                },
+                "to_stop_sequence": {
+                    "type": "integer"
+                },
+                "trip_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transit.JourneySearchResult": {
+            "type": "object",
+            "properties": {
+                "destination": {
+                    "type": "string"
+                },
+                "destination_stops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.Stop"
+                    }
+                },
+                "excluded_disruptions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.DisruptionNotice"
+                    }
+                },
+                "from": {
+                    "type": "string"
+                },
+                "itineraries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.Itinerary"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "origin": {
+                    "type": "string"
+                },
+                "origin_stops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transit.Stop"
+                    }
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "until": {
+                    "type": "string"
                 }
             }
         },
