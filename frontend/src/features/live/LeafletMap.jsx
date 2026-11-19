@@ -219,17 +219,20 @@ export function LeafletMap({ vehicles, routeShape, selectedVehicleId, onSelectVe
     const map = mapRef.current
     if (!map) return
     if (selectedVehicleId === prevSelectedIdRef.current) return
-    prevSelectedIdRef.current = selectedVehicleId
-    if (selectedVehicleId == null) return
+    if (selectedVehicleId == null) {
+      prevSelectedIdRef.current = null
+      return
+    }
 
     const marker = markersRef.current.get(selectedVehicleId)
     if (!marker) return
+    prevSelectedIdRef.current = selectedVehicleId
     const latLng = marker.getLatLng?.()
     if (latLng) {
       map.panTo?.(latLng)
     }
     marker.openPopup?.()
-  }, [selectedVehicleId])
+  }, [selectedVehicleId, vehicles])
 
   return (
     <div className="live-map-canvas-wrap">

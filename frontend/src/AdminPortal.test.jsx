@@ -694,3 +694,75 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
 })
+
+it('preserves multi-line segments and clears end_time when editing a disruption, and ignores hidden Trip IDs on utilities feed', async () => {
+  const mutationCalls = []
+  let catalog = [
+    {
+      ...fixtureActiveDisruptions[0],
+      id: 701,
+      title: 'Multi-segment corridor work',
+      end_time: '2026-11-12T18:00:00Z',
+      affected_segments: ['King St N', 'University Ave W'],
+    },
+  ]
+
+  const fetchMock = vi.fn(async (input, options = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost')
+    const method = (options.method ?? 'GET').toUpperCase()
+    if (url.pathname === '/api/auth/me') return jsonResponse(adminSession)
+    if (url.pathname === '/api/routes') return jsonResponse(fixtureRoutes)
+    if (url.pathname === '/api/disruptions') return jsonResponse(catalog)
+    if (url.pathname === '/api/integrations/service-status') {
+      return jsonResponse({ overall_status: 'disrupted', routes: [], disruptions: [] })
+    }
+    if (url.pathname === '/api/disruptions/701' && method === 'PATCH') {
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path: url.pathname, method, body })
+      catalog = catalog.map((item) => (item.id === 701 ? { ...item, ...body } : item))
+      return jsonResponse(catalog[0], 200)
+    }
+    if (url.pathname === '/api/integrations/utilities/notices' && method === 'POST') {
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path: url.pathname, method, body })
+      return jsonResponse(
+        {
+          created: true,
+          disruption: { ...catalog[0], id: 702, title: body.title, source_service: 'utilities' },
+          matched_route_ids: [],
+          matched_stop_ids: [],
+          transit_impact: 'OK',
+        },
+        201,
+      )
+    }
+    throw new Error(`Unexpected request: ${method} ${url.pathname}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<App initialPath="/admin/disruptions" />)
+
+  const row = (await screen.findByText('Multi-segment corridor work')).closest('tr')
+  await user.click(within(row).getByRole('button', { name: 'Edit' }))
+
+  expect(screen.getByLabelText('Affected route segments (optional)')).toHaveValue(
+    'King St N\nUniversity Ave W',
+  )
+  await user.clear(screen.getByLabelText('End time (optional)'))
+  await user.click(screen.getByRole('button', { name: 'Save disruption' }))
+
+  await screen.findByText(/Updated disruption #701/i)
+  expect(mutationCalls[0].body.affected_segments).toEqual(['King St N', 'University Ave W'])
+  expect(mutationCalls[0].body.end_time).toBeNull()
+
+  // Invalid Trip IDs entered on Emergency tab must not block Utilities submission where Trip IDs is hidden
+  await user.click(screen.getByRole('tab', { name: 'Emergency Services (US 187)' }))
+  await user.type(screen.getByLabelText('Trip IDs (optional)'), 'invalid-id')
+  await user.click(screen.getByRole('tab', { name: 'Utilities (US 186)' }))
+  await user.click(screen.getByRole('button', { name: 'Weber St Hydro Closure' }))
+  await user.click(screen.getByRole('button', { name: 'Submit utilities notice' }))
+
+  await screen.findByRole('status', { name: 'External integration result' })
+  expect(mutationCalls[1].path).toBe('/api/integrations/utilities/notices')
+})

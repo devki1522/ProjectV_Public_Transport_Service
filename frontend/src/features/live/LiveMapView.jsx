@@ -34,6 +34,7 @@ export function LiveMapView({ routes = [], selectedRouteId = '', onSelectedRoute
   const [statusFilter, setStatusFilter] = useState('all')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
+  const [lastVehiclesError, setLastVehiclesError] = useState(null)
 
   const sortedRoutes = useMemo(
     () =>
@@ -46,7 +47,18 @@ export function LiveMapView({ routes = [], selectedRouteId = '', onSelectedRoute
 
   const parsedRouteId = selectedRouteId ? Number(selectedRouteId) : 0
   const loadVehicles = useCallback(
-    (signal) => getActiveVehicles(parsedRouteId > 0 ? { routeId: parsedRouteId } : {}, signal),
+    async (signal) => {
+      try {
+        const data = await getActiveVehicles(parsedRouteId > 0 ? { routeId: parsedRouteId } : {}, signal)
+        setLastVehiclesError(null)
+        return data
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setLastVehiclesError(error)
+        }
+        throw error
+      }
+    },
     [parsedRouteId],
   )
   const vehiclesRes = useResource(
@@ -54,6 +66,8 @@ export function LiveMapView({ routes = [], selectedRouteId = '', onSelectedRoute
     loadVehicles,
     autoRefresh ? LIVE_POLL_MS : 0,
   )
+
+  const vehiclesError = vehiclesRes.error ?? lastVehiclesError
 
   const loadRouteShape = useCallback(
     (signal) => getRouteShape(parsedRouteId, signal),
@@ -100,15 +114,18 @@ export function LiveMapView({ routes = [], selectedRouteId = '', onSelectedRoute
 
   function handleRouteChange(event) {
     setSelectedVehicleId(null)
+    setLastVehiclesError(null)
     onSelectedRouteChange?.(event.target.value)
   }
 
   function handleStatusChange(event) {
+    setSelectedVehicleId(null)
     setStatusFilter(event.target.value)
   }
 
   function handleShowAllRoutes() {
     setSelectedVehicleId(null)
+    setLastVehiclesError(null)
     setStatusFilter('all')
     onSelectedRouteChange?.('')
   }
@@ -202,8 +219,8 @@ export function LiveMapView({ routes = [], selectedRouteId = '', onSelectedRoute
         </div>
       )}
 
-      {vehiclesRes.error && <ErrorNotice error={vehiclesRes.error} onRetry={handleRefresh} />}
-      {vehiclesRes.error && vehiclesRes.data && (
+      {vehiclesError && <ErrorNotice error={vehiclesError} onRetry={handleRefresh} />}
+      {vehiclesError && vehiclesRes.data && (
         <p className="stale-notice" role="status">
           Showing the last successful vehicle positions. Bus locations may have moved.
         </p>
