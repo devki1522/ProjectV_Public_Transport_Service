@@ -23,7 +23,7 @@ export function TransitWorkspace({ route, group, onDirectionChange, today, date,
 
       <div className="view-tabs" role="tablist" aria-label="Transit information" onKeyDown={handleTabKey}>
         <button id="tab-schedule" type="button" role="tab" aria-selected={view === 'schedule'} aria-controls="panel-schedule" tabIndex={view === 'schedule' ? 0 : -1} onClick={() => onViewChange('schedule')}><CalendarDays size={18} aria-hidden="true" />Timetable</button>
-        <button id="tab-departures" type="button" role="tab" aria-selected={view === 'departures'} aria-controls="panel-departures" tabIndex={view === 'departures' ? 0 : -1} onClick={() => onViewChange('departures')}><Clock3 size={18} aria-hidden="true" />Upcoming departures</button>
+        <button id="tab-departures" type="button" role="tab" aria-selected={view === 'departures'} aria-controls="panel-departures" tabIndex={view === 'departures' ? 0 : -1} onClick={() => onViewChange('departures')}><Clock3 size={18} aria-hidden="true" />Upcoming Departures</button>
       </div>
 
       <div id="panel-schedule" role="tabpanel" aria-labelledby="tab-schedule" tabIndex={0} className="view-panel" hidden={view !== 'schedule'}>

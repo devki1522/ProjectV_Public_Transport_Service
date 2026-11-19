@@ -19,6 +19,8 @@ type ScheduleService interface {
 	Timetable(context.Context, int, string) (transit.Timetable, error)
 	Departures(context.Context, transit.DepartureQuery) ([]transit.Departure, error)
 	Stop(context.Context, int, transit.DepartureQuery) (transit.StopDetails, error)
+	SearchStops(context.Context, transit.StopSearchQuery) ([]transit.Stop, error)
+	Journeys(context.Context, transit.JourneyQuery) (transit.JourneySearchResult, error)
 }
 
 // ScheduleHandler serves timetable, departure, and stop HTTP requests.
@@ -151,31 +153,58 @@ func scheduleQuery(r *http.Request, allowed ...string) (url.Values, error) {
 	return values, nil
 }
 
+type queryIDTarget struct {
+	name   string
+	target *int
+}
+
+func parsePositiveQueryIDs(values url.Values, fields ...queryIDTarget) error {
+	for _, field := range fields {
+		if value := values.Get(field.name); value != "" {
+			id, err := strconv.ParseInt(value, 10, 32)
+			if err != nil || id <= 0 {
+				return &transit.InvalidInput{Message: field.name + " must be a positive 32-bit integer"}
+			}
+			*field.target = int(id)
+		}
+	}
+	return nil
+}
+
+func parseTimeWindow(values url.Values, from, until *time.Time, defaultWindow time.Duration) error {
+	if value := values.Get("from"); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return &transit.InvalidInput{Message: "from must be an RFC3339 timestamp with a timezone"}
+		}
+		*from = parsed
+	}
+	*until = from.Add(defaultWindow)
+	if value := values.Get("until"); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return &transit.InvalidInput{Message: "until must be an RFC3339 timestamp with a timezone"}
+		}
+		*until = parsed
+	}
+	return nil
+}
+
 func (h *ScheduleHandler) departureQuery(r *http.Request) (transit.DepartureQuery, error) {
 	q := transit.DepartureQuery{From: h.now().UTC(), Limit: 20}
 	values, err := scheduleQuery(r, "stop_id", "route_id", "trip_id", "from", "until", "limit")
 	if err != nil {
 		return q, err
 	}
-	for _, field := range []struct {
-		name   string
-		target *int
-	}{
-		{"stop_id", &q.StopID}, {"route_id", &q.RouteID}, {"trip_id", &q.TripID},
-	} {
-		if value := values.Get(field.name); value != "" {
-			id, err := strconv.ParseInt(value, 10, 32)
-			if err != nil || id <= 0 {
-				return q, &transit.InvalidInput{Message: field.name + " must be a positive 32-bit integer"}
-			}
-			*field.target = int(id)
-		}
+	if err := parsePositiveQueryIDs(values,
+		queryIDTarget{"stop_id", &q.StopID},
+		queryIDTarget{"route_id", &q.RouteID},
+		queryIDTarget{"trip_id", &q.TripID},
+	); err != nil {
+		return q, err
 	}
 	// Nested resource paths fix their own filter; conflicting query IDs are errors.
-	for _, field := range []struct {
-		name   string
-		target *int
-	}{
+	for _, field := range []queryIDTarget{
 		{"stopID", &q.StopID}, {"routeID", &q.RouteID}, {"tripID", &q.TripID},
 	} {
 		if value := chi.URLParam(r, field.name); value != "" {
@@ -189,23 +218,67 @@ func (h *ScheduleHandler) departureQuery(r *http.Request) (transit.DepartureQuer
 			*field.target = int(id)
 		}
 	}
-	if value := values.Get("from"); value != "" {
-		q.From, err = time.Parse(time.RFC3339, value)
-		if err != nil {
-			return q, &transit.InvalidInput{Message: "from must be an RFC3339 timestamp with a timezone"}
-		}
-	}
-	q.Until = q.From.Add(2 * time.Hour)
-	if value := values.Get("until"); value != "" {
-		q.Until, err = time.Parse(time.RFC3339, value)
-		if err != nil {
-			return q, &transit.InvalidInput{Message: "until must be an RFC3339 timestamp with a timezone"}
-		}
+	if err := parseTimeWindow(values, &q.From, &q.Until, 2*time.Hour); err != nil {
+		return q, err
 	}
 	if value := values.Get("limit"); value != "" {
 		q.Limit, err = strconv.Atoi(value)
 		if err != nil {
 			return q, &transit.InvalidInput{Message: "limit must be between 1 and 100"}
+		}
+	}
+	return q, nil
+}
+
+func (h *ScheduleHandler) journeyQuery(r *http.Request) (transit.JourneyQuery, error) {
+	q := transit.JourneyQuery{
+		From:          h.now().UTC(),
+		Limit:         5,
+		MaxTransfers:  transit.DefaultMaxTransfers,
+		MaxWalkMeters: transit.DefaultMaxWalkMeters,
+	}
+	values, err := scheduleQuery(
+		r,
+		"origin_stop_id",
+		"destination_stop_id",
+		"origin",
+		"destination",
+		"from",
+		"until",
+		"limit",
+		"max_transfers",
+		"max_walk_meters",
+	)
+	if err != nil {
+		return q, err
+	}
+	q.Origin = values.Get("origin")
+	q.Destination = values.Get("destination")
+	if err := parsePositiveQueryIDs(values,
+		queryIDTarget{"origin_stop_id", &q.OriginStopID},
+		queryIDTarget{"destination_stop_id", &q.DestinationStopID},
+	); err != nil {
+		return q, err
+	}
+	if err := parseTimeWindow(values, &q.From, &q.Until, 6*time.Hour); err != nil {
+		return q, err
+	}
+	if value := values.Get("limit"); value != "" {
+		q.Limit, err = strconv.Atoi(value)
+		if err != nil {
+			return q, &transit.InvalidInput{Message: "limit must be between 1 and 20"}
+		}
+	}
+	if value := values.Get("max_transfers"); value != "" {
+		q.MaxTransfers, err = strconv.Atoi(value)
+		if err != nil {
+			return q, &transit.InvalidInput{Message: "max_transfers must be between 0 and 3"}
+		}
+	}
+	if value := values.Get("max_walk_meters"); value != "" {
+		q.MaxWalkMeters, err = strconv.Atoi(value)
+		if err != nil {
+			return q, &transit.InvalidInput{Message: "max_walk_meters must be between 0 and 1500"}
 		}
 	}
 	return q, nil
@@ -291,4 +364,71 @@ func (h *ScheduleHandler) RouteDepartures(w http.ResponseWriter, r *http.Request
 // @Router /api/trips/{tripID}/departures [get]
 func (h *ScheduleHandler) TripDepartures(w http.ResponseWriter, r *http.Request) {
 	h.Departures(w, r)
+}
+
+// Stops searches or lists active transit stops.
+//
+// @Tags schedules
+// @Produce json
+// @Summary Search or list active stops
+// @Param q query string false "Case-insensitive stop name filter"
+// @Param limit query int false "Maximum results" minimum(1) maximum(100) default(20)
+// @Success 200 {array} transit.Stop
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/stops [get]
+func (h *ScheduleHandler) Stops(w http.ResponseWriter, r *http.Request) {
+	values, err := scheduleQuery(r, "q", "limit")
+	if err != nil {
+		writeScheduleError(w, err)
+		return
+	}
+	q := transit.StopSearchQuery{Query: values.Get("q"), Limit: 20}
+	if value := values.Get("limit"); value != "" {
+		q.Limit, err = strconv.Atoi(value)
+		if err != nil {
+			writeScheduleError(w, &transit.InvalidInput{Message: "limit must be between 1 and 100"})
+			return
+		}
+	}
+	stops, err := h.service.SearchStops(r.Context(), q)
+	if err != nil {
+		writeScheduleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stops)
+}
+
+// Journeys searches direct, multi-transfer, and walking-connected transit itineraries between two locations.
+//
+// @Tags schedules
+// @Produce json
+// @Summary Search transit journeys between two locations
+// @Description Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id and/or destination). Returns direct, multi-transfer (up to 3 transfers), and walking-connected itinerary options with ordered leg stops, optional live estimates, and exclusion of cancelled trips, closed stops, and disrupted route segments, or a meaningful message when no itinerary is found.
+// @Param origin_stop_id query int false "Positive origin stop ID" minimum(1)
+// @Param destination_stop_id query int false "Positive destination stop ID" minimum(1)
+// @Param origin query string false "Origin stop or location name"
+// @Param destination query string false "Destination stop or location name"
+// @Param from query string false "RFC3339 timestamp; defaults to now"
+// @Param until query string false "RFC3339 timestamp; defaults to from plus 6 hours"
+// @Param limit query int false "Maximum itineraries" minimum(1) maximum(20) default(5)
+// @Param max_transfers query int false "Maximum transit transfers" minimum(0) maximum(3) default(3)
+// @Param max_walk_meters query int false "Maximum straight-line walking distance per walk leg in meters (0 disables walking)" minimum(0) maximum(1500) default(600)
+// @Success 200 {object} transit.JourneySearchResult
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/journeys [get]
+func (h *ScheduleHandler) Journeys(w http.ResponseWriter, r *http.Request) {
+	q, err := h.journeyQuery(r)
+	if err != nil {
+		writeScheduleError(w, err)
+		return
+	}
+	result, err := h.service.Journeys(r.Context(), q)
+	if err != nil {
+		writeScheduleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

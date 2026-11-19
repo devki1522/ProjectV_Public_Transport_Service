@@ -126,4 +126,73 @@ func TestPostgresSchedules(t *testing.T) {
 			t.Fatal(results[0])
 		}
 	}
+
+	stops, err := repo.SearchStops(ctx, StopSearchQuery{Query: "hub", Limit: 10})
+	if err != nil || len(stops) != 1 || stops[0].ID != 3 {
+		t.Fatalf("SearchStops got=%+v err=%v", stops, err)
+	}
+	directPlan, err := repo.Journeys(ctx, JourneyRepoQuery{
+		OriginStopIDs:      []int{5},
+		DestinationStopIDs: []int{3},
+		From:               parse("2026-11-14T12:30:00Z"),
+		Until:              parse("2026-11-14T15:00:00Z"),
+		Limit:              5,
+		MaxTransfers:       DefaultMaxTransfers,
+		MaxWalkMeters:      DefaultMaxWalkMeters,
+	})
+	if err != nil || len(directPlan.Itineraries) != 1 || directPlan.Itineraries[0].Transfers != 0 || directPlan.Itineraries[0].DurationMinutes != 15 {
+		t.Fatalf("direct Journeys got=%+v err=%v", directPlan, err)
+	}
+	transferPlan, err := repo.Journeys(ctx, JourneyRepoQuery{
+		OriginStopIDs:      []int{5},
+		DestinationStopIDs: []int{4},
+		From:               parse("2026-11-14T12:30:00Z"),
+		Until:              parse("2026-11-14T15:00:00Z"),
+		Limit:              5,
+		MaxTransfers:       DefaultMaxTransfers,
+		MaxWalkMeters:      DefaultMaxWalkMeters,
+	})
+	if err != nil || len(transferPlan.Itineraries) != 1 || transferPlan.Itineraries[0].Transfers != 1 || len(transferPlan.Itineraries[0].Legs) != 2 || transferPlan.Itineraries[0].DurationMinutes != 40 {
+		t.Fatalf("transfer Journeys got=%+v err=%v", transferPlan, err)
+	}
+	twoTransferPlan, err := repo.Journeys(ctx, JourneyRepoQuery{
+		OriginStopIDs:      []int{5},
+		DestinationStopIDs: []int{7},
+		From:               parse("2026-11-14T12:30:00Z"),
+		Until:              parse("2026-11-14T15:00:00Z"),
+		Limit:              5,
+		MaxTransfers:       DefaultMaxTransfers,
+		MaxWalkMeters:      DefaultMaxWalkMeters,
+	})
+	if err != nil || len(twoTransferPlan.Itineraries) != 1 || twoTransferPlan.Itineraries[0].Transfers != 2 || len(twoTransferPlan.Itineraries[0].Legs) != 3 || twoTransferPlan.Itineraries[0].DurationMinutes != 60 {
+		t.Fatalf("two-transfer Journeys got=%+v err=%v", twoTransferPlan, err)
+	}
+	egressWalkPlan, err := repo.Journeys(ctx, JourneyRepoQuery{
+		OriginStopIDs:      []int{5},
+		DestinationStopIDs: []int{6},
+		From:               parse("2026-11-14T12:30:00Z"),
+		Until:              parse("2026-11-14T15:00:00Z"),
+		Limit:              5,
+		MaxTransfers:       DefaultMaxTransfers,
+		MaxWalkMeters:      DefaultMaxWalkMeters,
+	})
+	if err != nil || len(egressWalkPlan.Itineraries) != 1 || egressWalkPlan.Itineraries[0].Transfers != 1 || len(egressWalkPlan.Itineraries[0].Legs) != 3 || egressWalkPlan.Itineraries[0].Legs[2].Mode != "walk" {
+		t.Fatalf("egress-walk Journeys got=%+v err=%v", egressWalkPlan, err)
+	}
+
+	if err := tx.Exec(`INSERT INTO disruptions VALUES (1, 'cancellation', 'Route 9 cancelled', NULL, '2026-11-14T12:00:00Z', '2026-11-14T15:00:00Z', 'active', 'ops'); INSERT INTO disruption_routes VALUES (1, 1, 9, NULL);`).Error; err != nil {
+		t.Fatal(err)
+	}
+	disruptedPlan, err := repo.Journeys(ctx, JourneyRepoQuery{
+		OriginStopIDs:      []int{5},
+		DestinationStopIDs: []int{3},
+		From:               parse("2026-11-14T12:30:00Z"),
+		Until:              parse("2026-11-14T15:00:00Z"),
+		Limit:              5,
+		MaxTransfers:       DefaultMaxTransfers,
+		MaxWalkMeters:      DefaultMaxWalkMeters,
+	})
+	if err != nil || len(disruptedPlan.Itineraries) != 0 || len(disruptedPlan.ExcludedDisruptions) != 1 {
+		t.Fatalf("expected disrupted route 9 excluded, got=%+v err=%v", disruptedPlan, err)
+	}
 }

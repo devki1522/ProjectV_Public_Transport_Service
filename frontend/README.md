@@ -10,9 +10,17 @@ Use the [project setup](../README.md#setup) to run it with Docker Compose.
 - In **Timetable**, select a date and optional time-of-day filter. Expand a trip
   to see its ordered arrival and departure times at every stop. Longer lists
   have pages of eight trips.
-- In **Upcoming departures**, filter the selected route by stop, trip and a
+- In **Upcoming Departures**, filter the selected route by stop, trip and a
   2-, 6- or 24-hour window. Refresh manually or leave the tab open for updates
   every minute while the browser page is visible.
+- Switch to the top-level **Journey Search** tab to enter an origin and
+  destination stop or station (with autocomplete suggestions from active stops
+  and a swap control), choose a 2-, 6- or 24-hour search window, and set a
+  transfer limit (up to 3 transfers) to view direct, multi-transfer, and
+  walking-connected itinerary options with expandable per-leg stop lists,
+  scheduled vs. estimated departure/arrival times, interactive itinerary
+  selection, avoided-disruption notices, or an explicit message when no
+  itinerary is available.
 - An available estimate is labeled **Estimated** and shown beside the published
   scheduled time. Missing estimates stay **Scheduled**; the UI does not infer
   live data. The default backend has no live provider configured.
@@ -69,7 +77,7 @@ Authentication restores via `GET /api/auth/me` using same-origin `HttpOnly` cook
 - `src/auth/`: `AuthProvider` and `useAuth` state/error handling.
 - `src/api/`: `transit.js` (public reads), `auth.js`, and `admin.js`.
 - `src/hooks/useResource.js`: keyed requests, cancellation, retries and refresh.
-- `src/features/resident/` and `src/features/admin/`: resident workspace and administrator layout/guards.
+- `src/features/resident/` and `src/features/admin/`: resident workspace (timetable, departures, and journey search under `src/features/journey/`) and administrator layout/guards.
 - `src/pages/`: `LoginPage`, `UnauthorizedPage`, `AdminDashboardPage`, `AdminRoutesPage`.
 - `src/lib/`: `transit.js`, `router.jsx`, and `routerState.js` (including open-redirect sanitization).
 - `src/App.css` and `src/index.css`: layout, components and shared design tokens.

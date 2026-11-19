@@ -100,7 +100,9 @@ func RegisterScheduleRoutes(r chi.Router, handler *handlers.ScheduleHandler) {
 	r.Get("/api/stops/{stopID}/departures", handler.StopDepartures)
 	r.Get("/api/routes/{routeID}/departures", handler.RouteDepartures)
 	r.Get("/api/trips/{tripID}/departures", handler.TripDepartures)
+	r.Get("/api/stops", handler.Stops)
 	r.Get("/api/stops/{id}", handler.Stop)
+	r.Get("/api/journeys", handler.Journeys)
 }
 
 // RegisterTransitRoutes registers public route reads and administrator-protected route writes.

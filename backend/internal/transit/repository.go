@@ -3,6 +3,7 @@ package transit
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -157,4 +158,178 @@ func (p *PostgresRepository) Departures(ctx context.Context, q DepartureQuery) (
 		})
 	}
 	return departures, nil
+}
+
+// SearchStops returns active stops matching an optional case-insensitive name filter.
+func (p *PostgresRepository) SearchStops(ctx context.Context, q StopSearchQuery) ([]Stop, error) {
+	var stops []Stop
+	tx := p.db.WithContext(ctx).Table("stops").Where("is_active = ?", true)
+	if q.Query != "" {
+		tx = tx.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(q.Query)+"%")
+	}
+	if err := tx.Order("name ASC, id ASC").Limit(q.Limit).Find(&stops).Error; err != nil {
+		return nil, err
+	}
+	return stops, nil
+}
+
+const activeStopsSQL = `
+SELECT id, name, latitude, longitude, wheelchair_boarding, is_active
+FROM stops
+WHERE is_active = true`
+
+const activeRoutesSQL = `
+SELECT id, number, name, direction, is_active
+FROM routes
+WHERE is_active = true`
+
+const activeScheduleStopTimesSQL = `
+SELECT t.id AS trip_id, t.route_id, t.schedule_type,
+       rs.id AS route_stop_id, rs.stop_id, rs.stop_sequence,
+       CAST(EXTRACT(EPOCH FROM st.arrival_time) AS bigint) AS arrival_sec,
+       CAST(EXTRACT(EPOCH FROM st.departure_time) AS bigint) AS departure_sec
+FROM stop_times st
+JOIN trips t ON t.id = st.trip_id AND t.route_id = st.route_id
+JOIN routes r ON r.id = t.route_id
+JOIN route_stops rs ON rs.id = st.route_stop_id AND rs.route_id = st.route_id
+JOIN stops s ON s.id = rs.stop_id
+WHERE r.is_active AND t.is_active AND s.is_active
+  AND t.schedule_type IN @schedule_types
+ORDER BY t.route_id, t.id, rs.stop_sequence`
+
+const activeDisruptionsSQL = `
+SELECT d.id, d.type, d.title, d.start_time, d.end_time, d.status,
+       dr.route_id, dr.stop_id
+FROM disruptions d
+JOIN disruption_routes dr ON dr.disruption_id = d.id
+WHERE d.status IN ('active', 'scheduled')
+  AND d.type IN ('cancellation', 'stop_closure', 'road_closure', 'emergency', 'detour')
+  AND d.start_time <= @window_end
+  AND (d.end_time IS NULL OR d.end_time >= @window_start)
+ORDER BY d.start_time, d.id`
+
+func minutesBetween(start, end time.Time) int {
+	if !end.After(start) {
+		return 0
+	}
+	return int(math.Round(end.Sub(start).Minutes()))
+}
+
+func (p *PostgresRepository) loadActiveStops(ctx context.Context) ([]Stop, error) {
+	rows, err := p.db.WithContext(ctx).Raw(activeStopsSQL).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stops []Stop
+	for rows.Next() {
+		var stop Stop
+		if err := rows.Scan(&stop.ID, &stop.Name, &stop.Latitude, &stop.Longitude, &stop.WheelchairBoarding, &stop.IsActive); err != nil {
+			return nil, err
+		}
+		stops = append(stops, stop)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return stops, nil
+}
+
+func (p *PostgresRepository) loadActiveRoutes(ctx context.Context) ([]Route, error) {
+	rows, err := p.db.WithContext(ctx).Raw(activeRoutesSQL).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var routes []Route
+	for rows.Next() {
+		var route Route
+		if err := rows.Scan(&route.ID, &route.Number, &route.Name, &route.Direction, &route.IsActive); err != nil {
+			return nil, err
+		}
+		routes = append(routes, route)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return routes, nil
+}
+
+func (p *PostgresRepository) loadActiveStopTimes(ctx context.Context, scheduleTypes []string) ([]JourneyStopTimeRow, error) {
+	rows, err := p.db.WithContext(ctx).Raw(activeScheduleStopTimesSQL, map[string]any{"schedule_types": scheduleTypes}).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stopTimes []JourneyStopTimeRow
+	for rows.Next() {
+		var row JourneyStopTimeRow
+		if err := rows.Scan(&row.TripID, &row.RouteID, &row.ScheduleType, &row.RouteStopID, &row.StopID, &row.StopSequence, &row.ArrivalSec, &row.DepartureSec); err != nil {
+			return nil, err
+		}
+		stopTimes = append(stopTimes, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return stopTimes, nil
+}
+
+func (p *PostgresRepository) loadActiveDisruptions(ctx context.Context, from, until time.Time) ([]JourneyDisruption, error) {
+	rows, err := p.db.WithContext(ctx).Raw(activeDisruptionsSQL, map[string]any{
+		"window_start": from,
+		"window_end":   until.Add(maxJourneyDuration),
+	}).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var disruptions []JourneyDisruption
+	for rows.Next() {
+		var d JourneyDisruption
+		if err := rows.Scan(&d.ID, &d.Type, &d.Title, &d.StartTime, &d.EndTime, &d.Status, &d.RouteID, &d.StopID); err != nil {
+			return nil, err
+		}
+		disruptions = append(disruptions, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return disruptions, nil
+}
+
+func (p *PostgresRepository) loadJourneyNetwork(ctx context.Context, q JourneyRepoQuery) (JourneyNetwork, error) {
+	stops, err := p.loadActiveStops(ctx)
+	if err != nil {
+		return JourneyNetwork{}, err
+	}
+	routes, err := p.loadActiveRoutes(ctx)
+	if err != nil {
+		return JourneyNetwork{}, err
+	}
+	stopTimes, err := p.loadActiveStopTimes(ctx, neededScheduleTypes(q.From, q.Until))
+	if err != nil {
+		return JourneyNetwork{}, err
+	}
+	disruptions, err := p.loadActiveDisruptions(ctx, q.From, q.Until)
+	if err != nil {
+		return JourneyNetwork{}, err
+	}
+	return JourneyNetwork{Stops: stops, Routes: routes, StopTimes: stopTimes, Disruptions: disruptions}, nil
+}
+
+// Journeys plans direct, multi-transfer, and walking-connected itineraries while excluding disrupted trips and stops.
+func (p *PostgresRepository) Journeys(ctx context.Context, q JourneyRepoQuery) (JourneyPlan, error) {
+	if len(q.OriginStopIDs) == 0 || len(q.DestinationStopIDs) == 0 || q.Limit <= 0 {
+		return JourneyPlan{Itineraries: []Itinerary{}}, nil
+	}
+	network, err := p.loadJourneyNetwork(ctx, q)
+	if err != nil {
+		return JourneyPlan{}, err
+	}
+	return PlanJourneysDetailed(network, q), nil
 }

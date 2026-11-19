@@ -16,11 +16,13 @@ import (
 )
 
 type fakeSchedules struct {
-	err    error
-	query  transit.DepartureQuery
-	id     int
-	date   string
-	called bool
+	err          error
+	query        transit.DepartureQuery
+	stopQuery    transit.StopSearchQuery
+	journeyQuery transit.JourneyQuery
+	id           int
+	date         string
+	called       bool
 }
 
 // Timetable returns scheduled trips for a route and service date.
@@ -39,6 +41,51 @@ func (f *fakeSchedules) Departures(_ context.Context, q transit.DepartureQuery) 
 func (f *fakeSchedules) Stop(_ context.Context, id int, q transit.DepartureQuery) (transit.StopDetails, error) {
 	f.id, f.query, f.called = id, q, true
 	return transit.StopDetails{Stop: transit.Stop{ID: id}, Departures: []transit.Departure{}}, f.err
+}
+
+// SearchStops searches active stops in the fake schedule service.
+func (f *fakeSchedules) SearchStops(_ context.Context, q transit.StopSearchQuery) ([]transit.Stop, error) {
+	f.stopQuery, f.called = q, true
+	return []transit.Stop{{ID: 21, Name: "Central Station", IsActive: true}}, f.err
+}
+
+// Journeys returns fake journey search results for HTTP handler tests.
+func (f *fakeSchedules) Journeys(_ context.Context, q transit.JourneyQuery) (transit.JourneySearchResult, error) {
+	f.journeyQuery, f.called = q, true
+	return transit.JourneySearchResult{
+		Origin:           q.Origin,
+		Destination:      q.Destination,
+		OriginStops:      []transit.Stop{},
+		DestinationStops: []transit.Stop{},
+		From:             q.From,
+		Until:            q.Until,
+		Timezone:         transit.AgencyTimezone,
+		Itineraries: []transit.Itinerary{{
+			OriginStop:         transit.Stop{ID: 21, Name: "Central Station", IsActive: true},
+			DestinationStop:    transit.Stop{ID: 22, Name: "Fairway Station", IsActive: true},
+			ScheduledDeparture: q.From.Add(10 * time.Minute),
+			ScheduledArrival:   q.From.Add(30 * time.Minute),
+			DurationMinutes:    20,
+			Transfers:          0,
+			Legs: []transit.JourneyLeg{{
+				Mode:               "transit",
+				TripID:             100,
+				Route:              &transit.Route{ID: 7, Number: "7", Name: "King", Direction: "direction_0", IsActive: true},
+				ServiceDate:        "2026-11-10",
+				FromStopID:         21,
+				FromStopName:       "Central Station",
+				FromStopSequence:   1,
+				ToStopID:           22,
+				ToStopName:         "Fairway Station",
+				ToStopSequence:     2,
+				StopCount:          1,
+				ScheduledDeparture: q.From.Add(10 * time.Minute),
+				ScheduledArrival:   q.From.Add(30 * time.Minute),
+				DurationMinutes:    20,
+			}},
+		}},
+		Message: "Found 1 itinerary option.",
+	}, f.err
 }
 
 func scheduleRequest(f *fakeSchedules, path string) *httptest.ResponseRecorder {
@@ -129,11 +176,91 @@ func TestScheduleHTTPErrorMapping(t *testing.T) {
 	}{
 		{transit.ErrNotFound, 404}, {&transit.InvalidInput{Message: "invalid date"}, 400}, {errors.New("secret database details"), 500},
 	} {
-		for _, path := range []string{"/api/routes/1/schedule?date=2026-11-10", "/api/stops/1/departures", "/api/stops/1"} {
+		for _, path := range []string{"/api/routes/1/schedule?date=2026-11-10", "/api/stops/1/departures", "/api/stops/1", "/api/stops", "/api/journeys?origin=Central&destination=Fairway"} {
 			response := scheduleRequest(&fakeSchedules{err: tc.err}, path)
 			if response.Code != tc.status || response.Header().Get("Content-Type") != "application/json" || strings.Contains(response.Body.String(), "secret") {
 				t.Fatalf("%s: %d %s", path, response.Code, response.Body)
 			}
+		}
+	}
+}
+
+// TestStopSearchAndJourneyRoutes verifies /api/stops and /api/journeys parsing and defaults.
+func TestStopSearchAndJourneyRoutes(t *testing.T) {
+	f := &fakeSchedules{}
+	response := scheduleRequest(f, "/api/stops?q=Central&limit=10")
+	if response.Code != 200 || !f.called || f.stopQuery.Query != "Central" || f.stopQuery.Limit != 10 {
+		t.Fatalf("%d %+v %s", response.Code, f.stopQuery, response.Body)
+	}
+
+	f = &fakeSchedules{}
+	response = scheduleRequest(f, "/api/stops")
+	if response.Code != 200 || !f.called || f.stopQuery.Limit != 20 || f.stopQuery.Query != "" {
+		t.Fatalf("%d %+v", response.Code, f.stopQuery)
+	}
+
+	f = &fakeSchedules{}
+	before := time.Now().Add(-time.Second)
+	response = scheduleRequest(f, "/api/journeys?origin=Central&destination=Fairway")
+	if response.Code != 200 || !f.called || f.journeyQuery.Origin != "Central" || f.journeyQuery.Destination != "Fairway" {
+		t.Fatalf("%d %+v %s", response.Code, f.journeyQuery, response.Body)
+	}
+	if f.journeyQuery.Limit != 5 || f.journeyQuery.MaxTransfers != transit.DefaultMaxTransfers || f.journeyQuery.MaxWalkMeters != transit.DefaultMaxWalkMeters || f.journeyQuery.Until.Sub(f.journeyQuery.From) != 6*time.Hour || f.journeyQuery.From.Before(before) {
+		t.Fatalf("wrong journey defaults: %+v", f.journeyQuery)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	itineraries, ok := payload["itineraries"].([]any)
+	if !ok || len(itineraries) != 1 {
+		t.Fatalf("missing itineraries in response: %+v", payload)
+	}
+	firstIt := itineraries[0].(map[string]any)
+	if est, ok := firstIt["estimated_departure_time"]; !ok || est != nil {
+		t.Fatalf("missing itinerary estimated_departure_time must be explicit null: %+v", firstIt)
+	}
+	if est, ok := firstIt["estimated_arrival_time"]; !ok || est != nil {
+		t.Fatalf("missing itinerary estimated_arrival_time must be explicit null: %+v", firstIt)
+	}
+	firstLeg := firstIt["legs"].([]any)[0].(map[string]any)
+	if est, ok := firstLeg["estimated_departure_time"]; !ok || est != nil {
+		t.Fatalf("missing leg estimated_departure_time must be explicit null: %+v", firstLeg)
+	}
+	if est, ok := firstLeg["estimated_arrival_time"]; !ok || est != nil {
+		t.Fatalf("missing leg estimated_arrival_time must be explicit null: %+v", firstLeg)
+	}
+
+	f = &fakeSchedules{}
+	response = scheduleRequest(f, "/api/journeys?origin_stop_id=21&destination_stop_id=22&from=2026-11-10T12:00:00Z&until=2026-11-10T16:00:00Z&limit=3&max_transfers=2&max_walk_meters=400")
+	if response.Code != 200 || f.journeyQuery.OriginStopID != 21 || f.journeyQuery.DestinationStopID != 22 || f.journeyQuery.Limit != 3 || f.journeyQuery.MaxTransfers != 2 || f.journeyQuery.MaxWalkMeters != 400 || f.journeyQuery.Until.Hour() != 16 {
+		t.Fatalf("%d %+v %s", response.Code, f.journeyQuery, response.Body)
+	}
+}
+
+// TestInvalidStopSearchAndJourneyRequests verifies invalid stop search and journey query rejection.
+func TestInvalidStopSearchAndJourneyRequests(t *testing.T) {
+	for _, path := range []string{
+		"/api/stops?q=",
+		"/api/stops?limit=many",
+		"/api/stops?unknown=1",
+		"/api/stops?q=a&q=b",
+		"/api/journeys?origin_stop_id=0&destination_stop_id=2",
+		"/api/journeys?origin_stop_id=abc&destination=Fairway",
+		"/api/journeys?origin=Central&destination_stop_id=2147483648",
+		"/api/journeys?origin=Central&destination=Fairway&from=today",
+		"/api/journeys?origin=Central&destination=Fairway&until=2026-11-10",
+		"/api/journeys?origin=Central&destination=Fairway&limit=many",
+		"/api/journeys?origin=Central&destination=Fairway&max_transfers=abc",
+		"/api/journeys?origin=Central&destination=Fairway&max_walk_meters=far",
+		"/api/journeys?origin=Central&destination=Fairway&unknown=true",
+		"/api/journeys?origin=Central&origin=King&destination=Fairway",
+		"/api/journeys?origin=&destination=Fairway",
+	} {
+		f := &fakeSchedules{}
+		response := scheduleRequest(f, path)
+		if response.Code != 400 || f.called {
+			t.Errorf("%s: %d called=%v body=%s", path, response.Code, f.called, response.Body)
 		}
 	}
 }
