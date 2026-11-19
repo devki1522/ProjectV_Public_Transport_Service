@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - azure-appservice-deploy
   workflow_dispatch:
 
 jobs:
