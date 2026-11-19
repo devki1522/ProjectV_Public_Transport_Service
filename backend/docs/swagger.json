@@ -533,41 +533,6 @@
                 "responses": {}
             }
         },
-        "/api/transport/v1/road-closures": {
-            "get": {
-                "description": "Lists road closure disruptions (type='road_closure') filtered by optional status, route_id, stop_id, trip_id, vehicle_id, or source_service.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "road-closures"
-                ],
-                "summary": "List road closures",
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    }
-                }
-            },
-            "post": {
-                "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "road-closures"
-                ],
-                "summary": "Create a road closure",
-                "responses": {
-                    "201": {
-                        "description": "Created"
-                    }
-                }
-            }
-        },
         "/api/transport/v1/disruptions": {
             "get": {
                 "description": "Lists transit disruptions filtered by optional status, type, route_id, stop_id, trip_id, vehicle_id, or source_service.",
@@ -1437,6 +1402,173 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/transport/v1/road-closures": {
+            "get": {
+                "description": "Lists road closure disruptions (`type='road_closure'`) filtered by optional status, route_id, stop_id, trip_id, vehicle_id, or source_service.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "List road closures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Disruption lifecycle status (scheduled, active, resolved)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive route ID",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive stop ID",
+                        "name": "stop_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive trip ID",
+                        "name": "trip_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive vehicle ID",
+                        "name": "vehicle_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Originating service identifier",
+                        "name": "source_service",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/disruptions.DisruptionResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "Create a road closure",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Road closure creation payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.CreateDisruptionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.DisruptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
