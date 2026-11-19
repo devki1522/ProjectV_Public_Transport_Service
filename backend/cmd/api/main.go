@@ -20,6 +20,7 @@ import (
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/staffhr"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/vehicles"
 	"github.com/joho/godotenv"
@@ -151,6 +152,9 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		disruptionHandler = handlers.NewDisruptionHandler(disruptions.NewService(disruptions.NewPostgresRepository(db)))
 	}
 
+	staffClient := staffhr.NewClient(cfg.StaffHR, nil)
+	staffHandler := handlers.NewStaffHRHandler(staffClient)
+
 	h := router.NewWithDependencies(db, router.Dependencies{
 		APIVersion:        cfg.Server.APIVersion,
 		Estimates:         estimates,
@@ -161,6 +165,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		AdminHandler:      adminHandler,
 		VehicleHandler:    vehicleHandler,
 		DisruptionHandler: disruptionHandler,
+		StaffHRHandler:    staffHandler,
 	})
 
 	cleanup := func() {

@@ -27,6 +27,7 @@ func clearAuthEnv(t *testing.T) {
 		"REGISTRATION_SERVICE_URL", "REGISTRATION_JWT_ISSUER",
 		"REGISTRATION_JWT_AUDIENCE", "REGISTRATION_JWT_SECRET",
 		"SIMULATE_VEHICLES", "SIMULATE_VEHICLES_COUNT", "SIMULATE_TICK_INTERVAL",
+		"STAFF_HR_SERVICE_URL", "STAFF_HR_DEPARTMENT_CODE", "STAFF_HR_BEARER_TOKEN",
 	} {
 		t.Setenv(key, "")
 	}
@@ -86,6 +87,10 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 			Simulate:             true,
 			SimulateVehicleCount: 24,
 			SimulateTickInterval: 3 * time.Second,
+		},
+		StaffHR: StaffHRConfig{
+			ServiceURL:     DefaultStaffHRURL,
+			DepartmentCode: DefaultStaffHRDepartment,
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -387,4 +392,59 @@ func TestLoadVehicleSimulatorSettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadStaffHRSettings(t *testing.T) {
+	t.Run("custom development URL and bearer token redaction", func(t *testing.T) {
+		setMockDevEnv(t)
+		t.Setenv("STAFF_HR_SERVICE_URL", "http://localhost:5150/")
+		t.Setenv("STAFF_HR_DEPARTMENT_CODE", " ems ")
+		t.Setenv("STAFF_HR_BEARER_TOKEN", "super-secret-hr-token")
+
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.StaffHR.ServiceURL != "http://localhost:5150" || got.StaffHR.DepartmentCode != "EMS" || got.StaffHR.BearerToken != "super-secret-hr-token" {
+			t.Fatalf("unexpected StaffHR config: %+v", got.StaffHR)
+		}
+		if strings.Contains(got.StaffHR.String(), "super-secret-hr-token") {
+			t.Fatalf("bearer token leaked in String(): %s", got.StaffHR.String())
+		}
+	})
+
+	t.Run("production leaves StaffHR URL empty when unset", func(t *testing.T) {
+		setRegistrationProdEnv(t)
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.StaffHR.ServiceURL != "" || got.StaffHR.DepartmentCode != "PTR" {
+			t.Fatalf("unexpected production StaffHR config: %+v", got.StaffHR)
+		}
+	})
+
+	t.Run("rejects insecure non-loopback StaffHR URL and long department code", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, key, value string
+			prod             bool
+		}{
+			{"non-loopback http in dev", "STAFF_HR_SERVICE_URL", "http://hr.internal:5000", false},
+			{"http localhost in prod", "STAFF_HR_SERVICE_URL", "http://localhost:5000", true},
+			{"invalid url", "STAFF_HR_SERVICE_URL", "ftp://hr.example.com", false},
+			{"dept too long", "STAFF_HR_DEPARTMENT_CODE", strings.Repeat("A", 21), false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.prod {
+					setRegistrationProdEnv(t)
+				} else {
+					setMockDevEnv(t)
+				}
+				t.Setenv(tc.key, tc.value)
+				if _, err := Load(); err == nil {
+					t.Fatalf("expected error for %s=%q", tc.key, tc.value)
+				}
+			})
+		}
+	})
 }

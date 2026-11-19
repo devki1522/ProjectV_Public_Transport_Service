@@ -42,6 +42,8 @@ authorization. The frontend never receives the JWT or raw session identifier.
 | `POST /api/integrations/emergency/incidents` | Session + `TransitAdministrator` + CSRF | Ingests an Emergency Services incident or road restriction (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
 | `POST /api/integrations/security/traffic-alerts` | Session + `TransitAdministrator` + CSRF | Ingests a Security / Police traffic restriction or road closure (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
 | `GET /api/integrations/service-status` | Session + `TransitAdministrator` | Returns the enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
+| `GET /api/transport/v1/admin/staff` | Session + `TransitAdministrator` | Queries CMES Staff/HR headcounts (`active_count`, `on_duty_count`, `vacancies_count`) and department directory (default `PTR`) |
+| `POST` / `PUT /api/transport/v1/admin/staff/employees` | Session + `TransitAdministrator` + CSRF | Validates and forwards employee onboarding to CMES Staff/HR `POST /staff` (`201`) and logs structured audit event |
 
 Auth and admin responses include `Cache-Control: no-store`. Error codes use JSON:
 `400` invalid request, `401` invalid credentials or missing/expired session,

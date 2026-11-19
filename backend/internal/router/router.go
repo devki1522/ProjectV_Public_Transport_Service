@@ -8,9 +8,11 @@ import (
 
 	_ "github.com/devki1522/ProjectV_Public_Transport_Service/backend/docs"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/staffhr"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/vehicles"
 	"github.com/go-chi/chi/v5"
@@ -29,6 +31,7 @@ type Dependencies struct {
 	AdminHandler      *handlers.AdminHandler
 	VehicleHandler    *handlers.VehicleHandler
 	DisruptionHandler *handlers.DisruptionHandler
+	StaffHRHandler    *handlers.StaffHRHandler
 }
 
 // New builds the HTTP router with default dependencies.
@@ -97,6 +100,12 @@ func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 		if adminHandler != nil {
 			RegisterAdminRoutes(api, adminHandler, deps.AuthMiddleware, deps.RequiredRole)
 		}
+
+		staffHandler := deps.StaffHRHandler
+		if staffHandler == nil {
+			staffHandler = handlers.NewStaffHRHandler(staffhr.NewClient(config.StaffHRConfig{}, nil))
+		}
+		RegisterStaffHRRoutes(api, staffHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
 	})
 
 	return r
@@ -235,6 +244,37 @@ func RegisterDisruptionRoutes(
 		protectedMutation.Post("/integrations/utilities/notices", handler.IngestUtilitiesNotice)
 		protectedMutation.Post("/integrations/emergency/incidents", handler.IngestEmergencyIncident)
 		protectedMutation.Post("/integrations/security/traffic-alerts", handler.IngestSecurityTrafficAlert)
+	})
+}
+
+// RegisterStaffHRRoutes registers administrator-only Staff/HR employee count and onboarding routes.
+func RegisterStaffHRRoutes(
+	r chi.Router,
+	handler *handlers.StaffHRHandler,
+	authMiddleware *auth.Middleware,
+	csrf *auth.CSRFProtector,
+	requiredRole string,
+) {
+	r.Group(func(protectedRead chi.Router) {
+		if authMiddleware == nil || requiredRole == "" {
+			protectedRead.Use(failClosedAuthMiddleware)
+		} else {
+			protectedRead.Use(authMiddleware.RequireAuthenticated)
+			protectedRead.Use(authMiddleware.RequireRole(requiredRole))
+		}
+		protectedRead.Get("/admin/staff", handler.Overview)
+	})
+
+	r.Group(func(protectedMutation chi.Router) {
+		if authMiddleware == nil || csrf == nil || requiredRole == "" {
+			protectedMutation.Use(failClosedAuthMiddleware)
+		} else {
+			protectedMutation.Use(authMiddleware.RequireAuthenticated)
+			protectedMutation.Use(authMiddleware.RequireRole(requiredRole))
+			protectedMutation.Use(csrf.RequireMutationCSRF)
+		}
+		protectedMutation.Post("/admin/staff/employees", handler.AddEmployee)
+		protectedMutation.Put("/admin/staff/employees", handler.PutEmployee)
 	})
 }
 
