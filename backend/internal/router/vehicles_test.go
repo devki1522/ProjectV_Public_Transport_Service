@@ -141,8 +141,10 @@ func newTestVehicleEnv(t *testing.T, svc handlers.VehicleService, sim handlers.V
 	handler := handlers.NewVehicleHandlerWithAudit(svc, sim, auditLogger)
 
 	mux := chi.NewRouter()
-	router.RegisterAuthRoutes(mux, authHandler, authMW)
-	router.RegisterVehicleRoutes(mux, handler, authMW, csrf, "TransitAdministrator")
+	mux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterAuthRoutes(api, authHandler, authMW)
+		router.RegisterVehicleRoutes(api, handler, authMW, csrf, "TransitAdministrator")
+	})
 
 	fakeSvc, _ := svc.(*fakeVehicleService)
 	return &testAuthEnv{
@@ -193,7 +195,7 @@ func TestVehiclePublicReadEndpoints(t *testing.T) {
 	sim := &fakeSimulator{status: vehicles.SimulatorStatus{Running: true, VehicleCount: 24, RouteCount: 24, TickIntervalMs: 3000, SpeedMultiplier: 1}}
 	env, _ := newTestVehicleEnv(t, svc, sim)
 
-	rec := authedRequest(env.mux, http.MethodGet, "/api/vehicles?route_number=7&max_age_seconds=300", "", nil, "")
+	rec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/vehicles?route_number=7&max_age_seconds=300", "", nil, "")
 	if rec.Code != http.StatusOK || svc.listQuery.RouteNumber != "7" || svc.listQuery.MaxAge != 300*time.Second {
 		t.Fatalf("GET /api/vehicles failed: code=%d query=%+v body=%s", rec.Code, svc.listQuery, rec.Body.String())
 	}
@@ -205,33 +207,33 @@ func TestVehiclePublicReadEndpoints(t *testing.T) {
 		t.Fatalf("unexpected decoded vehicles: %+v", gotVehicles)
 	}
 
-	rec = authedRequest(env.mux, http.MethodGet, "/api/routes/7/vehicles?trip_id=300", "", nil, "")
+	rec = authedRequest(env.mux, http.MethodGet, "/api/transport/v1/routes/7/vehicles?trip_id=300", "", nil, "")
 	if rec.Code != http.StatusOK || svc.listQuery.RouteID != 7 || svc.listQuery.TripID != 300 {
 		t.Fatalf("GET /api/routes/7/vehicles failed: code=%d query=%+v body=%s", rec.Code, svc.listQuery, rec.Body.String())
 	}
 
-	rec = authedRequest(env.mux, http.MethodGet, "/api/trips/300/vehicles", "", nil, "")
+	rec = authedRequest(env.mux, http.MethodGet, "/api/transport/v1/trips/300/vehicles", "", nil, "")
 	if rec.Code != http.StatusOK || svc.listQuery.TripID != 300 {
 		t.Fatalf("GET /api/trips/300/vehicles failed: code=%d query=%+v", rec.Code, svc.listQuery)
 	}
 
-	rec = authedRequest(env.mux, http.MethodGet, "/api/routes/7/shape", "", nil, "")
+	rec = authedRequest(env.mux, http.MethodGet, "/api/transport/v1/routes/7/shape", "", nil, "")
 	if rec.Code != http.StatusOK || svc.geometryID != 7 {
 		t.Fatalf("GET /api/routes/7/shape failed: code=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	rec = authedRequest(env.mux, http.MethodGet, "/api/vehicles/simulator", "", nil, "")
+	rec = authedRequest(env.mux, http.MethodGet, "/api/transport/v1/vehicles/simulator", "", nil, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/vehicles/simulator failed: code=%d", rec.Code)
 	}
 
 	// Conflicting path vs query filters and unknown parameters return 400.
 	for _, badPath := range []string{
-		"/api/routes/7/vehicles?route_id=8",
-		"/api/trips/300/vehicles?trip_id=301",
-		"/api/vehicles?bogus=1",
-		"/api/routes/0/vehicles",
-		"/api/routes/abc/shape",
+		"/api/transport/v1/routes/7/vehicles?route_id=8",
+		"/api/transport/v1/trips/300/vehicles?trip_id=301",
+		"/api/transport/v1/vehicles?bogus=1",
+		"/api/transport/v1/routes/0/vehicles",
+		"/api/transport/v1/routes/abc/shape",
 	} {
 		badRec := authedRequest(env.mux, http.MethodGet, badPath, "", nil, "")
 		if badRec.Code != http.StatusBadRequest {
@@ -265,11 +267,11 @@ func TestVehicleLocationMutationsEnforceAuthRoleCSRFAndErrors(t *testing.T) {
 
 	// Unauthenticated 401
 	for _, path := range []string{
-		"/api/vehicles/locations",
-		"/api/admin/vehicles/simulator/start",
-		"/api/admin/vehicles/simulator/stop",
-		"/api/admin/vehicles/simulator/step",
-		"/api/admin/vehicles/simulator/reset",
+		"/api/transport/v1/vehicles/locations",
+		"/api/transport/v1/admin/vehicles/simulator/start",
+		"/api/transport/v1/admin/vehicles/simulator/stop",
+		"/api/transport/v1/admin/vehicles/simulator/step",
+		"/api/transport/v1/admin/vehicles/simulator/reset",
 	} {
 		rec := authedRequest(env.mux, http.MethodPost, path, payload, nil, "")
 		if rec.Code != http.StatusUnauthorized {
@@ -278,19 +280,19 @@ func TestVehicleLocationMutationsEnforceAuthRoleCSRFAndErrors(t *testing.T) {
 	}
 
 	// Non-admin 403
-	rec := authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", payload, userCookie, userCSRF)
+	rec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", payload, userCookie, userCSRF)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("non-admin POST /api/vehicles/locations = %d, want 403", rec.Code)
 	}
 
 	// Missing CSRF 403
-	rec = authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", payload, adminCookie, "")
+	rec = authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", payload, adminCookie, "")
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("missing CSRF POST /api/vehicles/locations = %d, want 403", rec.Code)
 	}
 
 	// Admin valid creation returns 201 and captures principal username as fallback source.
-	rec = authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", payload, adminCookie, adminCSRF)
+	rec = authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", payload, adminCookie, adminCSRF)
 	if rec.Code != http.StatusCreated || svc.submitSource != "transit.admin" {
 		t.Fatalf("POST create status=%d source=%q body=%s", rec.Code, svc.submitSource, rec.Body.String())
 	}
@@ -300,7 +302,7 @@ func TestVehicleLocationMutationsEnforceAuthRoleCSRFAndErrors(t *testing.T) {
 
 	// Subsequent update returns 200 OK.
 	svc.submitResult.Created = false
-	rec = authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", payload, adminCookie, adminCSRF)
+	rec = authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", payload, adminCookie, adminCSRF)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST update status=%d, want 200", rec.Code)
 	}
@@ -316,7 +318,7 @@ func TestVehicleLocationMutationsEnforceAuthRoleCSRFAndErrors(t *testing.T) {
 		{errors.New("secret postgres crash"), 500},
 	} {
 		svc.submitErr = tc.err
-		errRec := authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", payload, adminCookie, adminCSRF)
+		errRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", payload, adminCookie, adminCSRF)
 		if errRec.Code != tc.status {
 			t.Fatalf("err=%v status=%d, want %d", tc.err, errRec.Code, tc.status)
 		}
@@ -326,25 +328,25 @@ func TestVehicleLocationMutationsEnforceAuthRoleCSRFAndErrors(t *testing.T) {
 	}
 
 	// Unknown JSON fields rejected with 400.
-	badJSON := authedRequest(env.mux, http.MethodPost, "/api/vehicles/locations", `{"unknown_field":1}`, adminCookie, adminCSRF)
+	badJSON := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/vehicles/locations", `{"unknown_field":1}`, adminCookie, adminCSRF)
 	if badJSON.Code != http.StatusBadRequest {
 		t.Fatalf("unknown field status=%d, want 400", badJSON.Code)
 	}
 
 	// Admin simulator endpoints work with auth & CSRF.
-	startRec := authedRequest(env.mux, http.MethodPost, "/api/admin/vehicles/simulator/start", `{"speed_multiplier":2}`, adminCookie, adminCSRF)
+	startRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/admin/vehicles/simulator/start", `{"speed_multiplier":2}`, adminCookie, adminCSRF)
 	if startRec.Code != http.StatusOK || !sim.status.Running || sim.status.SpeedMultiplier != 2 {
 		t.Fatalf("simulator start failed: code=%d status=%+v body=%s", startRec.Code, sim.status, startRec.Body.String())
 	}
-	stepRec := authedRequest(env.mux, http.MethodPost, "/api/admin/vehicles/simulator/step", "", adminCookie, adminCSRF)
+	stepRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/admin/vehicles/simulator/step", "", adminCookie, adminCSRF)
 	if stepRec.Code != http.StatusOK || sim.called != "step" {
 		t.Fatalf("simulator step failed: code=%d called=%s", stepRec.Code, sim.called)
 	}
-	stopRec := authedRequest(env.mux, http.MethodPost, "/api/admin/vehicles/simulator/stop", "", adminCookie, adminCSRF)
+	stopRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/admin/vehicles/simulator/stop", "", adminCookie, adminCSRF)
 	if stopRec.Code != http.StatusOK || sim.status.Running {
 		t.Fatalf("simulator stop failed: code=%d status=%+v", stopRec.Code, sim.status)
 	}
-	resetRec := authedRequest(env.mux, http.MethodPost, "/api/admin/vehicles/simulator/reset", "", adminCookie, adminCSRF)
+	resetRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/admin/vehicles/simulator/reset", "", adminCookie, adminCSRF)
 	if resetRec.Code != http.StatusOK || sim.called != "reset" {
 		t.Fatalf("simulator reset failed: code=%d called=%s", resetRec.Code, sim.called)
 	}
@@ -383,7 +385,7 @@ func TestVehicleArrivalEndpoints(t *testing.T) {
 		VehicleHandler: handlers.NewVehicleHandler(svc, nil),
 	})
 
-	rec := authedRequest(fullMux, http.MethodGet, "/api/trips/300/arrivals", "", nil, "")
+	rec := authedRequest(fullMux, http.MethodGet, "/api/transport/v1/trips/300/arrivals", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "upcoming_arrivals" || svc.arrivalsTripID != 300 || svc.arrivalsStopID != 0 {
 		t.Fatalf("GET /api/trips/300/arrivals failed: code=%d called=%s trip=%d stop=%d body=%s",
 			rec.Code, svc.called, svc.arrivalsTripID, svc.arrivalsStopID, rec.Body.String())
@@ -396,13 +398,13 @@ func TestVehicleArrivalEndpoints(t *testing.T) {
 		t.Fatalf("unexpected trip arrivals payload: %+v", gotTripArrivals)
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/stops/42/arrivals", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/stops/42/arrivals", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "stop_arrivals" || svc.arrivalsStopID != 42 || svc.arrivalsRouteID != 0 {
 		t.Fatalf("GET /api/stops/42/arrivals failed: code=%d called=%s stop=%d route=%d body=%s",
 			rec.Code, svc.called, svc.arrivalsStopID, svc.arrivalsRouteID, rec.Body.String())
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/stops/42/arrivals?route_id=7", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/stops/42/arrivals?route_id=7", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "stop_arrivals" || svc.arrivalsStopID != 42 || svc.arrivalsRouteID != 7 {
 		t.Fatalf("GET /api/stops/42/arrivals?route_id=7 failed: code=%d called=%s stop=%d route=%d body=%s",
 			rec.Code, svc.called, svc.arrivalsStopID, svc.arrivalsRouteID, rec.Body.String())
@@ -410,14 +412,14 @@ func TestVehicleArrivalEndpoints(t *testing.T) {
 
 	// Nil slice from service still serializes as JSON [] rather than null.
 	svc.arrivalsResult = nil
-	rec = authedRequest(fullMux, http.MethodGet, "/api/trips/300/arrivals", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/trips/300/arrivals", "", nil, "")
 	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
 		t.Fatalf("empty arrivals = code %d body %q, want 200 []", rec.Code, rec.Body.String())
 	}
 
 	// 404 when trip or stop does not exist, 500 without leaking internal error text.
 	svc.arrivalsErr = vehicles.ErrNotFound
-	for _, path := range []string{"/api/trips/999/arrivals", "/api/stops/999/arrivals"} {
+	for _, path := range []string{"/api/transport/v1/trips/999/arrivals", "/api/transport/v1/stops/999/arrivals"} {
 		notFound := authedRequest(fullMux, http.MethodGet, path, "", nil, "")
 		if notFound.Code != http.StatusNotFound {
 			t.Fatalf("%s returned %d, want 404", path, notFound.Code)
@@ -425,7 +427,7 @@ func TestVehicleArrivalEndpoints(t *testing.T) {
 	}
 
 	svc.arrivalsErr = errors.New("secret db password")
-	errRec := authedRequest(fullMux, http.MethodGet, "/api/stops/42/arrivals", "", nil, "")
+	errRec := authedRequest(fullMux, http.MethodGet, "/api/transport/v1/stops/42/arrivals", "", nil, "")
 	if errRec.Code != http.StatusInternalServerError || strings.Contains(errRec.Body.String(), "secret") {
 		t.Fatalf("expected sanitized 500, got code=%d body=%s", errRec.Code, errRec.Body.String())
 	}
@@ -433,15 +435,15 @@ func TestVehicleArrivalEndpoints(t *testing.T) {
 	// Invalid IDs and unexpected/bad query parameters return 400.
 	svc.arrivalsErr = nil
 	for _, badPath := range []string{
-		"/api/trips/0/arrivals",
-		"/api/trips/abc/arrivals",
-		"/api/trips/300/arrivals?bogus=1",
-		"/api/stops/0/arrivals",
-		"/api/stops/abc/arrivals",
-		"/api/stops/42/arrivals?route_id=0",
-		"/api/stops/42/arrivals?route_id=abc",
-		"/api/stops/42/arrivals?route_id=7&route_id=8",
-		"/api/stops/42/arrivals?bogus=1",
+		"/api/transport/v1/trips/0/arrivals",
+		"/api/transport/v1/trips/abc/arrivals",
+		"/api/transport/v1/trips/300/arrivals?bogus=1",
+		"/api/transport/v1/stops/0/arrivals",
+		"/api/transport/v1/stops/abc/arrivals",
+		"/api/transport/v1/stops/42/arrivals?route_id=0",
+		"/api/transport/v1/stops/42/arrivals?route_id=abc",
+		"/api/transport/v1/stops/42/arrivals?route_id=7&route_id=8",
+		"/api/transport/v1/stops/42/arrivals?bogus=1",
 	} {
 		badRec := authedRequest(fullMux, http.MethodGet, badPath, "", nil, "")
 		if badRec.Code != http.StatusBadRequest {

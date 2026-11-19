@@ -1,11 +1,14 @@
+import { RouteBadge } from '../../components/RouteBadge.jsx'
+import { FeedFreshness } from '../../components/FeedFreshness.jsx'
 import { useCallback, useMemo, useState } from 'react'
-import { Clock3, Info, RefreshCw } from 'lucide-react'
+import { Clock3, Info, RefreshCw, Pause, Play, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { getDepartures, getTimetable } from '../../api/transit.js'
 import { useResource } from '../../hooks/useResource.js'
 import { departureEstimate, directionLabel, formatDate, formatTime, getStops, serviceDate, tripEndpoints } from '../../lib/transit.js'
 import { EmptyState, ErrorNotice, LoadingRows } from '../../components/DataState.jsx'
 
 export function DepartureView({ route, today }) {
+  const [live, setLive] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   const stopId = selectedStop ? String(selectedStop.id) : ''
   const [tripId, setTripId] = useState('')
@@ -13,7 +16,7 @@ export function DepartureView({ route, today }) {
   const loadTimetable = useCallback((signal) => getTimetable(route.id, today, signal), [route.id, today])
   const timetable = useResource(`filter-options-${route.id}-${today}`, loadTimetable)
   const loadDepartures = useCallback((signal) => getDepartures({ routeId: route.id, stopId, tripId, hours }, signal), [route.id, stopId, tripId, hours])
-  const departures = useResource(`departures-${route.id}-${stopId}-${tripId}-${hours}`, loadDepartures, 60_000)
+  const departures = useResource(`departures-${route.id}-${stopId}-${tripId}-${hours}`, loadDepartures, live ? 60_000 : 0)
   const hasEstimates = departures.data?.some((departure) => departureEstimate(departure))
   const stops = useMemo(() => {
     const choices = new Map(getStops(timetable.data?.trips ?? []).map((stop) => [stop.id, stop]))
@@ -57,21 +60,24 @@ export function DepartureView({ route, today }) {
       {timetable.error && <div className="filter-warning" role="status"><Info size={17} aria-hidden="true" /><p>Full stop and trip lists couldn’t be loaded. You can still filter the departures shown.</p><button className="text-button" type="button" onClick={timetable.retry}>Retry filters</button></div>}
 
       <div className="results-heading departure-results-heading"><div><h3>{stopId ? stops.find((stop) => stop.id === Number(stopId))?.name ?? 'Stop departures' : 'Next departures'}</h3><p>{formatDate(today, { weekday: 'short', month: 'short' })} · Next {hours} hours{tripId ? ` · Trip ${tripId}` : ''}</p></div>
+        <button className="button button-secondary" type="button" aria-pressed={live} onClick={() => setLive(!live)}>{live ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}{live ? 'Pause updates' : 'Resume updates'}</button>
         <button className="button button-secondary refresh-button" type="button" onClick={departures.retry} disabled={departures.pending}><RefreshCw size={15} aria-hidden="true" />{departures.pending && departures.data ? 'Updating…' : 'Refresh'}</button>
       </div>
 
       <div className={`estimate-note${hasEstimates ? ' has-estimates' : ''}`}><Clock3 size={17} aria-hidden="true" /><p>{hasEstimates ? 'Estimated times are shown where available. Published times remain listed for reference.' : 'Showing scheduled times. Estimates will appear here when available.'}</p></div>
 
       {departures.error && <ErrorNotice error={departures.error} onRetry={departures.retry} />}
+      <FeedFreshness updatedAt={departures.updatedAt} paused={!live} />
+      <div className="visually-hidden" role="status">{departures.data ? `${departures.data.length} departures available.` : ''}</div>
       {departures.error && departures.data && <p className="stale-notice" role="status">Showing the last successful update. These departures may have changed.</p>}
-      {!departures.data && !departures.error ? <LoadingRows label="Loading upcoming departures" />
+      {!departures.data && !departures.error ? <LoadingRows label="Loading upcoming departures" variant="departures" />
         : departures.data?.length === 0 ? <EmptyState title="No departures in this window" description="Try a longer time window, another stop, or All trips. You can also check the timetable for later service." />
-          : departures.data && <div className="departure-list" aria-label="Upcoming departures" aria-busy={departures.pending}>
+          : departures.data && <div className="departure-list" role="region" aria-label="Upcoming departures" aria-busy={departures.pending}>
             <div className="departure-list-labels" aria-hidden="true"><span>Route &amp; stop</span><span>Scheduled</span><span>Departure</span></div>
             {departures.data.map((departure) => <DepartureRow key={`${departure.trip_id}-${departure.route_stop_id}-${departure.service_date}`} departure={departure} today={today} />)}
           </div>}
 
-      <div className="departure-footer"><p>{departures.updatedAt ? `Updated ${formatTime(departures.updatedAt)} · Refreshes every minute while this page is visible` : 'Departures refresh every minute while this page is visible.'}</p>
+      <div className="departure-footer"><p>{departures.updatedAt ? `Updated ${formatTime(departures.updatedAt)} · ${live ? 'Refreshes every minute while this page is visible' : 'Updates paused'}` : 'Departures refresh every minute while this page is visible.'}</p>
         {departures.data?.length === 100 && <p>Showing the first 100 departures. Choose a stop or trip to narrow the results.</p>}
         <p>Filters use today’s timetable and the departures shown. Holiday changes are not included.</p>
       </div>
@@ -90,10 +96,10 @@ function DepartureRow({ departure, today }) {
 
   return (
     <article className="departure-row" aria-label={`Route ${departure.route.number}, ${departure.stop_name}, ${formatTime(actual)}`}>
-      <div className="departure-location"><span className="route-number">{departure.route.number}</span><div><h4>{departure.stop_name}</h4><p>{directionLabel(departure.route.direction)} · Trip {departure.trip_id} · Stop {departure.stop_sequence}</p></div></div>
+      <div className="departure-location"><RouteBadge number={departure.route.number} /><div><h4>{departure.stop_name}</h4><p>{directionLabel(departure.route.direction)} · Trip {departure.trip_id} · Stop {departure.stop_sequence}</p></div></div>
       <div className="scheduled-column"><span className="mobile-column-label">Scheduled</span><time dateTime={departure.scheduled_departure_time}>{formatTime(departure.scheduled_departure_time)}</time></div>
       <div className={`departure-time${estimate ? ' is-estimated' : ''}`}><div><time dateTime={actual}>{formatTime(actual)}</time><span className="time-source">{estimate ? 'Estimated' : 'Scheduled'}</span></div>
-        {estimate && <small className={estimate.delay > 0 ? 'delay-label' : ''}>{estimateLabel}</small>}
+        {estimate && <small className={estimate.delay > 0 ? 'delay-label' : ''}>{estimate.delay > 0 ? <AlertTriangle size={12} aria-hidden="true" /> : <CheckCircle2 size={12} aria-hidden="true" />}{estimateLabel}</small>}
         {dayLabel && <small>{dayLabel}</small>}
       </div>
     </article>

@@ -4,6 +4,9 @@ import { getRoutes, getServiceStatus } from '../../api/transit.js'
 import { useResource } from '../../hooks/useResource.js'
 import { formatDate, groupRoutes, serviceDate } from '../../lib/transit.js'
 import { Link } from '../../lib/router.jsx'
+import { ThemeControl } from '../../components/ThemeControl.jsx'
+import { useOnline } from '../../hooks/usePreferences.js'
+import { SavedStops } from './SavedStops.jsx'
 import { RouteSidebar } from '../../components/RouteSidebar.jsx'
 import { EmptyState, ErrorNotice, LoadingRows } from '../../components/DataState.jsx'
 import { TransitWorkspace } from '../TransitWorkspace.jsx'
@@ -11,12 +14,13 @@ import { JourneyView } from '../journey/JourneyView.jsx'
 import { LiveMapView } from '../live/LiveMapView.jsx'
 import { ServiceAlertsView } from '../alerts/ServiceAlertsView.jsx'
 
-const RESIDENT_SECTIONS = ['schedules', 'journey', 'map', 'alerts']
+const RESIDENT_SECTIONS = ['map', 'schedules', 'journey', 'alerts']
 
 export function ResidentPage() {
+  const online = useOnline()
   const routes = useResource('routes', getRoutes)
   const groups = useMemo(() => groupRoutes(routes.data ?? []), [routes.data])
-  const [section, setSection] = useState('schedules')
+  const [section, setSection] = useState('map')
   const [routeId, setRouteId] = useState(null)
   const [mapRouteId, setMapRouteId] = useState('')
   const [alertsRouteId, setAlertsRouteId] = useState('')
@@ -91,7 +95,7 @@ export function ResidentPage() {
     const currentIndex = RESIDENT_SECTIONS.indexOf(section)
     let next = section
     if (event.key === 'Home') {
-      next = 'schedules'
+      next = 'map'
     } else if (event.key === 'End') {
       next = 'alerts'
     } else if (event.key === 'ArrowRight') {
@@ -122,41 +126,15 @@ export function ResidentPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell resident-shell${section === 'map' ? ' is-primary-view' : ''}`}>
       <a className="skip-link" href="#main-content">Skip to transit information</a>
       <header className="site-header resident-header">
-        <Link className="brand" to="/" onClick={() => setSection('schedules')}>
+        <Link className="brand" to="/" onClick={() => setSection('map')}>
           <span className="brand-mark"><BusFront size={24} aria-hidden="true" /></span>
           <span>Public Transport{' '}<span className="brand-region">Waterloo Region</span></span>
         </Link>
 
         <div className="resident-nav" role="tablist" aria-label="Resident sections" onKeyDown={handleSectionTabKey}>
-          <button
-            id="section-tab-schedules"
-            type="button"
-            role="tab"
-            className="resident-nav-tab"
-            aria-selected={section === 'schedules'}
-            aria-controls="section-panel-schedules"
-            tabIndex={section === 'schedules' ? 0 : -1}
-            onClick={() => setSection('schedules')}
-          >
-            <CalendarDays size={16} aria-hidden="true" />
-            <span>Schedules &amp; Departures</span>
-          </button>
-          <button
-            id="section-tab-journey"
-            type="button"
-            role="tab"
-            className="resident-nav-tab"
-            aria-selected={section === 'journey'}
-            aria-controls="section-panel-journey"
-            tabIndex={section === 'journey' ? 0 : -1}
-            onClick={() => setSection('journey')}
-          >
-            <ArrowRightLeft size={16} aria-hidden="true" />
-            <span>Journey Search</span>
-          </button>
           <button
             id="section-tab-map"
             type="button"
@@ -171,7 +149,36 @@ export function ResidentPage() {
             <span>Live Map</span>
           </button>
           <button
+            id="section-tab-schedules"
+            aria-label="Schedules & Departures"
+            type="button"
+            role="tab"
+            className="resident-nav-tab"
+            aria-selected={section === 'schedules'}
+            aria-controls="section-panel-schedules"
+            tabIndex={section === 'schedules' ? 0 : -1}
+            onClick={() => setSection('schedules')}
+          >
+            <CalendarDays size={16} aria-hidden="true" />
+            <span>{section === 'map' ? 'Schedules' : 'Schedules & Departures'}</span>
+          </button>
+          <button
+            id="section-tab-journey"
+            aria-label="Journey Search"
+            type="button"
+            role="tab"
+            className="resident-nav-tab"
+            aria-selected={section === 'journey'}
+            aria-controls="section-panel-journey"
+            tabIndex={section === 'journey' ? 0 : -1}
+            onClick={() => setSection('journey')}
+          >
+            <ArrowRightLeft size={16} aria-hidden="true" />
+            <span>{section === 'map' ? 'Journey' : 'Journey Search'}</span>
+          </button>
+          <button
             id="section-tab-alerts"
+            aria-label="Service Alerts"
             type="button"
             role="tab"
             className="resident-nav-tab"
@@ -181,7 +188,7 @@ export function ResidentPage() {
             onClick={() => setSection('alerts')}
           >
             <AlertTriangle size={16} aria-hidden="true" />
-            <span>Service Alerts</span>
+            <span>{section === 'map' ? 'Alerts' : 'Service Alerts'}</span>
             {activeDisruptionCount > 0 && (
               <span className="nav-alert-badge" aria-hidden="true">
                 {activeDisruptionCount}
@@ -190,21 +197,24 @@ export function ResidentPage() {
           </button>
         </div>
 
-        <div className="header-location"><MapPin size={16} aria-hidden="true" /> Waterloo Region, Ontario</div>
+        <div className="header-tools"><span className="header-location"><MapPin size={16} aria-hidden="true" /> Waterloo Region</span><ThemeControl /></div>
       </header>
 
-      <div className="page-heading">
+      {section !== 'map' && <div className="page-heading">
         {section === 'journey' ? (
           <div><h1>Journey Search</h1><p>Find transit routes and walking connections between two locations.</p></div>
         ) : section === 'map' ? (
-          <div><h1>Live Map</h1><p>Track active buses across Waterloo Region and view upcoming stop arrivals.</p></div>
+          <div><h1>Live Map</h1><p>Track vehicles and check the next arrivals.</p></div>
         ) : section === 'alerts' ? (
           <div><h1>Service Alerts</h1><p>View active transit disruptions, detours, and affected routes and stops across Waterloo Region.</p></div>
         ) : (
-          <div><h1>Schedules &amp; Departures</h1><p>A little planning. A smoother journey.</p></div>
+          <div><h1>Schedules &amp; Departures</h1><p>Choose a route to see its stops and departure times.</p></div>
         )}
         <p className="today-label">{formatDate(today, { weekday: 'short', month: 'short' })}<span>All times Eastern · 24-hour clock</span></p>
-      </div>
+      </div>}
+
+      {section !== 'map' && <div className="commuter-tools"><SavedStops /><p>Waterloo Region <span aria-hidden="true">/</span> Bus &amp; rail</p></div>}
+      <div className="connection-notice" role="status">{!online && <><AlertTriangle size={18} aria-hidden="true" /><span>You’re offline. Live positions and arrivals may be out of date. Reconnect to update transit information.</span></>}</div>
 
       {section === 'schedules' ? (
         <div
@@ -246,6 +256,7 @@ export function ResidentPage() {
         >
           <main id="main-content" className="main-content live-main" tabIndex={-1}>
             <div className="view-panel">
+              {routes.error && <ErrorNotice error={routes.error} onRetry={routes.retry} />}
               <LiveMapView
                 routes={routes.data ?? []}
                 selectedRouteId={mapRouteId}

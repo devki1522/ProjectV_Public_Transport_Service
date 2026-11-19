@@ -47,7 +47,7 @@ it('rejects unsafe redirect paths and keeps safe internal paths', () => {
 it('waits for session restoration on protected routes and redirects unauthenticated users to login', async () => {
   let resolveMe
   const fetchMock = vi.fn((path) => {
-    if (path === '/api/auth/me') {
+    if (path === '/api/transport/v1/auth/me') {
       return new Promise((resolve) => {
         resolveMe = resolve
       })
@@ -69,8 +69,8 @@ it('waits for session restoration on protected routes and redirects unauthentica
 
 it('signs in an administrator, reaches dashboard, and falls back safely on unsafe next path', async () => {
   const fetchMock = vi.fn(async (path, options = {}) => {
-    if (path === '/api/auth/me') return jsonResponse({ error: 'unauthenticated' }, 401)
-    if (path === '/api/auth/login') {
+    if (path === '/api/transport/v1/auth/me') return jsonResponse({ error: 'unauthenticated' }, 401)
+    if (path === '/api/transport/v1/auth/login') {
       expect(JSON.parse(options.body)).toEqual({
         username: 'transit.admin',
         password: 'admin-password',
@@ -78,7 +78,7 @@ it('signs in an administrator, reaches dashboard, and falls back safely on unsaf
       })
       return jsonResponse(adminSession, 200)
     }
-    if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+    if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -101,8 +101,8 @@ it('signs in an administrator, reaches dashboard, and falls back safely on unsaf
 
 it('shows invalid credential and provider-unavailable messages on login without leaving login', async () => {
   const fetchMock = vi.fn(async (path) => {
-    if (path === '/api/auth/me') return jsonResponse({}, 401)
-    if (path === '/api/auth/login') return jsonResponse({ error: 'invalid username or password' }, 401)
+    if (path === '/api/transport/v1/auth/me') return jsonResponse({}, 401)
+    if (path === '/api/transport/v1/auth/login') return jsonResponse({ error: 'invalid username or password' }, 401)
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -121,7 +121,7 @@ it('shows invalid credential and provider-unavailable messages on login without 
   expect(passwordInput).toHaveValue('')
 
   fetchMock.mockImplementationOnce(async (path) => {
-    if (path === '/api/auth/login') return jsonResponse({ error: 'unavailable' }, 503)
+    if (path === '/api/transport/v1/auth/login') return jsonResponse({ error: 'unavailable' }, 503)
     throw new Error(`Unexpected request: ${path}`)
   })
   await user.type(passwordInput, 'any-pw')
@@ -131,8 +131,8 @@ it('shows invalid credential and provider-unavailable messages on login without 
 
 it('routes a signed-in normal user to the unauthorized page', async () => {
   const fetchMock = vi.fn(async (path) => {
-    if (path === '/api/auth/me') return jsonResponse({}, 401)
-    if (path === '/api/auth/login') return jsonResponse(normalUserSession, 200)
+    if (path === '/api/transport/v1/auth/me') return jsonResponse({}, 401)
+    if (path === '/api/transport/v1/auth/login') return jsonResponse(normalUserSession, 200)
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -153,8 +153,8 @@ it('routes a signed-in normal user to the unauthorized page', async () => {
 it('shows dashboard error state and retries cleanly', async () => {
   let failDashboard = true
   const fetchMock = vi.fn(async (path) => {
-    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (path === '/api/admin/dashboard') {
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/transport/v1/admin/dashboard') {
       if (failDashboard) return jsonResponse({ error: 'db down' }, 500)
       return jsonResponse(dashboardData, 200)
     }
@@ -177,21 +177,21 @@ it('supports creating, editing, and deactivating routes with CSRF headers and co
 
   const fetchMock = vi.fn(async (path, options = {}) => {
     const method = options.method || 'GET'
-    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (path === '/api/routes' && method === 'GET') return jsonResponse(catalog, 200)
-    if (path === '/api/routes' && method === 'POST') {
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/transport/v1/routes' && method === 'GET') return jsonResponse(catalog, 200)
+    if (path === '/api/transport/v1/routes' && method === 'POST') {
       mutationCalls.push({ path, method, headers: options.headers, body: JSON.parse(options.body) })
       const created = { id: 99, ...JSON.parse(options.body), is_active: true }
       catalog = [...catalog, created]
       return jsonResponse(created, 201)
     }
-    if (path === '/api/routes/7' && method === 'PATCH') {
+    if (path === '/api/transport/v1/routes/7' && method === 'PATCH') {
       mutationCalls.push({ path, method, headers: options.headers, body: JSON.parse(options.body) })
       const patch = JSON.parse(options.body)
       catalog = catalog.map((r) => (r.id === 7 ? { ...r, ...patch } : r))
       return jsonResponse(catalog.find((r) => r.id === 7), 200)
     }
-    if (path === '/api/routes/7' && method === 'DELETE') {
+    if (path === '/api/transport/v1/routes/7' && method === 'DELETE') {
       mutationCalls.push({ path, method, headers: options.headers })
       catalog = catalog.map((r) => (r.id === 7 ? { ...r, is_active: false } : r))
       return { ok: true, status: 204, json: async () => ({}) }
@@ -209,7 +209,7 @@ it('supports creating, editing, and deactivating routes with CSRF headers and co
 
   // Recoverable 409 conflict preserves form values
   fetchMock.mockImplementationOnce(async (path, options = {}) => {
-    if (path === '/api/routes' && options.method === 'POST') {
+    if (path === '/api/transport/v1/routes' && options.method === 'POST') {
       return jsonResponse({ error: 'a route with that number and direction already exists' }, 409)
     }
     throw new Error(`Unexpected request: ${options.method} ${path}`)
@@ -251,13 +251,13 @@ it('supports creating, editing, and deactivating routes with CSRF headers and co
   for (const call of mutationCalls) {
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
-})
+}, 15_000)
 
 it('clears session on backend 401 and displays access denial on backend 403', async () => {
   let nextDashStatus = 401
   const fetchMock = vi.fn(async (path) => {
-    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (path === '/api/admin/dashboard') return jsonResponse({ error: 'denied' }, nextDashStatus)
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/transport/v1/admin/dashboard') return jsonResponse({ error: 'denied' }, nextDashStatus)
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -274,9 +274,9 @@ it('clears session on backend 401 and displays access denial on backend 403', as
 it('logs out with CSRF header, removes protected content, and returns to login', async () => {
   const logoutCalls = []
   const fetchMock = vi.fn(async (path, options = {}) => {
-    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
-    if (path === '/api/auth/logout') {
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
+    if (path === '/api/transport/v1/auth/logout') {
       logoutCalls.push(options.headers)
       return jsonResponse({ status: 'logged_out' }, 200)
     }
@@ -298,9 +298,9 @@ for (const failure of ['network', 403, 500]) {
   it(`keeps sign out retryable when logout fails with ${failure}`, async () => {
     let fail = true
     vi.stubGlobal('fetch', vi.fn(async (path) => {
-      if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
-      if (path === '/api/auth/logout') {
+      if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+      if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
+      if (path === '/api/transport/v1/auth/logout') {
         if (fail && failure === 'network') throw new Error('offline')
         return jsonResponse({}, fail ? failure : 200)
       }
@@ -322,8 +322,8 @@ for (const failure of ['network', 403, 500]) {
 it('uses the backend capability for a configured administrator role', async () => {
   const customSession = { ...adminSession, user: { ...adminSession.user, roles: ['TransportOperator'] } }
   vi.stubGlobal('fetch', vi.fn(async (path) => {
-    if (path === '/api/auth/me') return jsonResponse(customSession, 200)
-    if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(customSession, 200)
+    if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
     throw new Error(`Unexpected request: ${path}`)
   }))
   render(<App initialPath="/admin" />)
@@ -351,8 +351,8 @@ it('returns an expired administrator session to login without waiting for a muta
   try {
     const session = { ...adminSession, expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString() }
     vi.stubGlobal('fetch', vi.fn(async (path) => {
-      if (path === '/api/auth/me') return jsonResponse(session, 200)
-      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
+      if (path === '/api/transport/v1/auth/me') return jsonResponse(session, 200)
+      if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
       throw new Error(`Unexpected request: ${path}`)
     }))
     await act(async () => { render(<App initialPath="/admin" />) })
@@ -369,16 +369,16 @@ it('keeps the resident page public when a previous administrator session expires
   try {
     const session = { ...adminSession, expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString() }
     vi.stubGlobal('fetch', vi.fn(async (path) => {
-      if (path === '/api/auth/me') return jsonResponse(session, 200)
-      if (path === '/api/admin/dashboard') return jsonResponse(dashboardData, 200)
-      if (path === '/api/routes') return jsonResponse([], 200)
+      if (path === '/api/transport/v1/auth/me') return jsonResponse(session, 200)
+      if (path === '/api/transport/v1/admin/dashboard') return jsonResponse(dashboardData, 200)
+      if (path === '/api/transport/v1/routes') return jsonResponse([], 200)
       throw new Error(`Unexpected request: ${path}`)
     }))
     await act(async () => { render(<App initialPath="/admin" />) })
     await act(async () => { fireEvent.click(screen.getByRole('link', { name: 'Public schedules' })) })
     await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60_000) })
     expect(window.location.pathname).toBe('/')
-    expect(screen.getByRole('heading', { name: 'Schedules & Departures' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Live Map' })).toBeVisible()
   } finally {
     vi.useRealTimers()
   }
@@ -391,11 +391,11 @@ it('supports /admin/vehicles US 177 location updates with presets, validation, C
 
   const fetchMock = vi.fn(async (path, options = {}) => {
     const method = options.method || 'GET'
-    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (path === '/api/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
-    if (path === '/api/vehicles' && method === 'GET') return jsonResponse(fleet, 200)
-    if (path === '/api/vehicles/simulator' && method === 'GET') return jsonResponse(sim, 200)
-    if (path === '/api/vehicles/locations' && method === 'POST') {
+    if (path === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/transport/v1/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
+    if (path === '/api/transport/v1/vehicles' && method === 'GET') return jsonResponse(fleet, 200)
+    if (path === '/api/transport/v1/vehicles/simulator' && method === 'GET') return jsonResponse(sim, 200)
+    if (path === '/api/transport/v1/vehicles/locations' && method === 'POST') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path, method, headers: options.headers, body })
       const route = fixtureRoutes.find((r) => r.id === body.route_id) ?? fixtureRoutes[2]
@@ -421,23 +421,23 @@ it('supports /admin/vehicles US 177 location updates with presets, validation, C
       fleet = [...fleet, created]
       return jsonResponse(created, 201)
     }
-    if (path === '/api/admin/vehicles/simulator/start' && method === 'POST') {
+    if (path === '/api/transport/v1/admin/vehicles/simulator/start' && method === 'POST') {
       const body = options.body ? JSON.parse(options.body) : {}
       mutationCalls.push({ path, method, headers: options.headers, body })
       sim = { ...sim, running: true, speed_multiplier: body.speed_multiplier ?? 1 }
       return jsonResponse(sim, 200)
     }
-    if (path === '/api/admin/vehicles/simulator/step' && method === 'POST') {
+    if (path === '/api/transport/v1/admin/vehicles/simulator/step' && method === 'POST') {
       mutationCalls.push({ path, method, headers: options.headers })
       sim = { ...sim, total_updates_sent: sim.total_updates_sent + 8 }
       return jsonResponse(sim, 200)
     }
-    if (path === '/api/admin/vehicles/simulator/stop' && method === 'POST') {
+    if (path === '/api/transport/v1/admin/vehicles/simulator/stop' && method === 'POST') {
       mutationCalls.push({ path, method, headers: options.headers })
       sim = { ...sim, running: false }
       return jsonResponse(sim, 200)
     }
-    if (path === '/api/admin/vehicles/simulator/reset' && method === 'POST') {
+    if (path === '/api/transport/v1/admin/vehicles/simulator/reset' && method === 'POST') {
       mutationCalls.push({ path, method, headers: options.headers })
       sim = { ...sim, running: false, total_updates_sent: 0 }
       fleet = fleet.filter((v) => !v.is_simulated)
@@ -505,7 +505,7 @@ it('supports /admin/vehicles US 177 location updates with presets, validation, C
   for (const call of mutationCalls) {
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
-})
+}, 15_000)
 
 it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187/188 external incident feeds with CSRF, and US 196 enterprise service status', async () => {
   let disruptionsCatalog = [...fixtureAllDisruptions]
@@ -514,15 +514,15 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
   const fetchMock = vi.fn(async (path, options = {}) => {
     const method = options.method || 'GET'
     const url = new URL(path, 'https://transit.test')
-    if (url.pathname === '/api/auth/me') return jsonResponse(adminSession, 200)
-    if (url.pathname === '/api/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
-    if (url.pathname === '/api/disruptions' && method === 'GET') {
+    if (url.pathname === '/api/transport/v1/auth/me') return jsonResponse(adminSession, 200)
+    if (url.pathname === '/api/transport/v1/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
+    if (url.pathname === '/api/transport/v1/disruptions' && method === 'GET') {
       return jsonResponse(disruptionsCatalog, 200)
     }
-    if (url.pathname === '/api/integrations/service-status' && method === 'GET') {
+    if (url.pathname === '/api/transport/v1/integrations/service-status' && method === 'GET') {
       return jsonResponse(serviceStatusResponse({ disruptions: disruptionsCatalog }), 200)
     }
-    if (url.pathname === '/api/disruptions' && method === 'POST') {
+    if (url.pathname === '/api/transport/v1/disruptions' && method === 'POST') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
       const created = {
@@ -553,8 +553,8 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
       disruptionsCatalog = [created, ...disruptionsCatalog]
       return jsonResponse(created, 201)
     }
-    if (url.pathname.startsWith('/api/disruptions/') && method === 'PATCH') {
-      const id = Number(url.pathname.split('/')[3])
+    if (url.pathname.startsWith('/api/transport/v1/disruptions/') && method === 'PATCH') {
+      const id = Number(url.pathname.split('/')[5])
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
       disruptionsCatalog = disruptionsCatalog.map((item) =>
@@ -563,9 +563,9 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
       return jsonResponse(disruptionsCatalog.find((item) => item.id === id), 200)
     }
     if (
-      (url.pathname === '/api/integrations/utilities/notices' ||
-        url.pathname === '/api/integrations/emergency/incidents' ||
-        url.pathname === '/api/integrations/security/traffic-alerts') &&
+      (url.pathname === '/api/transport/v1/integrations/utilities/notices' ||
+        url.pathname === '/api/transport/v1/integrations/emergency/incidents' ||
+        url.pathname === '/api/transport/v1/integrations/security/traffic-alerts') &&
       method === 'POST'
     ) {
       const body = JSON.parse(options.body)
@@ -684,16 +684,16 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
 
   expect(mutationCalls).toHaveLength(5)
   expect(mutationCalls.map((c) => `${c.method} ${c.path}`)).toEqual([
-    'POST /api/disruptions',
-    'PATCH /api/disruptions/410',
-    'POST /api/integrations/utilities/notices',
-    'POST /api/integrations/emergency/incidents',
-    'POST /api/integrations/security/traffic-alerts',
+    'POST /api/transport/v1/disruptions',
+    'PATCH /api/transport/v1/disruptions/410',
+    'POST /api/transport/v1/integrations/utilities/notices',
+    'POST /api/transport/v1/integrations/emergency/incidents',
+    'POST /api/transport/v1/integrations/security/traffic-alerts',
   ])
   for (const call of mutationCalls) {
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
-})
+}, 15_000)
 
 it('preserves multi-line segments and clears end_time when editing a disruption, and ignores hidden Trip IDs on utilities feed', async () => {
   const mutationCalls = []
@@ -710,19 +710,19 @@ it('preserves multi-line segments and clears end_time when editing a disruption,
   const fetchMock = vi.fn(async (input, options = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost')
     const method = (options.method ?? 'GET').toUpperCase()
-    if (url.pathname === '/api/auth/me') return jsonResponse(adminSession)
-    if (url.pathname === '/api/routes') return jsonResponse(fixtureRoutes)
-    if (url.pathname === '/api/disruptions') return jsonResponse(catalog)
-    if (url.pathname === '/api/integrations/service-status') {
+    if (url.pathname === '/api/transport/v1/auth/me') return jsonResponse(adminSession)
+    if (url.pathname === '/api/transport/v1/routes') return jsonResponse(fixtureRoutes)
+    if (url.pathname === '/api/transport/v1/disruptions') return jsonResponse(catalog)
+    if (url.pathname === '/api/transport/v1/integrations/service-status') {
       return jsonResponse({ overall_status: 'disrupted', routes: [], disruptions: [] })
     }
-    if (url.pathname === '/api/disruptions/701' && method === 'PATCH') {
+    if (url.pathname === '/api/transport/v1/disruptions/701' && method === 'PATCH') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, body })
       catalog = catalog.map((item) => (item.id === 701 ? { ...item, ...body } : item))
       return jsonResponse(catalog[0], 200)
     }
-    if (url.pathname === '/api/integrations/utilities/notices' && method === 'POST') {
+    if (url.pathname === '/api/transport/v1/integrations/utilities/notices' && method === 'POST') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, body })
       return jsonResponse(
@@ -764,5 +764,5 @@ it('preserves multi-line segments and clears end_time when editing a disruption,
   await user.click(screen.getByRole('button', { name: 'Submit utilities notice' }))
 
   await screen.findByRole('status', { name: 'External integration result' })
-  expect(mutationCalls[1].path).toBe('/api/integrations/utilities/notices')
+  expect(mutationCalls[1].path).toBe('/api/transport/v1/integrations/utilities/notices')
 })

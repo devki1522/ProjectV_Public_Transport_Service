@@ -1,3 +1,5 @@
+import { RouteBadge } from '../../components/RouteBadge.jsx'
+import { routePalette } from '../../lib/routeColors.js'
 import { useCallback, useMemo, useState } from 'react'
 import {
   AlertCircle,
@@ -10,6 +12,7 @@ import {
   Info,
 } from 'lucide-react'
 import { getJourneys, getStopsCatalog } from '../../api/transit.js'
+import { RouteMap } from '../live/RouteMap.jsx'
 import { useResource } from '../../hooks/useResource.js'
 import { directionLabel, formatDate, formatTime, serviceDate } from '../../lib/transit.js'
 import { EmptyState, ErrorNotice, LoadingRows } from '../../components/DataState.jsx'
@@ -45,7 +48,7 @@ export function JourneyView({ today }) {
   const [maxTransfers, setMaxTransfers] = useState(3)
   const [validationError, setValidationError] = useState('')
   const [submitted, setSubmitted] = useState(null)
-  const [selectedIndex, setSelectedIndex] = useState(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
 
   const loadStops = useCallback((signal) => getStopsCatalog('', signal), [])
   const stopsCatalog = useResource('stops-catalog', loadStops)
@@ -76,6 +79,7 @@ export function JourneyView({ today }) {
 
     if (!originTrimmed || !destinationTrimmed) {
       setValidationError('Enter both an origin and a destination to search.')
+      document.getElementById(!originTrimmed ? 'journey-origin' : 'journey-destination')?.focus()
       return
     }
     if (originTrimmed.toLowerCase() === destinationTrimmed.toLowerCase()) {
@@ -84,7 +88,7 @@ export function JourneyView({ today }) {
     }
 
     setValidationError('')
-    setSelectedIndex(null)
+    setSelectedIndex(0)
     if (
       submitted &&
       submitted.origin === originTrimmed &&
@@ -126,6 +130,8 @@ export function JourneyView({ today }) {
           <label htmlFor="journey-origin">Origin</label>
           <input
             id="journey-origin"
+            aria-invalid={Boolean(validationError)}
+            aria-describedby={validationError ? 'journey-validation-error' : undefined}
             type="search"
             list="transit-stops-list"
             placeholder="e.g. Central Station"
@@ -147,6 +153,8 @@ export function JourneyView({ today }) {
           <label htmlFor="journey-destination">Destination</label>
           <input
             id="journey-destination"
+            aria-invalid={Boolean(validationError)}
+            aria-describedby={validationError ? 'journey-validation-error' : undefined}
             type="search"
             list="transit-stops-list"
             placeholder="e.g. Fairway Station"
@@ -191,8 +199,10 @@ export function JourneyView({ today }) {
         </datalist>
       </form>
 
+      <RouteMap itinerary={selectedItinerary} />
+
       {validationError && (
-        <div className="filter-warning journey-validation" role="alert">
+        <div id="journey-validation-error" className="filter-warning journey-validation" role="alert">
           <AlertCircle size={17} aria-hidden="true" />
           <p>{validationError}</p>
         </div>
@@ -206,7 +216,7 @@ export function JourneyView({ today }) {
       ) : journeys.error ? (
         <ErrorNotice error={journeys.error} onRetry={journeys.retry} />
       ) : !journeys.data ? (
-        <LoadingRows label="Searching transit journeys" />
+        <LoadingRows label="Searching transit journeys" variant="journeys" />
       ) : (
         <>
           <div className="results-heading">
@@ -336,6 +346,7 @@ function LegStopTimes({ leg }) {
 }
 
 function ItineraryCard({ itinerary, selected, onSelect, today }) {
+  const colors = routePalette(itinerary.legs.filter((leg) => leg.route).map((leg) => leg.route))
   const times = resolveTimes(itinerary)
   const departureDay = serviceDate(new Date(times.departure))
   const dayLabel = departureDay !== today
@@ -441,7 +452,7 @@ function ItineraryCard({ itinerary, selected, onSelect, today }) {
               )}
               <div className="journey-leg-main">
                 <div className="journey-leg-route">
-                  <span className="route-number">{leg.route?.number}</span>
+                  <RouteBadge number={leg.route?.number} color={colors.get(String(leg.route?.number))} />
                   <div>
                     <strong>{leg.route?.name}</strong>
                     <small>

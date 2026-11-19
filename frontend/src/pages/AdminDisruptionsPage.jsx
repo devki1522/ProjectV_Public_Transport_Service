@@ -38,6 +38,7 @@ import {
   operationalStatusLabel,
   sourceServiceLabel,
 } from '../features/alerts/disruptionFormat.js'
+import { API_BASE } from '../api/base.js'
 import { useResource } from '../hooks/useResource.js'
 import { directionLabel, formatTime } from '../lib/transit.js'
 
@@ -45,7 +46,7 @@ const FEED_TABS = [
   {
     id: 'utilities',
     label: 'Utilities (US 186)',
-    endpoint: 'POST /api/integrations/utilities/notices',
+    endpoint: `POST ${API_BASE}/integrations/utilities/notices`,
     submitLabel: 'Submit utilities notice',
     subtypeLabel: 'Notice type',
     subtypes: [
@@ -56,7 +57,7 @@ const FEED_TABS = [
   {
     id: 'emergency',
     label: 'Emergency Services (US 187)',
-    endpoint: 'POST /api/integrations/emergency/incidents',
+    endpoint: `POST ${API_BASE}/integrations/emergency/incidents`,
     submitLabel: 'Submit emergency incident',
     subtypeLabel: 'Incident type',
     subtypes: [
@@ -67,7 +68,7 @@ const FEED_TABS = [
   {
     id: 'security',
     label: 'Security / Police (US 188)',
-    endpoint: 'POST /api/integrations/security/traffic-alerts',
+    endpoint: `POST ${API_BASE}/integrations/security/traffic-alerts`,
     submitLabel: 'Submit security traffic alert',
     subtypeLabel: 'Alert type',
     subtypes: [
@@ -717,7 +718,7 @@ export function AdminDisruptionsPage() {
               )}
             </div>
             <p>
-              Real-time operational status summary from <code>GET /api/integrations/service-status</code> for smart-city enterprise consumers.
+              Real-time operational status summary from <code>{`GET ${API_BASE}/integrations/service-status`}</code> for smart-city enterprise consumers.
             </p>
           </div>
 

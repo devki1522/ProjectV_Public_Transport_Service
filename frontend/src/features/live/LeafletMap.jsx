@@ -1,3 +1,4 @@
+import { routeColor } from '../../lib/routeColors.js'
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -25,6 +26,7 @@ function createBusIcon(vehicle, isSelected) {
   }
 
   const badge = document.createElement('div')
+  badge.style.setProperty('--route-color', routeColor(vehicle.route_number))
   badge.className = `bus-marker ${vehicleStatusClass(vehicle.status)}${isSelected ? ' is-selected' : ''}`
   const label = document.createElement('span')
   label.className = 'bus-marker-label'
@@ -90,11 +92,11 @@ function createPopupContent(vehicle) {
   return container
 }
 
-export function LeafletMap({ vehicles, routeShape, selectedVehicleId, onSelectVehicle }) {
+export function LeafletMap({ vehicles = [], routeShape, selectedVehicleId, onSelectVehicle }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef(new Map())
-  const polylineRef = useRef(null)
+  const polylineRef = useRef([])
   const fittedRouteIdRef = useRef(null)
   const prevSelectedIdRef = useRef(null)
   const onSelectVehicleRef = useRef(onSelectVehicle)
@@ -117,14 +119,17 @@ export function LeafletMap({ vehicles, routeShape, selectedVehicleId, onSelectVe
     }).addTo(map)
     mapRef.current = map
     const markers = markersRef.current
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize?.({ pan: false })) : null
+    observer?.observe(container)
 
     return () => {
+      observer?.disconnect()
       for (const marker of markers.values()) {
         marker.remove()
       }
       markers.clear()
-      polylineRef.current?.remove()
-      polylineRef.current = null
+      polylineRef.current.forEach((line) => line.remove())
+      polylineRef.current = []
       fittedRouteIdRef.current = null
       prevSelectedIdRef.current = null
       map.remove()
@@ -136,30 +141,41 @@ export function LeafletMap({ vehicles, routeShape, selectedVehicleId, onSelectVe
     const map = mapRef.current
     if (!map) return
 
-    polylineRef.current?.remove()
-    polylineRef.current = null
+    polylineRef.current.forEach((line) => line.remove())
+    polylineRef.current = []
 
-    const coords = routeShape?.coordinates
-    if (Array.isArray(coords) && coords.length >= 2) {
-      const latLngs = coords
+    const paths = routeShape?.paths ?? (routeShape?.coordinates ? [{ coordinates: routeShape.coordinates }] : [])
+    const allPoints = []
+    for (const path of paths) {
+      const coords = path.coordinates
+      if (!Array.isArray(coords) || !coords.length) continue
+      const segments = Array.isArray(coords[0]) ? coords : [coords]
+      const latLngs = segments.map((segment) => segment
         .filter((pt) => Number.isFinite(pt?.lat) && Number.isFinite(pt?.lng))
-        .map((pt) => [pt.lat, pt.lng])
-
-      if (latLngs.length >= 2) {
-        const polyline = L.polyline(latLngs, {
-          color: '#246447',
-          weight: 4,
-          opacity: 0.78,
-        }).addTo(map)
-        polylineRef.current = polyline
-
-        const routeKey = routeShape.route_id ?? 'shape'
-        if (fittedRouteIdRef.current !== routeKey) {
-          fittedRouteIdRef.current = routeKey
-          const bounds = polyline.getBounds?.()
-          if (bounds && (!bounds.isValid || bounds.isValid())) {
-            map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 })
-          }
+        .map((pt) => [pt.lat, pt.lng])).filter((segment) => segment.length >= 2)
+      if (!latLngs.length) continue
+      allPoints.push(...latLngs.flat())
+      const line = L.polyline(latLngs, {
+        color: path.color ?? routeColor(routeShape.route_number),
+        weight: 5,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map)
+      polylineRef.current.push(line)
+      if (path.label) {
+        const label = document.createElement('span')
+        label.textContent = path.label
+        line.bindTooltip?.(label, { sticky: true })
+      }
+    }
+    if (allPoints.length) {
+      const routeKey = routeShape.route_id ?? 'shape'
+      if (fittedRouteIdRef.current !== routeKey) {
+        fittedRouteIdRef.current = routeKey
+        const bounds = L.latLngBounds ? L.latLngBounds(allPoints) : polylineRef.current[0].getBounds?.()
+        if (bounds && (!bounds.isValid || bounds.isValid())) {
+          map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 })
         }
       }
     } else if (fittedRouteIdRef.current !== null) {
@@ -228,11 +244,11 @@ export function LeafletMap({ vehicles, routeShape, selectedVehicleId, onSelectVe
     if (!marker) return
     prevSelectedIdRef.current = selectedVehicleId
     const latLng = marker.getLatLng?.()
-    if (latLng) {
+    if (latLng && !routeShape) {
       map.panTo?.(latLng)
     }
     marker.openPopup?.()
-  }, [selectedVehicleId, vehicles])
+  }, [selectedVehicleId, routeShape])
 
   return (
     <div className="live-map-canvas-wrap">

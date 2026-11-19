@@ -1,10 +1,12 @@
-import { AlertTriangle, CalendarDays, Clock3, Radio } from 'lucide-react'
+import { RouteBadge } from '../components/RouteBadge.jsx'
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Radio } from 'lucide-react'
 import { directionLabel } from '../lib/transit.js'
 import {
   disruptionTypeLabel,
   operationalStatusLabel,
   operationalStatusPillClass,
 } from './alerts/disruptionFormat.js'
+import { RouteMap } from './live/RouteMap.jsx'
 import { ScheduleView } from './schedule/ScheduleView.jsx'
 import { DepartureView } from './departures/DepartureView.jsx'
 
@@ -37,12 +39,13 @@ export function TransitWorkspace({
     <>
       <div className="route-heading">
         <div className="selected-route-name">
-          <span className="route-number route-number-large">{route.number}</span>
+          <RouteBadge number={route.number} large />
           <div>
             <div className="route-title-row">
               <h2>{route.name}</h2>
               {operationalStatus && (
                 <span className={`status-pill ${operationalStatusPillClass(operationalStatus)}`}>
+                  {operationalStatus === 'normal' ? <CheckCircle2 size={13} aria-hidden="true" /> : <AlertTriangle size={13} aria-hidden="true" />}
                   {operationalStatusLabel(operationalStatus)}
                 </span>
               )}
@@ -93,6 +96,8 @@ export function TransitWorkspace({
           )}
         </div>
       )}
+
+      <RouteMap routeIds={[route.id]} />
 
       <div className="view-tabs" role="tablist" aria-label="Transit information" onKeyDown={handleTabKey}>
         <button id="tab-schedule" type="button" role="tab" aria-selected={view === 'schedule'} aria-controls="panel-schedule" tabIndex={view === 'schedule' ? 0 : -1} onClick={() => onViewChange('schedule')}><CalendarDays size={18} aria-hidden="true" />Timetable</button>

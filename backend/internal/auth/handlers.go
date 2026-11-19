@@ -79,7 +79,7 @@ type SessionResponse struct {
 // @Failure 502 {object} map[string]string
 // @Failure 503 {object} map[string]string
 // @Failure 504 {object} map[string]string
-// @Router /api/auth/login [post]
+// @Router /api/transport/v1/auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 
@@ -141,7 +141,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Success 200 {object} SessionResponse
 // @Failure 401 {object} map[string]string
-// @Router /api/auth/me [get]
+// @Router /api/transport/v1/auth/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 	session, ok := SessionFromContext(r.Context())
@@ -161,7 +161,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 // @Description Requires a trusted Origin. Expired or missing sessions are cleared idempotently.
 // @Success 200 {object} map[string]string
 // @Failure 403 {object} map[string]string
-// @Router /api/auth/logout [post]
+// @Router /api/transport/v1/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
 

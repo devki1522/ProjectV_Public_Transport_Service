@@ -133,3 +133,20 @@ be retried; it does not report successful logout before backend invalidation.
 Run `npm run auth:setup` from the repository root for local mock setup. It preserves
 existing nonempty environment values and database configuration. Mock passwords
 are stored only in the ignored `backend/.env`.
+
+## Commuter redesign and local skills
+
+Project-local design skills are installed in `.agents/skills/`; provenance is in
+`.agents/skills/INSTALLATION.md`. The audit, visual contract, token palette and exact
+verification boundaries are recorded in [DESIGN.md](DESIGN.md).
+
+The public workspace now offers Light/Dark/System appearance, mobile bottom navigation,
+a mobile map/vehicle-list switch, searchable live route choices, route-coloured journey
+previews and badges, and a Saved stops drawer. Saved stops persist only on the current
+device. Select one to load live estimated arrivals; no login or server mutation is needed.
+Stops can be removed with the labelled remove button. Transit estimates keep their
+scheduled references and simulated arrivals remain labelled.
+
+Active live feeds refresh on reconnect and when the page becomes visible. Pausing stops
+both polling and resume-triggered refreshes. Offline and stale-age notices distinguish
+old results from current updates. See the design document for outstanding browser QA.

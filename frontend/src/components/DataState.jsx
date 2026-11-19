@@ -20,9 +20,9 @@ export function EmptyState({ title, description, onRetry, actionLabel = 'Try aga
   )
 }
 
-export function LoadingRows({ label = 'Loading transit information' }) {
+export function LoadingRows({ label = 'Loading transit information', variant = 'timetable' }) {
   return (
-    <div className="loading-rows" role="status" aria-label={label}>
+    <div className={`loading-rows skeleton-${variant}`} role="status" aria-busy="true" aria-label={label}>
       <span className="visually-hidden">{label}</span>
       {[0, 1, 2, 3].map((row) => <div className="skeleton-row" key={row} aria-hidden="true"><span /><span /><span /></div>)}
     </div>

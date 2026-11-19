@@ -19,7 +19,7 @@ const (
 func clearAuthEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		"PORT", "DB_MAX_IDLE_CONNS", "DB_MAX_OPEN_CONNS", "DB_CONN_MAX_LIFETIME",
+		"PORT", "API_VERSION", "DB_MAX_IDLE_CONNS", "DB_MAX_OPEN_CONNS", "DB_CONN_MAX_LIFETIME",
 		"APP_ENV", "AUTH_PROVIDER", "AUTH_REQUIRED_ROLE", "AUTH_SESSION_COOKIE",
 		"AUTH_COOKIE_SECURE", "AUTH_TRUSTED_ORIGINS", "AUTH_TRUSTED_PROXY",
 		"MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_JWT_SECRET",
@@ -62,7 +62,7 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 	}
 	want := Config{
 		Env:    EnvDevelopment,
-		Server: ServerConfig{Port: 8080},
+		Server: ServerConfig{Port: 8080, APIVersion: DefaultAPIVersion},
 		Database: DatabaseConfig{
 			DSN: testDSN, MaxIdleConns: 5, MaxOpenCons: 20, ConnMaxLifetime: time.Hour,
 		},
@@ -95,9 +95,13 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 
 func TestLoadProductionDefaultsToRegistration(t *testing.T) {
 	setRegistrationProdEnv(t)
+	t.Setenv("API_VERSION", "v2")
 	got, err := Load()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got.Server.APIVersion != "v2" {
+		t.Errorf("Server.APIVersion = %q, want v2", got.Server.APIVersion)
 	}
 	if got.Env != EnvProduction || got.Auth.Provider != AuthProviderRegistration {
 		t.Fatalf("got env=%q provider=%q, want production/registration", got.Env, got.Auth.Provider)
