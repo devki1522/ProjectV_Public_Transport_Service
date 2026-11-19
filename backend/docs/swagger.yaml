@@ -31,6 +31,464 @@ definitions:
       user:
         $ref: '#/definitions/auth.Principal'
     type: object
+  disruptions.AffectedRoute:
+    properties:
+      direction:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+    type: object
+  disruptions.AffectedRouteSummary:
+    properties:
+      direction:
+        type: string
+      disruption_ids:
+        items:
+          type: integer
+        type: array
+      operational_status:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+    type: object
+  disruptions.AffectedSegmentSummary:
+    properties:
+      disruption_id:
+        type: integer
+      operational_status:
+        type: string
+      route_id:
+        type: integer
+      segment:
+        type: string
+    type: object
+  disruptions.AffectedServicesSummary:
+    properties:
+      active_disruption_count:
+        type: integer
+      affected_routes:
+        items:
+          $ref: '#/definitions/disruptions.AffectedRouteSummary'
+        type: array
+      affected_segments:
+        items:
+          $ref: '#/definitions/disruptions.AffectedSegmentSummary'
+        type: array
+      affected_stops:
+        items:
+          $ref: '#/definitions/disruptions.AffectedStopSummary'
+        type: array
+      affected_trips:
+        items:
+          $ref: '#/definitions/disruptions.AffectedTripSummary'
+        type: array
+      affected_vehicles:
+        items:
+          $ref: '#/definitions/disruptions.AffectedVehicleSummary'
+        type: array
+      generated_at:
+        type: string
+    type: object
+  disruptions.AffectedStop:
+    properties:
+      route_id:
+        type: integer
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+    type: object
+  disruptions.AffectedStopSummary:
+    properties:
+      disruption_ids:
+        items:
+          type: integer
+        type: array
+      operational_status:
+        type: string
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+    type: object
+  disruptions.AffectedTripSummary:
+    properties:
+      disruption_ids:
+        items:
+          type: integer
+        type: array
+      operational_status:
+        type: string
+      route_id:
+        type: integer
+      trip_id:
+        type: integer
+    type: object
+  disruptions.AffectedVehicleSummary:
+    properties:
+      disruption_ids:
+        items:
+          type: integer
+        type: array
+      operational_status:
+        type: string
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+    type: object
+  disruptions.CreateDisruptionInput:
+    properties:
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      external_reference:
+        type: string
+      route_ids:
+        items:
+          type: integer
+        type: array
+      source_service:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      type:
+        type: string
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  disruptions.DisruptionResponse:
+    properties:
+      affected_area:
+        type: string
+      affected_routes:
+        items:
+          $ref: '#/definitions/disruptions.AffectedRoute'
+        type: array
+      affected_segments:
+        items:
+          type: string
+        type: array
+      affected_stops:
+        items:
+          $ref: '#/definitions/disruptions.AffectedStop'
+        type: array
+      affected_trips:
+        items:
+          type: integer
+        type: array
+      affected_vehicles:
+        items:
+          type: integer
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      external_reference:
+        type: string
+      id:
+        type: integer
+      received_at:
+        type: string
+      source_service:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  disruptions.EmergencyIncidentInput:
+    properties:
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      external_id:
+        type: string
+      external_reference:
+        type: string
+      incident_type:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+      radius_meters:
+        type: number
+      route_ids:
+        items:
+          type: integer
+        type: array
+      severity:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      type:
+        type: string
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  disruptions.EntityOperationalStatus:
+    properties:
+      active_disruptions:
+        items:
+          $ref: '#/definitions/disruptions.DisruptionResponse'
+        type: array
+      entity_id:
+        type: integer
+      entity_type:
+        type: string
+      operational_status:
+        type: string
+    type: object
+  disruptions.ExternalNoticeResult:
+    properties:
+      created:
+        type: boolean
+      disruption:
+        $ref: '#/definitions/disruptions.DisruptionResponse'
+      matched_route_ids:
+        items:
+          type: integer
+        type: array
+      matched_stop_ids:
+        items:
+          type: integer
+        type: array
+      transit_impact:
+        type: string
+    type: object
+  disruptions.SecurityTrafficAlertInput:
+    properties:
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      alert_type:
+        type: string
+      description:
+        type: string
+      end_time:
+        type: string
+      external_id:
+        type: string
+      external_reference:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+      radius_meters:
+        type: number
+      route_ids:
+        items:
+          type: integer
+        type: array
+      start_time:
+        type: string
+      status:
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      type:
+        type: string
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  disruptions.ServiceStatusResponse:
+    properties:
+      active_disruption_count:
+        type: integer
+      active_disruptions:
+        items:
+          $ref: '#/definitions/disruptions.DisruptionResponse'
+        type: array
+      affected_routes:
+        items:
+          $ref: '#/definitions/disruptions.AffectedRouteSummary'
+        type: array
+      affected_segments:
+        items:
+          $ref: '#/definitions/disruptions.AffectedSegmentSummary'
+        type: array
+      affected_stops:
+        items:
+          $ref: '#/definitions/disruptions.AffectedStopSummary'
+        type: array
+      affected_trips:
+        items:
+          $ref: '#/definitions/disruptions.AffectedTripSummary'
+        type: array
+      affected_vehicles:
+        items:
+          $ref: '#/definitions/disruptions.AffectedVehicleSummary'
+        type: array
+      detours:
+        items:
+          $ref: '#/definitions/disruptions.DisruptionResponse'
+        type: array
+      generated_at:
+        type: string
+      overall_status:
+        type: string
+    type: object
+  disruptions.UpdateDisruptionInput:
+    properties:
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      route_ids:
+        items:
+          type: integer
+        type: array
+      start_time:
+        type: string
+      status:
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      type:
+        type: string
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  disruptions.UtilitiesNoticeInput:
+    properties:
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      external_id:
+        type: string
+      external_reference:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+      notice_type:
+        type: string
+      radius_meters:
+        type: number
+      route_ids:
+        items:
+          type: integer
+        type: array
+      start_time:
+        type: string
+      status:
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      type:
+        type: string
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  handlers.SimulatorStartInput:
+    properties:
+      speed_multiplier:
+        type: number
+    type: object
   handlers.TransitRouteResponse:
     properties:
       direction:
@@ -288,6 +746,150 @@ definitions:
           $ref: '#/definitions/transit.ScheduledTrip'
         type: array
     type: object
+  vehicles.ActiveVehicle:
+    properties:
+      direction:
+        type: string
+      heading:
+        type: number
+      is_accessible:
+        type: boolean
+      is_simulated:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      received_at:
+        type: string
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+      source_service:
+        type: string
+      speed_kmh:
+        type: number
+      status:
+        type: string
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+    type: object
+  vehicles.Coordinate:
+    properties:
+      lat:
+        type: number
+      lng:
+        type: number
+    type: object
+  vehicles.EstimatedArrival:
+    properties:
+      delay_minutes:
+        type: integer
+      direction:
+        type: string
+      distance_meters:
+        type: integer
+      estimated_arrival_time:
+        type: string
+      is_simulated:
+        type: boolean
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+      scheduled_arrival_time:
+        type: string
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+      stop_sequence:
+        type: integer
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+      vehicle_status:
+        type: string
+    type: object
+  vehicles.LocationUpdateInput:
+    properties:
+      heading:
+        type: number
+      is_accessible:
+        type: boolean
+      is_simulated:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      source_service:
+        type: string
+      speed_kmh:
+        type: number
+      status:
+        type: string
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+    type: object
+  vehicles.RouteGeometry:
+    properties:
+      coordinates:
+        items:
+          $ref: '#/definitions/vehicles.Coordinate'
+        type: array
+      direction:
+        type: string
+      headsign:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+    type: object
+  vehicles.SimulatorStatus:
+    properties:
+      last_tick_at:
+        type: string
+      route_count:
+        type: integer
+      running:
+        type: boolean
+      speed_multiplier:
+        type: number
+      tick_interval_ms:
+        type: integer
+      total_updates_sent:
+        type: integer
+      vehicle_count:
+        type: integer
+    type: object
 info:
   contact: {}
   description: Public resident schedules and cookie-authenticated transit administration.
@@ -360,6 +962,175 @@ paths:
       summary: Administrator health
       tags:
       - administration
+  /api/admin/vehicles/simulator/reset:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset simulated vehicle locations
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Optional simulator speed multiplier
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handlers.SimulatorStartInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start live bus simulator
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/step:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Advance simulated buses by one step
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/stop:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Pause live bus simulator
+      tags:
+      - vehicles
   /api/auth/login:
     post:
       consumes:
@@ -473,6 +1244,301 @@ paths:
   /api/departures:
     get:
       responses: {}
+  /api/disruptions:
+    get:
+      description: Lists transit disruptions filtered by optional status, type, route_id,
+        stop_id, trip_id, vehicle_id, or source_service.
+      parameters:
+      - description: Disruption lifecycle status (scheduled, active, resolved)
+        in: query
+        name: status
+        type: string
+      - description: Disruption type (delay, detour, cancellation, stop_closure, road_closure,
+          construction, emergency, traffic_restriction, accessibility)
+        in: query
+        name: type
+        type: string
+      - description: Positive route ID
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Positive stop ID
+        in: query
+        minimum: 1
+        name: stop_id
+        type: integer
+      - description: Positive trip ID
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - description: Positive vehicle ID
+        in: query
+        minimum: 1
+        name: vehicle_id
+        type: integer
+      - description: Originating service identifier
+        in: query
+        name: source_service
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/disruptions.DisruptionResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List transit disruptions
+      tags:
+      - disruptions
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator session cookie, trusted Origin, and X-CSRF-Token.
+        Creates a disruption and links affected routes, stops, trips, vehicles, and
+        segments.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Disruption creation payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.CreateDisruptionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a transit disruption
+      tags:
+      - disruptions
+  /api/disruptions/{id}:
+    get:
+      parameters:
+      - description: Positive disruption ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a transit disruption by ID
+      tags:
+      - disruptions
+    patch:
+      consumes:
+      - application/json
+      description: Requires an administrator session cookie, trusted Origin, and X-CSRF-Token.
+        Updates disruption fields, operational status, and affected transit entities.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Positive disruption ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Disruption partial update payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.UpdateDisruptionInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a transit disruption
+      tags:
+      - disruptions
+  /api/disruptions/active:
+    get:
+      description: Returns only active transit disruptions (`status='active'`), optionally
+        filtered by type, route_id, stop_id, or trip_id.
+      parameters:
+      - description: Disruption type filter
+        in: query
+        name: type
+        type: string
+      - description: Positive route ID filter
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Positive stop ID filter
+        in: query
+        minimum: 1
+        name: stop_id
+        type: integer
+      - description: Positive trip ID filter
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/disruptions.DisruptionResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active transit disruptions
+      tags:
+      - disruptions
+  /api/disruptions/affected:
+    get:
+      description: Aggregates all routes, stops, trips, vehicles, and route segments
+        currently impacted by active disruptions along with their derived operational
+        statuses.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.AffectedServicesSummary'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get affected transit services summary
+      tags:
+      - disruptions
   /api/health:
     get:
       produces:
@@ -487,6 +1553,237 @@ paths:
       summary: Check API health
       tags:
       - health
+  /api/integrations/emergency/incidents:
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator/enterprise session cookie, trusted Origin,
+        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
+        radius matching) and creates (201) or idempotently updates (200) an emergency
+        disruption.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Emergency incident payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.EmergencyIncidentInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Ingest an emergency incident or road restriction
+      tags:
+      - integrations
+  /api/integrations/security/traffic-alerts:
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator/enterprise session cookie, trusted Origin,
+        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
+        radius matching) and creates (201) or idempotently updates (200) a security
+        traffic disruption.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Security traffic alert payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.SecurityTrafficAlertInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Ingest a security or police traffic alert
+      tags:
+      - integrations
+  /api/integrations/service-status:
+    get:
+      description: Requires an authenticated administrator/enterprise session cookie.
+        Returns overall network operational status, active disruptions, detours, and
+        affected services.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.ServiceStatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Retrieve enterprise transit disruption and service status snapshot
+      tags:
+      - integrations
+  /api/integrations/utilities/notices:
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator/enterprise session cookie, trusted Origin,
+        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
+        radius matching) and creates (201) or idempotently updates (200) a utilities
+        disruption.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Utilities notice payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.UtilitiesNoticeInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/disruptions.ExternalNoticeResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Ingest a utilities road closure or construction notice
+      tags:
+      - integrations
   /api/journeys:
     get:
       description: Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id
@@ -850,6 +2147,136 @@ paths:
       summary: Get a route timetable
       tags:
       - schedules
+  /api/routes/{id}/shape:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.RouteGeometry'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get route polyline geometry for map rendering
+      tags:
+      - vehicles
+  /api/routes/{id}/status:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.EntityOperationalStatus'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get route operational status
+      tags:
+      - disruptions
+  /api/routes/{id}/vehicles:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Conflicting route_id is rejected
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Optional trip_id filter
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles for a route
+      tags:
+      - vehicles
   /api/routes/{routeID}/departures:
     get:
       parameters:
@@ -860,6 +2287,33 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/service-status:
+    get:
+      description: Returns overall network operational status (normal or disrupted),
+        active disruptions, active detours, and affected routes, stops, trips, vehicles,
+        and segments.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.ServiceStatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get overall transit service status
+      tags:
+      - disruptions
   /api/stops:
     get:
       parameters:
@@ -968,6 +2422,91 @@ paths:
       summary: Get stop details and upcoming departures
       tags:
       - schedules
+  /api/stops/{id}/arrivals:
+    get:
+      description: Returns estimated arrival times for active vehicles on routes serving
+        the requested stop (optionally filtered by route_id) that have recent location
+        data. Returns an empty array when no active vehicle with recent location data
+        is approaching the stop.
+      parameters:
+      - description: Positive stop ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Optional positive route ID filter
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.EstimatedArrival'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get estimated bus arrivals at a stop
+      tags:
+      - vehicles
+  /api/stops/{id}/status:
+    get:
+      parameters:
+      - description: Positive stop ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.EntityOperationalStatus'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get stop operational status
+      tags:
+      - disruptions
   /api/stops/{stopID}/departures:
     get:
       parameters:
@@ -978,6 +2517,142 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/trips/{id}/arrivals:
+    get:
+      description: Returns estimated arrival times for upcoming stops of an active
+        trip that has recent vehicle location data, preserving scheduled arrival times.
+        Returns an empty array when no active vehicle with recent location data is
+        reporting on the trip.
+      parameters:
+      - description: Positive trip ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.EstimatedArrival'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get estimated bus arrivals for a trip
+      tags:
+      - vehicles
+  /api/trips/{id}/status:
+    get:
+      parameters:
+      - description: Positive trip ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.EntityOperationalStatus'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get trip operational status
+      tags:
+      - disruptions
+  /api/trips/{id}/vehicles:
+    get:
+      parameters:
+      - description: Positive trip ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Optional route_id filter
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Conflicting trip_id is rejected
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles for a trip
+      tags:
+      - vehicles
   /api/trips/{tripID}/departures:
     get:
       parameters:
@@ -988,4 +2663,141 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/vehicles:
+    get:
+      description: Filters active non-retired vehicles reported within max_age_seconds
+        (default 900s) by optional route_id, route_number, or trip_id.
+      parameters:
+      - description: Positive route_id
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Public route number (case-insensitive)
+        in: query
+        name: route_number
+        type: string
+      - description: Positive trip_id
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles
+      tags:
+      - vehicles
+  /api/vehicles/locations:
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator session cookie, trusted Origin, and X-CSRF-Token.
+        Updates the vehicle's latest GPS coordinates, speed, heading, route/trip assignment,
+        and operating status.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Vehicle location payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/vehicles.LocationUpdateInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.ActiveVehicle'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/vehicles.ActiveVehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a vehicle location update
+      tags:
+      - vehicles
+  /api/vehicles/simulator:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+      summary: Get live bus simulator status
+      tags:
+      - vehicles
 swagger: "2.0"

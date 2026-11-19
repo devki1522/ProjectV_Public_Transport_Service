@@ -87,3 +87,87 @@ export async function getJourneys({
   }
   return data
 }
+
+export async function getActiveVehicles({ routeId, routeNumber, tripId, maxAgeSeconds } = {}, signal) {
+  const params = new URLSearchParams()
+  if (routeId) params.set('route_id', String(routeId))
+  if (typeof routeNumber === 'string' && routeNumber.trim()) params.set('route_number', routeNumber.trim())
+  if (tripId) params.set('trip_id', String(tripId))
+  if (maxAgeSeconds) params.set('max_age_seconds', String(maxAgeSeconds))
+  const query = params.toString()
+  return requireArray(await getJSON(query ? `/api/vehicles?${query}` : '/api/vehicles', signal))
+}
+
+export async function getRouteShape(routeId, signal) {
+  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/shape`, signal)
+  if (!data || !Array.isArray(data.coordinates)) {
+    throw new TransitApiError('Route map path is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getSimulatorStatus(signal) {
+  const data = await getJSON('/api/vehicles/simulator', signal)
+  if (!data || typeof data.running !== 'boolean') {
+    throw new TransitApiError('Simulator status is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getTripArrivals(tripId, signal) {
+  return requireArray(await getJSON(`/api/trips/${encodeURIComponent(tripId)}/arrivals`, signal))
+}
+
+export async function getStopArrivals(stopId, routeId, signal) {
+  const params = new URLSearchParams()
+  if (routeId) params.set('route_id', String(routeId))
+  const query = params.toString()
+  const path = `/api/stops/${encodeURIComponent(stopId)}/arrivals${query ? `?${query}` : ''}`
+  return requireArray(await getJSON(path, signal))
+}
+
+export async function getActiveDisruptions({ type, routeId, stopId } = {}, signal) {
+  const params = new URLSearchParams()
+  if (typeof type === 'string' && type.trim()) params.set('type', type.trim())
+  if (routeId) params.set('route_id', String(routeId))
+  if (stopId) params.set('stop_id', String(stopId))
+  const query = params.toString()
+  const path = query ? `/api/disruptions/active?${query}` : '/api/disruptions/active'
+  return requireArray(await getJSON(path, signal))
+}
+
+export async function getServiceStatus(signal) {
+  const data = await getJSON('/api/service-status', signal)
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
+    throw new TransitApiError('Service status is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getAffectedServices(signal) {
+  const data = await getJSON('/api/disruptions/affected', signal)
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    !Array.isArray(data.affected_routes) ||
+    !Array.isArray(data.affected_stops)
+  ) {
+    throw new TransitApiError('Affected service information is unavailable. Please try again.')
+  }
+  return data
+}
+
+export async function getRouteStatus(routeId, signal) {
+  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/status`, signal)
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    typeof data.operational_status !== 'string' ||
+    !Array.isArray(data.active_disruptions)
+  ) {
+    throw new TransitApiError('Route status is unavailable. Please try again.')
+  }
+  return data
+}

@@ -1,6 +1,34 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDepartures, getJourneys, getRoutes, getStopsCatalog, getTimetable } from './transit.js'
-import { journeyResult, jsonResponse, routes, stopsCatalog } from '../test/fixtures.js'
+import {
+  getActiveDisruptions,
+  getActiveVehicles,
+  getAffectedServices,
+  getDepartures,
+  getJourneys,
+  getRouteShape,
+  getRouteStatus,
+  getRoutes,
+  getServiceStatus,
+  getSimulatorStatus,
+  getStopArrivals,
+  getStopsCatalog,
+  getTimetable,
+  getTripArrivals,
+} from './transit.js'
+import {
+  activeDisruptions,
+  activeVehicles,
+  affectedServicesSummary,
+  estimatedArrivals,
+  journeyResult,
+  jsonResponse,
+  routeOperationalStatus,
+  routeShape,
+  routes,
+  serviceStatusResponse,
+  simulatorStatus,
+  stopsCatalog,
+} from '../test/fixtures.js'
 
 afterEach(() => vi.useRealTimers())
 
@@ -80,4 +108,107 @@ it('requests journey options using text locations or stop IDs and validates the 
   })
 
   await expect(getJourneys({ origin: 'A', destination: 'B' })).rejects.toThrow('Journey results are unavailable')
+})
+
+it('loads active vehicles with optional route and trip filters and validates array response', async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(jsonResponse(activeVehicles))
+    .mockResolvedValueOnce(jsonResponse([activeVehicles[1]]))
+    .mockResolvedValueOnce(jsonResponse({ unexpected: true }))
+  vi.stubGlobal('fetch', fetch)
+  const signal = new AbortController().signal
+
+  expect(await getActiveVehicles({}, signal)).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/vehicles', expect.objectContaining({ signal }))
+
+  expect(await getActiveVehicles({ routeId: 7, routeNumber: ' 7 ', tripId: 200 }, signal)).toHaveLength(1)
+  const filteredUrl = new URL(fetch.mock.calls[1][0], 'https://transit.test')
+  expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({
+    route_id: '7',
+    route_number: '7',
+    trip_id: '200',
+  })
+
+  await expect(getActiveVehicles()).rejects.toThrow('unexpected data')
+})
+
+it('loads route geometry shape and simulator status and rejects malformed payloads', async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(jsonResponse(routeShape(7)))
+    .mockResolvedValueOnce(jsonResponse({}))
+    .mockResolvedValueOnce(jsonResponse(simulatorStatus()))
+    .mockResolvedValueOnce(jsonResponse({}))
+  vi.stubGlobal('fetch', fetch)
+  const signal = new AbortController().signal
+
+  const shape = await getRouteShape(7, signal)
+  expect(shape.coordinates).toHaveLength(3)
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/routes/7/shape', expect.objectContaining({ signal }))
+  await expect(getRouteShape(7)).rejects.toThrow('Route map path is unavailable')
+
+  const status = await getSimulatorStatus(signal)
+  expect(status.running).toBe(true)
+  expect(fetch).toHaveBeenNthCalledWith(3, '/api/vehicles/simulator', expect.objectContaining({ signal }))
+  await expect(getSimulatorStatus()).rejects.toThrow('Simulator status is unavailable')
+})
+
+it('loads trip arrivals and stop arrivals with optional route filter', async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(jsonResponse(estimatedArrivals(100)))
+    .mockResolvedValueOnce(jsonResponse(estimatedArrivals(100)))
+    .mockResolvedValueOnce(jsonResponse(estimatedArrivals(200)))
+  vi.stubGlobal('fetch', fetch)
+  const signal = new AbortController().signal
+
+  expect(await getTripArrivals(100, signal)).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/trips/100/arrivals', expect.objectContaining({ signal }))
+
+  expect(await getStopArrivals(21, undefined, signal)).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(2, '/api/stops/21/arrivals', expect.objectContaining({ signal }))
+
+  expect(await getStopArrivals(21, 7, signal)).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(3, '/api/stops/21/arrivals?route_id=7', expect.objectContaining({ signal }))
+})
+
+it('loads active disruptions, service status, affected services, and route operational status', async () => {
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(jsonResponse(activeDisruptions))
+    .mockResolvedValueOnce(jsonResponse([activeDisruptions[0]]))
+    .mockResolvedValueOnce(jsonResponse({ bad: true }))
+    .mockResolvedValueOnce(jsonResponse(serviceStatusResponse()))
+    .mockResolvedValueOnce(jsonResponse([]))
+    .mockResolvedValueOnce(jsonResponse(affectedServicesSummary()))
+    .mockResolvedValueOnce(jsonResponse({}))
+    .mockResolvedValueOnce(jsonResponse(routeOperationalStatus(7)))
+    .mockResolvedValueOnce(jsonResponse({}))
+  vi.stubGlobal('fetch', fetch)
+  const signal = new AbortController().signal
+
+  expect(await getActiveDisruptions({}, signal)).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/disruptions/active', expect.objectContaining({ signal }))
+
+  expect(await getActiveDisruptions({ type: ' detour ', routeId: 7, stopId: 23 }, signal)).toHaveLength(1)
+  const url = new URL(fetch.mock.calls[1][0], 'https://transit.test')
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    type: 'detour',
+    route_id: '7',
+    stop_id: '23',
+  })
+  await expect(getActiveDisruptions()).rejects.toThrow('unexpected data')
+
+  const status = await getServiceStatus(signal)
+  expect(status.overall_status).toBe('disrupted')
+  expect(status.active_disruptions).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(4, '/api/service-status', expect.objectContaining({ signal }))
+  await expect(getServiceStatus()).rejects.toThrow('Service status is unavailable')
+
+  const affected = await getAffectedServices(signal)
+  expect(affected.affected_routes).toHaveLength(2)
+  expect(fetch).toHaveBeenNthCalledWith(6, '/api/disruptions/affected', expect.objectContaining({ signal }))
+  await expect(getAffectedServices()).rejects.toThrow('Affected service information is unavailable')
+
+  const routeStatus = await getRouteStatus(7, signal)
+  expect(routeStatus.operational_status).toBe('detoured')
+  expect(fetch).toHaveBeenNthCalledWith(8, '/api/routes/7/status', expect.objectContaining({ signal }))
+  await expect(getRouteStatus(7)).rejects.toThrow('Route status is unavailable')
 })

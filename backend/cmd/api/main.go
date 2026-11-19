@@ -15,10 +15,13 @@ import (
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/models"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/vehicles"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
@@ -57,8 +60,10 @@ func main() {
 		&models.Trip{},
 		&models.StopTime{},
 		&models.Vehicle{},
+		&models.VehicleLocation{},
 		&models.Disruption{},
 		&models.DisruptionRoute{},
+		&models.DisruptionImpact{},
 		&models.RouteShape{},
 		&models.RoutePattern{},
 		&models.RoutePatternStop{},
@@ -126,15 +131,45 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 	authMiddleware := auth.NewMiddleware(sessions, validator, cfg.Auth.SessionCookie, cfg.Auth.CookieSecure)
 	adminHandler := handlers.NewAdminHandler(services.NewAdminDashboardService(services.NewPostgresDashboardRepository(db)))
 
+	var simulator *vehicles.Simulator
+	var vehicleHandler *handlers.VehicleHandler
+	var disruptionHandler *handlers.DisruptionHandler
+	var estimates transit.EstimateProvider
+	if db != nil {
+		vehicleService := vehicles.NewService(vehicles.NewPostgresRepository(db))
+		estimates = vehicles.NewLiveEstimateProvider(db)
+		simulator = vehicles.NewSimulator(vehicleService, vehicles.SimulatorConfig{
+			VehicleCount: cfg.Vehicles.SimulateVehicleCount,
+			TickInterval: cfg.Vehicles.SimulateTickInterval,
+		})
+		if cfg.Vehicles.Simulate {
+			if _, err := simulator.Start(nil); err != nil {
+				log.Printf("vehicle simulator startup warning: %v", err)
+			}
+		}
+		vehicleHandler = handlers.NewVehicleHandler(vehicleService, simulator)
+		disruptionHandler = handlers.NewDisruptionHandler(disruptions.NewService(disruptions.NewPostgresRepository(db)))
+	}
+
 	h := router.NewWithDependencies(db, router.Dependencies{
-		AuthHandler:    authHandler,
-		AuthMiddleware: authMiddleware,
-		CSRF:           csrf,
-		RequiredRole:   cfg.Auth.RequiredRole,
-		AdminHandler:   adminHandler,
+		Estimates:         estimates,
+		AuthHandler:       authHandler,
+		AuthMiddleware:    authMiddleware,
+		CSRF:              csrf,
+		RequiredRole:      cfg.Auth.RequiredRole,
+		AdminHandler:      adminHandler,
+		VehicleHandler:    vehicleHandler,
+		DisruptionHandler: disruptionHandler,
 	})
 
-	return h, sessions.Close, nil
+	cleanup := func() {
+		if simulator != nil {
+			simulator.Close()
+		}
+		sessions.Close()
+	}
+
+	return h, cleanup, nil
 }
 
 func newAuthProvider(cfg config.Config) (auth.Provider, error) {

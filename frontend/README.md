@@ -1,7 +1,10 @@
 # Frontend
 
-The React/Vite UI provides resident route timetables and upcoming departures
-for work items 164, 166 and 167 (SRS PT-FR-004, PT-FR-006 and PT-FR-007).
+The React/Vite UI provides resident route timetables, upcoming departures,
+journey search, live vehicle tracking/arrivals, service alerts/affected transit
+services, and enterprise disruption administration for work items 164, 166, 167,
+177, 178, 180, 183, 186, 187, 188, 190, 191, 192, 194, 195 and 196 (SRS
+PT-FR-004 through PT-FR-021).
 Use the [project setup](../README.md#setup) to run it with Docker Compose.
 
 ## Resident workflows
@@ -9,7 +12,10 @@ Use the [project setup](../README.md#setup) to run it with Docker Compose.
 - Search routes by public number or name, then select a travel direction.
 - In **Timetable**, select a date and optional time-of-day filter. Expand a trip
   to see its ordered arrival and departure times at every stop. Longer lists
-  have pages of eight trips.
+  have pages of eight trips. Use the **Live buses** button in the route heading
+  to jump straight to the Live Map pre-filtered to that route. When the selected
+  route has an active disruption or detour (US 192), its operational status pill
+  and a disruption alert banner appear with a **View service alerts** shortcut.
 - In **Upcoming Departures**, filter the selected route by stop, trip and a
   2-, 6- or 24-hour window. Refresh manually or leave the tab open for updates
   every minute while the browser page is visible.
@@ -21,9 +27,23 @@ Use the [project setup](../README.md#setup) to run it with Docker Compose.
   scheduled vs. estimated departure/arrival times, interactive itinerary
   selection, avoided-disruption notices, or an explicit message when no
   itinerary is available.
+- Switch to the top-level **Live Map** tab to view active Waterloo Region buses
+  on an interactive Leaflet + OpenStreetMap map (US 178, US 180). Filter active
+  vehicles by route (drawing the selected route's polyline path) or operating
+  status, toggle 3-second auto-refresh (`Live · 3s` / `Paused`), and select an
+  active bus on the map or list to view upcoming stop **Estimated** arrival
+  times from `GET /api/trips/{id}/arrivals` (US 183). When simulated fleet
+  movement is active, a notice banner states this explicitly.
+- Switch to the top-level **Service Alerts** tab to inspect active transit
+  disruptions (US 194) and affected routes, stops, trips, vehicles, and route
+  segments (US 195) loaded from `GET /api/service-status`. Filter alerts by
+  disruption type (`Delay`, `Detour`, `Cancellation`, `Stop closure`,
+  `Road closure`, `Construction`, `Emergency`, `Traffic restriction`,
+  `Accessibility`) or route, and jump directly from any affected route to its
+  **View schedule** or **Live map** view.
 - An available estimate is labeled **Estimated** and shown beside the published
   scheduled time. Missing estimates stay **Scheduled**; the UI does not infer
-  live data. The default backend has no live provider configured.
+  live data.
 
 All times and today's date use `America/Toronto`, independent of the user's
 device timezone. Overnight timetable times have a +1 (or later day) label;
@@ -62,23 +82,25 @@ The default remains the Compose backend hostname.
 
 ## Client routes and administrator portal
 
-- `/`: public resident timetable and departure workspace (no login required).
+- `/`: public resident timetable, departure, journey search, live map, and service alerts workspace (no login required).
 - `/login`: administrator sign-in page (`rememberMe=false`, CSRF-protected same-origin login).
 - `/admin`: protected administrator dashboard showing live route inventory counts.
 - `/admin/transit`: protected route management (list including inactive routes, create, edit, activate/deactivate with confirmation).
+- `/admin/vehicles`: protected live fleet page (US 177) for submitting vehicle GPS location updates (with Waterloo Region location presets and validation), controlling the built-in live bus simulator (1x/2x/5x start/pause, step once, reset), and inspecting the active vehicles table.
+- `/admin/disruptions`: protected disruptions & external incident feeds page for creating and updating transit disruptions, affected services, and operational statuses (US 190, US 191, US 192), testing external incident ingestion from Utilities (`POST /api/integrations/utilities/notices`, US 186), Emergency Services (`POST /api/integrations/emergency/incidents`, US 187), and Security/Police (`POST /api/integrations/security/traffic-alerts`, US 188) with Waterloo Region templates, and inspecting the enterprise service status snapshot (`GET /api/integrations/service-status`, US 196).
 - `/unauthorized`: access-denied page for authenticated users lacking `TransitAdministrator`.
 
-Authentication restores via `GET /api/auth/me` using same-origin `HttpOnly` cookies. The `csrfToken` is kept in React memory only (never `localStorage` or `sessionStorage`), and `X-CSRF-Token` is sent on route mutations and logout. Backend `401` clears session state and returns to `/login`; `403` navigates to `/unauthorized`.
+Authentication restores via `GET /api/auth/me` using same-origin `HttpOnly` cookies. The `csrfToken` is kept in React memory only (never `localStorage` or `sessionStorage`), and `X-CSRF-Token` is sent on route mutations, vehicle location submissions, simulator controls, disruption mutations, external notice ingestion, and logout. Backend `401` clears session state and returns to `/login`; `403` navigates to `/unauthorized`.
 
 ## Files and checks
 
 - `src/main.jsx`: React entry point.
 - `src/App.jsx`: client route dispatch, router provider, and auth provider.
 - `src/auth/`: `AuthProvider` and `useAuth` state/error handling.
-- `src/api/`: `transit.js` (public reads), `auth.js`, and `admin.js`.
+- `src/api/`: `transit.js` (public reads including live vehicles, route shapes, simulator status, arrival estimates, active disruptions, affected services, service status, and route operational status), `auth.js`, and `admin.js`.
 - `src/hooks/useResource.js`: keyed requests, cancellation, retries and refresh.
-- `src/features/resident/` and `src/features/admin/`: resident workspace (timetable, departures, and journey search under `src/features/journey/`) and administrator layout/guards.
-- `src/pages/`: `LoginPage`, `UnauthorizedPage`, `AdminDashboardPage`, `AdminRoutesPage`.
+- `src/features/resident/` and `src/features/admin/`: resident workspace (timetable, departures, journey search under `src/features/journey/`, live Leaflet map under `src/features/live/`, and service alerts under `src/features/alerts/`) and administrator layout/guards.
+- `src/pages/`: `LoginPage`, `UnauthorizedPage`, `AdminDashboardPage`, `AdminRoutesPage`, `AdminVehiclesPage`, `AdminDisruptionsPage`.
 - `src/lib/`: `transit.js`, `router.jsx`, and `routerState.js` (including open-redirect sanitization).
 - `src/App.css` and `src/index.css`: layout, components and shared design tokens.
 - [DESIGN.md](DESIGN.md): visual system and frontend design scope.

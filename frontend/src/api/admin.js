@@ -50,7 +50,8 @@ async function adminRequest(path, { method = 'GET', body, csrfToken, signal } = 
       throw new AdminApiError(detail || 'You do not have permission to perform this action.', 403)
     }
     if (response.status === 404) {
-      throw new AdminApiError('The requested route could not be found.', 404)
+      const detail = await readErrorBody(response)
+      throw new AdminApiError(detail || 'The requested resource could not be found.', 404)
     }
     if (response.status === 409) {
       const detail = await readErrorBody(response)
@@ -58,7 +59,11 @@ async function adminRequest(path, { method = 'GET', body, csrfToken, signal } = 
     }
     if (response.status === 400) {
       const detail = await readErrorBody(response)
-      throw new AdminApiError(detail || 'Check the route fields and try again.', 400)
+      throw new AdminApiError(detail || 'Check the submitted fields and try again.', 400)
+    }
+    if (response.status === 503) {
+      const detail = await readErrorBody(response)
+      throw new AdminApiError(detail || 'This administration service is currently unavailable.', 503)
     }
     throw new AdminApiError('The administration request could not be completed. Please try again.', response.status)
   }
@@ -116,4 +121,108 @@ export function deactivateAdminRoute(id, csrfToken) {
     method: 'DELETE',
     csrfToken,
   })
+}
+
+export function submitVehicleLocation(input, csrfToken) {
+  return adminRequest('/api/vehicles/locations', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function startVehicleSimulator(options, csrfToken) {
+  let body
+  if (options && typeof options === 'object') {
+    const speedMultiplier = options.speed_multiplier ?? options.speedMultiplier
+    if (speedMultiplier !== undefined) {
+      body = { speed_multiplier: speedMultiplier }
+    }
+  }
+  return adminRequest('/api/admin/vehicles/simulator/start', {
+    method: 'POST',
+    body,
+    csrfToken,
+  })
+}
+
+export function stopVehicleSimulator(csrfToken) {
+  return adminRequest('/api/admin/vehicles/simulator/stop', {
+    method: 'POST',
+    csrfToken,
+  })
+}
+
+export function stepVehicleSimulator(csrfToken) {
+  return adminRequest('/api/admin/vehicles/simulator/step', {
+    method: 'POST',
+    csrfToken,
+  })
+}
+
+export function resetVehicleSimulator(csrfToken) {
+  return adminRequest('/api/admin/vehicles/simulator/reset', {
+    method: 'POST',
+    csrfToken,
+  })
+}
+
+export async function getAllDisruptions({ status, type } = {}, signal) {
+  const params = new URLSearchParams()
+  if (typeof status === 'string' && status.trim() && status !== 'all') params.set('status', status.trim())
+  if (typeof type === 'string' && type.trim() && type !== 'all') params.set('type', type.trim())
+  const query = params.toString()
+  const data = await adminRequest(query ? `/api/disruptions?${query}` : '/api/disruptions', { signal })
+  if (!Array.isArray(data)) {
+    throw new AdminApiError('Disruption list returned unexpected data.', 502)
+  }
+  return data
+}
+
+export function createDisruption(input, csrfToken) {
+  return adminRequest('/api/disruptions', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function updateDisruption(id, input, csrfToken) {
+  return adminRequest(`/api/disruptions/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitUtilitiesNotice(input, csrfToken) {
+  return adminRequest('/api/integrations/utilities/notices', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitEmergencyIncident(input, csrfToken) {
+  return adminRequest('/api/integrations/emergency/incidents', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitSecurityTrafficAlert(input, csrfToken) {
+  return adminRequest('/api/integrations/security/traffic-alerts', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export async function getEnterpriseServiceStatus(signal) {
+  const data = await adminRequest('/api/integrations/service-status', { signal })
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
+    throw new AdminApiError('Enterprise service status returned unexpected data.', 502)
+  }
+  return data
 }

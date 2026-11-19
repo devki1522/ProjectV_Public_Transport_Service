@@ -30,6 +30,14 @@ type Config struct {
 	Server   ServerConfig   // HTTP server settings.
 	Database DatabaseConfig // Database connection settings.
 	Auth     AuthConfig     // Authentication, session, and CSRF settings.
+	Vehicles VehiclesConfig // Live vehicle simulation settings.
+}
+
+// VehiclesConfig contains settings for the built-in vehicle location simulator.
+type VehiclesConfig struct {
+	Simulate             bool          // Whether simulated vehicles run automatically on startup.
+	SimulateVehicleCount int           // Number of simulated vehicles distributed across active routes.
+	SimulateTickInterval time.Duration // Update interval between simulator position ticks.
 }
 
 // ServerConfig contains HTTP server settings.
@@ -130,6 +138,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	vehiclesCfg, err := loadVehiclesConfig(env)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Env: env,
 		Server: ServerConfig{
@@ -141,7 +154,38 @@ func Load() (Config, error) {
 			MaxOpenCons:     maxOpen,
 			ConnMaxLifetime: lifetime,
 		},
-		Auth: authCfg,
+		Auth:     authCfg,
+		Vehicles: vehiclesCfg,
+	}, nil
+}
+
+func loadVehiclesConfig(env string) (VehiclesConfig, error) {
+	defaultSimulate := env == EnvDevelopment
+	simulate, err := parseBoolEnv("SIMULATE_VEHICLES", defaultSimulate)
+	if err != nil {
+		return VehiclesConfig{}, err
+	}
+
+	count, err := strconv.Atoi(getEnv("SIMULATE_VEHICLES_COUNT", "24"))
+	if err != nil {
+		return VehiclesConfig{}, fmt.Errorf("SIMULATE_VEHICLES_COUNT: %w", err)
+	}
+	if count < 1 || count > 200 {
+		return VehiclesConfig{}, fmt.Errorf("SIMULATE_VEHICLES_COUNT must be between 1 and 200")
+	}
+
+	interval, err := time.ParseDuration(getEnv("SIMULATE_TICK_INTERVAL", "3s"))
+	if err != nil {
+		return VehiclesConfig{}, fmt.Errorf("SIMULATE_TICK_INTERVAL: %w", err)
+	}
+	if interval < 500*time.Millisecond || interval > 60*time.Second {
+		return VehiclesConfig{}, fmt.Errorf("SIMULATE_TICK_INTERVAL must be between 500ms and 60s")
+	}
+
+	return VehiclesConfig{
+		Simulate:             simulate,
+		SimulateVehicleCount: count,
+		SimulateTickInterval: interval,
 	}, nil
 }
 

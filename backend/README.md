@@ -31,6 +31,17 @@ authorization. The frontend never receives the JWT or raw session identifier.
 | `POST /api/routes` | Session + `TransitAdministrator` + CSRF | Creates a route (`201`) and logs a structured audit event |
 | `PATCH /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Updates a route (`200`) and logs a structured audit event |
 | `DELETE /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Soft-deactivates a route (`204`, schedules preserved) and logs a structured audit event |
+| `POST /api/vehicles/locations` | Session + `TransitAdministrator` + CSRF | Creates (`201`) or updates (`200`) a vehicle's latest GPS location and logs a structured audit event (`409` on stale timestamp) |
+| `POST /api/admin/vehicles/simulator/start` | Session + `TransitAdministrator` + CSRF | Starts or resumes periodic bus simulation ticks (optional `{ "speed_multiplier": 0.25..10 }`) |
+| `POST /api/admin/vehicles/simulator/stop` | Session + `TransitAdministrator` + CSRF | Pauses periodic bus simulation ticks |
+| `POST /api/admin/vehicles/simulator/step` | Session + `TransitAdministrator` + CSRF | Advances all simulated buses by one tick immediately |
+| `POST /api/admin/vehicles/simulator/reset` | Session + `TransitAdministrator` + CSRF | Clears simulated vehicle locations and resets simulator progress |
+| `POST /api/disruptions` | Session + `TransitAdministrator` + CSRF | Creates a transit disruption (`201`) linking affected routes, stops, trips, vehicles, and segments; logs structured audit event |
+| `PATCH /api/disruptions/{id}` | Session + `TransitAdministrator` + CSRF | Updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200`); logs structured audit event |
+| `POST /api/integrations/utilities/notices` | Session + `TransitAdministrator` + CSRF | Ingests a Utilities road closure or construction notice (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `POST /api/integrations/emergency/incidents` | Session + `TransitAdministrator` + CSRF | Ingests an Emergency Services incident or road restriction (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `POST /api/integrations/security/traffic-alerts` | Session + `TransitAdministrator` + CSRF | Ingests a Security / Police traffic restriction or road closure (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
+| `GET /api/integrations/service-status` | Session + `TransitAdministrator` | Returns the enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
 
 Auth and admin responses include `Cache-Control: no-store`. Error codes use JSON:
 `400` invalid request, `401` invalid credentials or missing/expired session,
@@ -156,13 +167,95 @@ window. PostgreSQL resolves daylight-saving gaps/overlaps in the agency zone.
 The fixed GRT seed has no holiday exceptions, date-specific cancellations, or
 live predictions; see the [seed limits](../database/README.md#seed-contents-and-limits).
 
-Estimated departures are nullable and never replace scheduled times. A live
-integration can implement `transit.EstimateProvider` and supply it through
-`router.NewWithEstimates`. Estimates are keyed by trip, route-stop occurrence,
-and service date to avoid mixing recurring trips or loop stops. Missing
-predictions, zero predictions, or provider failures leave estimates null and
-scheduled times available. The default server has no live provider configured;
-this change does not calculate predictions from GPS data (PT-FR-011).
+Estimated departures are nullable and never replace scheduled times. The default
+server wires `vehicles.NewLiveEstimateProvider(db)` into `router.Dependencies`
+when PostgreSQL is available, satisfying `transit.EstimateProvider` so resident
+departure boards and journey itineraries automatically reflect live or simulated
+vehicle positions whenever fresh `vehicle_locations` rows exist. Estimates are
+keyed by trip, route-stop occurrence, and service date to avoid mixing recurring
+trips or loop stops. Missing vehicle data, stale timestamps, or provider
+failures leave estimates `null` and preserve scheduled times without fabricating
+predictions.
+
+### Live vehicle tracking, map geometry, simulator, and estimated arrivals
+
+These endpoints implement User Stories 177 (Submit Vehicle Location Updates /
+PT-FR-008), 178 (View Active Vehicles by Route / PT-FR-009), 180 (View Live
+Buses on a Map / PT-FR-010), and 183 (View Estimated Bus Arrivals / PT-FR-011).
+Public read endpoints require no authentication; vehicle location submissions
+and simulator controls require an authenticated `TransitAdministrator` session,
+a trusted `Origin`, and `X-CSRF-Token`.
+
+| Endpoint | Access | Response |
+| --- | --- | --- |
+| `GET /api/vehicles` | Public | Active non-retired vehicles reported within `max_age_seconds` (10–86400, default 900); filters: `route_id`, `route_number`, `trip_id` |
+| `GET /api/routes/{id}/vehicles` | Public | Active vehicles operating on route `{id}` (`404` if unknown route) |
+| `GET /api/trips/{id}/vehicles` | Public | Active vehicles operating on trip `{id}` (`404` if unknown trip) |
+| `GET /api/routes/{id}/shape` | Public | Primary GeoJSON `LineString` polyline coordinates (falling back to ordered `route_stops`) for map rendering |
+| `GET /api/vehicles/simulator` | Public | Built-in simulator status (`running`, `vehicle_count`, `route_count`, `tick_interval_ms`, `speed_multiplier`, `last_tick_at`, `total_updates_sent`) |
+| `GET /api/trips/{id}/arrivals` | Public | Live estimated arrivals (`[]vehicles.EstimatedArrival`) for upcoming stops of trip `{id}` (`404` if unknown trip; `[]` if no active vehicle) |
+| `GET /api/stops/{id}/arrivals` | Public | Live estimated arrivals for active vehicles approaching stop `{id}` (optional `route_id` filter; `404` if unknown stop or route; `[]` if no approaching vehicle) |
+| `POST /api/vehicles/locations` | Admin + CSRF | Upserts latest position in `vehicle_locations` (`201` created, `200` updated, `409` stale `recorded_at`, structured audit log) |
+| `POST /api/admin/vehicles/simulator/{start,stop,step,reset}` | Admin + CSRF | Controls the built-in live bus movement simulator |
+
+Estimated arrivals project each fresh active vehicle (within the 15-minute
+`DefaultActiveMaxAge` freshness window and `status <> 'out_of_service'`) onto the
+trip's ordered upcoming `stop_times` (or route stops when `trip_id` is omitted)
+using Haversine stop-to-stop distances, speed clamped to 15–65 km/h (default
+28 km/h), a delay factor when `status == "delayed"`, and terminal layover dwell
+when `status == "layover"`. Scheduled arrival times are always preserved
+alongside `estimated_arrival_time`, `delay_minutes`, `distance_meters`,
+`is_simulated`, and `recorded_at`.
+
+#### Live vehicle simulator configuration
+
+The built-in simulator moves simulated buses (`is_simulated=true`,
+`source_service="simulator"`) along seeded route shapes through the same
+`vehicles.Service.SubmitLocation` validation and persistence path used by live
+feeds, and can be controlled from the admin portal or configured via environment
+variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SIMULATE_VEHICLES` | `true` in `APP_ENV=development`, `false` in `staging`/`production` | Whether simulated buses start automatically at API startup |
+| `SIMULATE_VEHICLES_COUNT` | `24` (range 1–200) | Number of simulated vehicles distributed across active routes |
+| `SIMULATE_TICK_INTERVAL` | `3s` (range `500ms`–`60s`) | Interval between simulated GPS updates |
+
+### Transit disruptions, affected services, operational statuses, and external incident feeds
+
+These endpoints implement User Stories 186 (Utilities Road Closures and
+Construction / PT-FR-018), 187 (Emergency Incidents and Road Restrictions /
+PT-FR-019), 188 (Security and Police Traffic Alerts / PT-FR-020), 190 (Create
+and Update Disruptions / PT-FR-014), 191 (Identify Affected Transit Services /
+PT-FR-015), 192 (Update Operational Statuses / PT-FR-016), 194 (View Active
+Disruptions / PT-FR-017), 195 (View Affected Routes and Stops), and 196
+(Enterprise Retrieve Disruption and Service Status Information / PT-FR-021), as
+well as PT-NFR-005 through PT-NFR-008.
+
+| Endpoint | Access | Response |
+| --- | --- | --- |
+| `GET /api/disruptions` | Public | All disruptions (`[]disruptions.DisruptionResponse`) filtered by optional `status`, `type`, `route_id`, `stop_id`, `trip_id`, `vehicle_id`, `source_service` |
+| `GET /api/disruptions/active` | Public | Strictly active disruptions (`status='active'`), optionally filtered by `type`, `route_id`, `stop_id`, `trip_id` |
+| `GET /api/disruptions/affected` | Public | Consolidated `AffectedServicesSummary` with derived operational statuses for all currently affected routes, stops, trips, vehicles, and corridor segments |
+| `GET /api/disruptions/{id}` | Public | Single hydrated `DisruptionResponse` (`404` if unknown) |
+| `GET /api/service-status` | Public | Resident network status (`overall_status`: `"normal"` or `"disrupted"`), active disruptions, active detours, and affected services summary |
+| `GET /api/routes/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="route"`, derived `operational_status`, `active_disruptions`; `404` if unknown route) |
+| `GET /api/stops/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="stop"`, derived `operational_status`, `active_disruptions`; `404` if unknown stop) |
+| `GET /api/trips/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="trip"`, derived `operational_status`, `active_disruptions` including parent-route disruptions; `404` if unknown trip) |
+| `POST /api/disruptions` | Admin + CSRF | Creates a disruption (`201 Created`) and links routes, stops (auto-resolving serving routes via `route_stops`), trips, vehicles, and segments |
+| `PATCH /api/disruptions/{id}` | Admin + CSRF | Partially updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200 OK`) |
+| `POST /api/integrations/utilities/notices` | Admin + CSRF | Ingests Utilities notice (`source_service="utilities"`, types `road_closure` \| `construction`) with optional Haversine radius matching (`50`–`5000m`, default `400m`) |
+| `POST /api/integrations/emergency/incidents` | Admin + CSRF | Ingests Emergency Services incident (`source_service="emergency_services"`, types `emergency` \| `road_closure`) with severity and spatial matching |
+| `POST /api/integrations/security/traffic-alerts` | Admin + CSRF | Ingests Security / Police traffic alert (`source_service="security_police"`, types `traffic_restriction` \| `road_closure`) with spatial matching |
+| `GET /api/integrations/service-status` | Admin session | Authenticated enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
+
+All external notices retain `source_service`, `external_reference`, and server
+`received_at` timestamps (PT-NFR-007), and upsert idempotently on
+`(source_service, external_reference)` (`201 Created` on insert, `200 OK` on
+update). Stop-level impacts automatically resolve serving active routes from
+`route_stops` and persist `(disruption_id, route_id, stop_id)` in
+`disruption_routes`, so `/api/journeys` (US 174) immediately routes around
+newly ingested closures, emergencies, and detours.
 
 ## Develop outside Docker
 
@@ -192,8 +285,10 @@ are listed in [`.env.example`](.env.example).
 - `internal/database/`: database connection and pool setup.
 - `internal/models/`: GORM models defining the database tables and constraints.
 - `internal/auth/`: authentication providers (`mock`, `registration`), HS256 JWT validation, session store, CSRF, throttling, and HTTP middleware/handlers.
-- `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, and routing.
-- `internal/transit/`: resident schedule logic, PostgreSQL reads, and estimate-provider interface.
+- `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, live vehicles/arrivals, and routing.
+- `internal/transit/`: resident schedule logic, journey planner, PostgreSQL reads, and estimate-provider interface.
+- `internal/vehicles/`: live vehicle location ingestion, route geometry lookup, built-in bus simulator, upcoming arrival ETA projections, and `LiveEstimateProvider`.
+- `internal/disruptions/`: transit disruption lifecycle management, spatial stop/route impact matching, operational status derivation, and external Utilities/Emergency/Security notice ingestion.
 
 Keep startup small. As endpoints grow, separate HTTP handling, application
 logic and database access under `internal/`, passing dependencies explicitly.
