@@ -133,6 +133,10 @@ func (h *VehicleHandler) SubmitLocation(w http.ResponseWriter, r *http.Request) 
 // @Failure 500 {object} map[string]string
 // @Router /api/vehicles [get]
 func (h *VehicleHandler) ListActive(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
+		return
+	}
 	q, err := parseActiveVehiclesQuery(r)
 	if err != nil {
 		writeVehicleError(w, err)
@@ -161,6 +165,10 @@ func (h *VehicleHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/routes/{id}/vehicles [get]
 func (h *VehicleHandler) ListByRoute(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
+		return
+	}
 	id, ok := parsePositivePathID(w, r, "id")
 	if !ok {
 		return
@@ -198,6 +206,10 @@ func (h *VehicleHandler) ListByRoute(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/trips/{id}/vehicles [get]
 func (h *VehicleHandler) ListByTrip(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
+		return
+	}
 	id, ok := parsePositivePathID(w, r, "id")
 	if !ok {
 		return
@@ -232,6 +244,10 @@ func (h *VehicleHandler) ListByTrip(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} map[string]string
 // @Router /api/routes/{id}/shape [get]
 func (h *VehicleHandler) RouteShape(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
+		return
+	}
 	id, ok := parsePositivePathID(w, r, "id")
 	if !ok {
 		return

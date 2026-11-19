@@ -741,13 +741,15 @@ func insertStopRoutesOnlyTx(tx *gorm.DB, disruptionID int, stopIDs, fallbackRout
 		}
 
 		cleanFallback := uniqueSortedPositive(fallbackRouteIDs)
-		if len(cleanFallback) > 0 {
-			for _, sid := range uncovered {
-				if !coveredStops[sid] {
-					for _, rid := range cleanFallback {
-						pairs = append(pairs, routeStopPair{RouteID: rid, StopID: sid})
-					}
-				}
+		for _, sid := range uncovered {
+			if coveredStops[sid] {
+				continue
+			}
+			if len(cleanFallback) == 0 {
+				return &InvalidInput{Message: fmt.Sprintf("stop_id %d is not associated with any route; provide route_ids", sid)}
+			}
+			for _, rid := range cleanFallback {
+				pairs = append(pairs, routeStopPair{RouteID: rid, StopID: sid})
 			}
 		}
 	}

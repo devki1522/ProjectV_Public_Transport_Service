@@ -257,7 +257,7 @@ function toLocalDateTimeInput(isoString) {
   return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
 }
 
-function validateDisruptionForm(form) {
+function validateDisruptionForm(form, isEditing = false) {
   const validTypes = new Set(DISRUPTION_TYPE_OPTIONS.map((item) => item.value))
   if (!validTypes.has(form.type)) {
     return { error: 'Select a valid disruption type.' }
@@ -326,6 +326,7 @@ function validateDisruptionForm(form) {
   else payload.affected_area = ''
   if (startIso) payload.start_time = startIso
   if (endIso) payload.end_time = endIso
+  else if (isEditing) payload.end_time = null
 
   return { payload }
 }
@@ -342,7 +343,9 @@ function validateFeedForm(activeFeed, form) {
   const stopParsed = parsePositiveIdList(form.stopIds, 'Stop IDs')
   if (stopParsed.error) return { error: stopParsed.error }
 
-  const tripParsed = parsePositiveIdList(form.tripIds, 'Trip IDs')
+  const tripParsed = activeFeed === 'utilities'
+    ? { ids: [] }
+    : parsePositiveIdList(form.tripIds, 'Trip IDs')
   if (tripParsed.error) return { error: tripParsed.error }
 
   const hasLat = form.latitude.trim() !== ''
@@ -509,7 +512,7 @@ export function AdminDisruptionsPage() {
     event.preventDefault()
     if (mutationPending) return
 
-    const { payload, error: validationError } = validateDisruptionForm(form)
+    const { payload, error: validationError } = validateDisruptionForm(form, editingId !== null)
     if (validationError) {
       setFormError(validationError)
       return
@@ -998,9 +1001,9 @@ export function AdminDisruptionsPage() {
 
               <div className="field">
                 <label htmlFor="disruption-segments">Affected route segments (optional)</label>
-                <input
+                <textarea
                   id="disruption-segments"
-                  type="text"
+                  rows={2}
                   placeholder="e.g. King St N between University & Columbia"
                   value={form.segmentsText}
                   onChange={(event) => setForm((f) => ({ ...f, segmentsText: event.target.value }))}
