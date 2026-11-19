@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, BusFront, CalendarDays, MapPin } from 'lucide-react'
+import { ArrowRightLeft, BusFront, CalendarDays, Map as MapIcon, MapPin } from 'lucide-react'
 import { getRoutes } from '../../api/transit.js'
 import { useResource } from '../../hooks/useResource.js'
 import { formatDate, groupRoutes, serviceDate } from '../../lib/transit.js'
@@ -8,12 +8,16 @@ import { RouteSidebar } from '../../components/RouteSidebar.jsx'
 import { EmptyState, ErrorNotice, LoadingRows } from '../../components/DataState.jsx'
 import { TransitWorkspace } from '../TransitWorkspace.jsx'
 import { JourneyView } from '../journey/JourneyView.jsx'
+import { LiveMapView } from '../live/LiveMapView.jsx'
+
+const RESIDENT_SECTIONS = ['schedules', 'journey', 'map']
 
 export function ResidentPage() {
   const routes = useResource('routes', getRoutes)
   const groups = useMemo(() => groupRoutes(routes.data ?? []), [routes.data])
   const [section, setSection] = useState('schedules')
   const [routeId, setRouteId] = useState(null)
+  const [mapRouteId, setMapRouteId] = useState('')
   const [today, setToday] = useState(serviceDate)
   const [date, setDate] = useState(serviceDate)
   const [view, setView] = useState('schedule')
@@ -21,9 +25,13 @@ export function ResidentPage() {
   const selectedGroup = groups.find((group) => group.number === selectedRoute?.number)
 
   useEffect(() => {
-    document.title = section === 'journey'
-      ? 'Journey Search · Public Transport Waterloo Region'
-      : 'Schedules & Departures · Public Transport Waterloo Region'
+    if (section === 'journey') {
+      document.title = 'Journey Search · Public Transport Waterloo Region'
+    } else if (section === 'map') {
+      document.title = 'Live Map · Public Transport Waterloo Region'
+    } else {
+      document.title = 'Schedules & Departures · Public Transport Waterloo Region'
+    }
   }, [section])
 
   useEffect(() => {
@@ -34,15 +42,24 @@ export function ResidentPage() {
   function handleSectionTabKey(event) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
-    const next = event.key === 'Home'
-      ? 'schedules'
-      : event.key === 'End'
-        ? 'journey'
-        : section === 'schedules'
-          ? 'journey'
-          : 'schedules'
+    const currentIndex = RESIDENT_SECTIONS.indexOf(section)
+    let next = section
+    if (event.key === 'Home') {
+      next = 'schedules'
+    } else if (event.key === 'End') {
+      next = 'map'
+    } else if (event.key === 'ArrowRight') {
+      next = RESIDENT_SECTIONS[(currentIndex + 1) % RESIDENT_SECTIONS.length]
+    } else if (event.key === 'ArrowLeft') {
+      next = RESIDENT_SECTIONS[(currentIndex - 1 + RESIDENT_SECTIONS.length) % RESIDENT_SECTIONS.length]
+    }
     setSection(next)
     document.getElementById(`section-tab-${next}`)?.focus()
+  }
+
+  function handleOpenLiveMap(targetRouteId) {
+    setMapRouteId(targetRouteId ? String(targetRouteId) : '')
+    setSection('map')
   }
 
   return (
@@ -81,6 +98,19 @@ export function ResidentPage() {
             <ArrowRightLeft size={16} aria-hidden="true" />
             <span>Journey Search</span>
           </button>
+          <button
+            id="section-tab-map"
+            type="button"
+            role="tab"
+            className="resident-nav-tab"
+            aria-selected={section === 'map'}
+            aria-controls="section-panel-map"
+            tabIndex={section === 'map' ? 0 : -1}
+            onClick={() => setSection('map')}
+          >
+            <MapIcon size={16} aria-hidden="true" />
+            <span>Live Map</span>
+          </button>
         </div>
 
         <div className="header-location"><MapPin size={16} aria-hidden="true" /> Waterloo Region, Ontario</div>
@@ -89,6 +119,8 @@ export function ResidentPage() {
       <div className="page-heading">
         {section === 'journey' ? (
           <div><h1>Journey Search</h1><p>Find transit routes and walking connections between two locations.</p></div>
+        ) : section === 'map' ? (
+          <div><h1>Live Map</h1><p>Track active buses across Waterloo Region and view upcoming stop arrivals.</p></div>
         ) : (
           <div><h1>Schedules &amp; Departures</h1><p>A little planning. A smoother journey.</p></div>
         )}
@@ -108,10 +140,11 @@ export function ResidentPage() {
               : routes.pending && !routes.data ? <LoadingRows label="Loading routes" />
                 : !selectedRoute ? <EmptyState title="No routes available" description="There are no active routes to show right now. Try again in a moment." onRetry={routes.retry} />
                   : <TransitWorkspace route={selectedRoute} group={selectedGroup}
-                    onDirectionChange={setRouteId} today={today} date={date} onDateChange={setDate} view={view} onViewChange={setView} />}
+                    onDirectionChange={setRouteId} today={today} date={date} onDateChange={setDate} view={view} onViewChange={setView}
+                    onViewLiveMap={() => handleOpenLiveMap(selectedRoute.id)} />}
           </main>
         </div>
-      ) : (
+      ) : section === 'journey' ? (
         <div
           id="section-panel-journey"
           role="tabpanel"
@@ -120,6 +153,22 @@ export function ResidentPage() {
           <main id="main-content" className="main-content journey-main" tabIndex={-1}>
             <div className="view-panel">
               <JourneyView today={today} />
+            </div>
+          </main>
+        </div>
+      ) : (
+        <div
+          id="section-panel-map"
+          role="tabpanel"
+          aria-labelledby="section-tab-map"
+        >
+          <main id="main-content" className="main-content live-main" tabIndex={-1}>
+            <div className="view-panel">
+              <LiveMapView
+                routes={routes.data ?? []}
+                selectedRouteId={mapRouteId}
+                onSelectedRouteChange={setMapRouteId}
+              />
             </div>
           </main>
         </div>

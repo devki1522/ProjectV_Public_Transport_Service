@@ -31,6 +31,11 @@ authorization. The frontend never receives the JWT or raw session identifier.
 | `POST /api/routes` | Session + `TransitAdministrator` + CSRF | Creates a route (`201`) and logs a structured audit event |
 | `PATCH /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Updates a route (`200`) and logs a structured audit event |
 | `DELETE /api/routes/{id}` | Session + `TransitAdministrator` + CSRF | Soft-deactivates a route (`204`, schedules preserved) and logs a structured audit event |
+| `POST /api/vehicles/locations` | Session + `TransitAdministrator` + CSRF | Creates (`201`) or updates (`200`) a vehicle's latest GPS location and logs a structured audit event (`409` on stale timestamp) |
+| `POST /api/admin/vehicles/simulator/start` | Session + `TransitAdministrator` + CSRF | Starts or resumes periodic bus simulation ticks (optional `{ "speed_multiplier": 0.25..10 }`) |
+| `POST /api/admin/vehicles/simulator/stop` | Session + `TransitAdministrator` + CSRF | Pauses periodic bus simulation ticks |
+| `POST /api/admin/vehicles/simulator/step` | Session + `TransitAdministrator` + CSRF | Advances all simulated buses by one tick immediately |
+| `POST /api/admin/vehicles/simulator/reset` | Session + `TransitAdministrator` + CSRF | Clears simulated vehicle locations and resets simulator progress |
 
 Auth and admin responses include `Cache-Control: no-store`. Error codes use JSON:
 `400` invalid request, `401` invalid credentials or missing/expired session,
@@ -156,13 +161,59 @@ window. PostgreSQL resolves daylight-saving gaps/overlaps in the agency zone.
 The fixed GRT seed has no holiday exceptions, date-specific cancellations, or
 live predictions; see the [seed limits](../database/README.md#seed-contents-and-limits).
 
-Estimated departures are nullable and never replace scheduled times. A live
-integration can implement `transit.EstimateProvider` and supply it through
-`router.NewWithEstimates`. Estimates are keyed by trip, route-stop occurrence,
-and service date to avoid mixing recurring trips or loop stops. Missing
-predictions, zero predictions, or provider failures leave estimates null and
-scheduled times available. The default server has no live provider configured;
-this change does not calculate predictions from GPS data (PT-FR-011).
+Estimated departures are nullable and never replace scheduled times. The default
+server wires `vehicles.NewLiveEstimateProvider(db)` into `router.Dependencies`
+when PostgreSQL is available, satisfying `transit.EstimateProvider` so resident
+departure boards and journey itineraries automatically reflect live or simulated
+vehicle positions whenever fresh `vehicle_locations` rows exist. Estimates are
+keyed by trip, route-stop occurrence, and service date to avoid mixing recurring
+trips or loop stops. Missing vehicle data, stale timestamps, or provider
+failures leave estimates `null` and preserve scheduled times without fabricating
+predictions.
+
+### Live vehicle tracking, map geometry, simulator, and estimated arrivals
+
+These endpoints implement User Stories 177 (Submit Vehicle Location Updates /
+PT-FR-008), 178 (View Active Vehicles by Route / PT-FR-009), 180 (View Live
+Buses on a Map / PT-FR-010), and 183 (View Estimated Bus Arrivals / PT-FR-011).
+Public read endpoints require no authentication; vehicle location submissions
+and simulator controls require an authenticated `TransitAdministrator` session,
+a trusted `Origin`, and `X-CSRF-Token`.
+
+| Endpoint | Access | Response |
+| --- | --- | --- |
+| `GET /api/vehicles` | Public | Active non-retired vehicles reported within `max_age_seconds` (10–86400, default 900); filters: `route_id`, `route_number`, `trip_id` |
+| `GET /api/routes/{id}/vehicles` | Public | Active vehicles operating on route `{id}` (`404` if unknown route) |
+| `GET /api/trips/{id}/vehicles` | Public | Active vehicles operating on trip `{id}` (`404` if unknown trip) |
+| `GET /api/routes/{id}/shape` | Public | Primary GeoJSON `LineString` polyline coordinates (falling back to ordered `route_stops`) for map rendering |
+| `GET /api/vehicles/simulator` | Public | Built-in simulator status (`running`, `vehicle_count`, `route_count`, `tick_interval_ms`, `speed_multiplier`, `last_tick_at`, `total_updates_sent`) |
+| `GET /api/trips/{id}/arrivals` | Public | Live estimated arrivals (`[]vehicles.EstimatedArrival`) for upcoming stops of trip `{id}` (`404` if unknown trip; `[]` if no active vehicle) |
+| `GET /api/stops/{id}/arrivals` | Public | Live estimated arrivals for active vehicles approaching stop `{id}` (optional `route_id` filter; `404` if unknown stop or route; `[]` if no approaching vehicle) |
+| `POST /api/vehicles/locations` | Admin + CSRF | Upserts latest position in `vehicle_locations` (`201` created, `200` updated, `409` stale `recorded_at`, structured audit log) |
+| `POST /api/admin/vehicles/simulator/{start,stop,step,reset}` | Admin + CSRF | Controls the built-in live bus movement simulator |
+
+Estimated arrivals project each fresh active vehicle (within the 15-minute
+`DefaultActiveMaxAge` freshness window and `status <> 'out_of_service'`) onto the
+trip's ordered upcoming `stop_times` (or route stops when `trip_id` is omitted)
+using Haversine stop-to-stop distances, speed clamped to 15–65 km/h (default
+28 km/h), a delay factor when `status == "delayed"`, and terminal layover dwell
+when `status == "layover"`. Scheduled arrival times are always preserved
+alongside `estimated_arrival_time`, `delay_minutes`, `distance_meters`,
+`is_simulated`, and `recorded_at`.
+
+#### Live vehicle simulator configuration
+
+The built-in simulator moves simulated buses (`is_simulated=true`,
+`source_service="simulator"`) along seeded route shapes through the same
+`vehicles.Service.SubmitLocation` validation and persistence path used by live
+feeds, and can be controlled from the admin portal or configured via environment
+variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SIMULATE_VEHICLES` | `true` in `APP_ENV=development`, `false` in `staging`/`production` | Whether simulated buses start automatically at API startup |
+| `SIMULATE_VEHICLES_COUNT` | `24` (range 1–200) | Number of simulated vehicles distributed across active routes |
+| `SIMULATE_TICK_INTERVAL` | `3s` (range `500ms`–`60s`) | Interval between simulated GPS updates |
 
 ## Develop outside Docker
 
@@ -192,8 +243,9 @@ are listed in [`.env.example`](.env.example).
 - `internal/database/`: database connection and pool setup.
 - `internal/models/`: GORM models defining the database tables and constraints.
 - `internal/auth/`: authentication providers (`mock`, `registration`), HS256 JWT validation, session store, CSRF, throttling, and HTTP middleware/handlers.
-- `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, and routing.
-- `internal/transit/`: resident schedule logic, PostgreSQL reads, and estimate-provider interface.
+- `internal/handlers/` and `internal/router/`: HTTP validation, responses, admin dashboard, live vehicles/arrivals, and routing.
+- `internal/transit/`: resident schedule logic, journey planner, PostgreSQL reads, and estimate-provider interface.
+- `internal/vehicles/`: live vehicle location ingestion, route geometry lookup, built-in bus simulator, upcoming arrival ETA projections, and `LiveEstimateProvider`.
 
 Keep startup small. As endpoints grow, separate HTTP handling, application
 logic and database access under `internal/`, passing dependencies explicitly.

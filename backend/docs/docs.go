@@ -112,6 +112,264 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/vehicles/simulator/reset": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Reset simulated vehicle locations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.SimulatorStatus"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/vehicles/simulator/start": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Start live bus simulator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional simulator speed multiplier",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SimulatorStartInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.SimulatorStatus"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/vehicles/simulator/step": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Advance simulated buses by one step",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.SimulatorStatus"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/vehicles/simulator/stop": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Pause live bus simulator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.SimulatorStatus"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/auth/login": {
             "post": {
                 "description": "Requires a trusted Origin. Returns a CSRF token and backend-derived isAdmin capability; never returns the JWT.",
@@ -831,6 +1089,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/routes/{id}/shape": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Get route polyline geometry for map rendering",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive route ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.RouteGeometry"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/routes/{id}/vehicles": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "List active vehicles for a route",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive route ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Conflicting route_id is rejected",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Optional trip_id filter",
+                        "name": "trip_id",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 86400,
+                        "minimum": 10,
+                        "type": "integer",
+                        "default": 900,
+                        "description": "Freshness window in seconds",
+                        "name": "max_age_seconds",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/vehicles.ActiveVehicle"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/routes/{routeID}/departures": {
             "get": {
                 "parameters": [
@@ -1002,6 +1398,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/stops/{id}/arrivals": {
+            "get": {
+                "description": "Returns estimated arrival times for active vehicles on routes serving the requested stop (optionally filtered by route_id) that have recent location data. Returns an empty array when no active vehicle with recent location data is approaching the stop.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Get estimated bus arrivals at a stop",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive stop ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Optional positive route ID filter",
+                        "name": "route_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/vehicles.EstimatedArrival"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/stops/{stopID}/departures": {
             "get": {
                 "parameters": [
@@ -1017,6 +1480,148 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/trips/{id}/arrivals": {
+            "get": {
+                "description": "Returns estimated arrival times for upcoming stops of an active trip that has recent vehicle location data, preserving scheduled arrival times. Returns an empty array when no active vehicle with recent location data is reporting on the trip.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Get estimated bus arrivals for a trip",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive trip ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/vehicles.EstimatedArrival"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trips/{id}/vehicles": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "List active vehicles for a trip",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive trip ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Optional route_id filter",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Conflicting trip_id is rejected",
+                        "name": "trip_id",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 86400,
+                        "minimum": 10,
+                        "type": "integer",
+                        "default": 900,
+                        "description": "Freshness window in seconds",
+                        "name": "max_age_seconds",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/vehicles.ActiveVehicle"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/trips/{tripID}/departures": {
             "get": {
                 "parameters": [
@@ -1030,6 +1635,207 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {}
+            }
+        },
+        "/api/vehicles": {
+            "get": {
+                "description": "Filters active non-retired vehicles reported within max_age_seconds (default 900s) by optional route_id, route_number, or trip_id.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "List active vehicles",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive route_id",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Public route number (case-insensitive)",
+                        "name": "route_number",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive trip_id",
+                        "name": "trip_id",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 86400,
+                        "minimum": 10,
+                        "type": "integer",
+                        "default": 900,
+                        "description": "Freshness window in seconds",
+                        "name": "max_age_seconds",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/vehicles.ActiveVehicle"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/vehicles/locations": {
+            "post": {
+                "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Updates the vehicle's latest GPS coordinates, speed, heading, route/trip assignment, and operating status.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Submit a vehicle location update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Vehicle location payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.LocationUpdateInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.ActiveVehicle"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.ActiveVehicle"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/vehicles/simulator": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "vehicles"
+                ],
+                "summary": "Get live bus simulator status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vehicles.SimulatorStatus"
+                        }
+                    }
+                }
             }
         }
     },
@@ -1079,6 +1885,14 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/auth.Principal"
+                }
+            }
+        },
+        "handlers.SimulatorStartInput": {
+            "type": "object",
+            "properties": {
+                "speed_multiplier": {
+                    "type": "number"
                 }
             }
         },
@@ -1472,6 +2286,225 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/transit.ScheduledTrip"
                     }
+                }
+            }
+        },
+        "vehicles.ActiveVehicle": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string"
+                },
+                "heading": {
+                    "type": "number"
+                },
+                "is_accessible": {
+                    "type": "boolean"
+                },
+                "is_simulated": {
+                    "type": "boolean"
+                },
+                "latitude": {
+                    "type": "number"
+                },
+                "longitude": {
+                    "type": "number"
+                },
+                "received_at": {
+                    "type": "string"
+                },
+                "recorded_at": {
+                    "type": "string"
+                },
+                "route_id": {
+                    "type": "integer"
+                },
+                "route_name": {
+                    "type": "string"
+                },
+                "route_number": {
+                    "type": "string"
+                },
+                "source_service": {
+                    "type": "string"
+                },
+                "speed_kmh": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trip_id": {
+                    "type": "integer"
+                },
+                "vehicle_id": {
+                    "type": "integer"
+                },
+                "vehicle_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "vehicles.Coordinate": {
+            "type": "object",
+            "properties": {
+                "lat": {
+                    "type": "number"
+                },
+                "lng": {
+                    "type": "number"
+                }
+            }
+        },
+        "vehicles.EstimatedArrival": {
+            "type": "object",
+            "properties": {
+                "delay_minutes": {
+                    "type": "integer"
+                },
+                "direction": {
+                    "type": "string"
+                },
+                "distance_meters": {
+                    "type": "integer"
+                },
+                "estimated_arrival_time": {
+                    "type": "string"
+                },
+                "is_simulated": {
+                    "type": "boolean"
+                },
+                "recorded_at": {
+                    "type": "string"
+                },
+                "route_id": {
+                    "type": "integer"
+                },
+                "route_name": {
+                    "type": "string"
+                },
+                "route_number": {
+                    "type": "string"
+                },
+                "scheduled_arrival_time": {
+                    "type": "string"
+                },
+                "stop_id": {
+                    "type": "integer"
+                },
+                "stop_name": {
+                    "type": "string"
+                },
+                "stop_sequence": {
+                    "type": "integer"
+                },
+                "trip_id": {
+                    "type": "integer"
+                },
+                "vehicle_id": {
+                    "type": "integer"
+                },
+                "vehicle_number": {
+                    "type": "string"
+                },
+                "vehicle_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "vehicles.LocationUpdateInput": {
+            "type": "object",
+            "properties": {
+                "heading": {
+                    "type": "number"
+                },
+                "is_accessible": {
+                    "type": "boolean"
+                },
+                "is_simulated": {
+                    "type": "boolean"
+                },
+                "latitude": {
+                    "type": "number"
+                },
+                "longitude": {
+                    "type": "number"
+                },
+                "recorded_at": {
+                    "type": "string"
+                },
+                "route_id": {
+                    "type": "integer"
+                },
+                "source_service": {
+                    "type": "string"
+                },
+                "speed_kmh": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trip_id": {
+                    "type": "integer"
+                },
+                "vehicle_id": {
+                    "type": "integer"
+                },
+                "vehicle_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "vehicles.RouteGeometry": {
+            "type": "object",
+            "properties": {
+                "coordinates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/vehicles.Coordinate"
+                    }
+                },
+                "direction": {
+                    "type": "string"
+                },
+                "headsign": {
+                    "type": "string"
+                },
+                "route_id": {
+                    "type": "integer"
+                },
+                "route_name": {
+                    "type": "string"
+                },
+                "route_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "vehicles.SimulatorStatus": {
+            "type": "object",
+            "properties": {
+                "last_tick_at": {
+                    "type": "string"
+                },
+                "route_count": {
+                    "type": "integer"
+                },
+                "running": {
+                    "type": "boolean"
+                },
+                "speed_multiplier": {
+                    "type": "number"
+                },
+                "tick_interval_ms": {
+                    "type": "integer"
+                },
+                "total_updates_sent": {
+                    "type": "integer"
+                },
+                "vehicle_count": {
+                    "type": "integer"
                 }
             }
         }

@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import App from './App.jsx'
 import { sanitizeRedirectPath } from './lib/routerState.js'
-import { jsonResponse, routes as fixtureRoutes } from './test/fixtures.js'
+import {
+  activeVehicles as fixtureVehicles,
+  jsonResponse,
+  routes as fixtureRoutes,
+  simulatorStatus,
+} from './test/fixtures.js'
 
 const adminSession = {
   isAdmin: true,
@@ -373,5 +378,128 @@ it('keeps the resident page public when a previous administrator session expires
     expect(screen.getByRole('heading', { name: 'Schedules & Departures' })).toBeVisible()
   } finally {
     vi.useRealTimers()
+  }
+})
+
+it('supports /admin/vehicles US 177 location updates with presets, validation, CSRF headers, and simulator controls', async () => {
+  let fleet = [fixtureVehicles[0]]
+  let sim = simulatorStatus({ running: false, speed_multiplier: 1, total_updates_sent: 10 })
+  const mutationCalls = []
+
+  const fetchMock = vi.fn(async (path, options = {}) => {
+    const method = options.method || 'GET'
+    if (path === '/api/auth/me') return jsonResponse(adminSession, 200)
+    if (path === '/api/routes' && method === 'GET') return jsonResponse(fixtureRoutes, 200)
+    if (path === '/api/vehicles' && method === 'GET') return jsonResponse(fleet, 200)
+    if (path === '/api/vehicles/simulator' && method === 'GET') return jsonResponse(sim, 200)
+    if (path === '/api/vehicles/locations' && method === 'POST') {
+      const body = JSON.parse(options.body)
+      mutationCalls.push({ path, method, headers: options.headers, body })
+      const route = fixtureRoutes.find((r) => r.id === body.route_id) ?? fixtureRoutes[2]
+      const created = {
+        vehicle_id: 901,
+        vehicle_number: body.vehicle_number,
+        is_accessible: body.is_accessible,
+        route_id: route.id,
+        route_number: route.number,
+        route_name: route.name,
+        direction: route.direction,
+        trip_id: body.trip_id ?? null,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        heading: body.heading ?? null,
+        speed_kmh: body.speed_kmh ?? null,
+        status: body.status,
+        source_service: 'transit.admin',
+        is_simulated: false,
+        recorded_at: '2026-11-10T13:15:00Z',
+        received_at: '2026-11-10T13:15:00Z',
+      }
+      fleet = [...fleet, created]
+      return jsonResponse(created, 201)
+    }
+    if (path === '/api/admin/vehicles/simulator/start' && method === 'POST') {
+      const body = options.body ? JSON.parse(options.body) : {}
+      mutationCalls.push({ path, method, headers: options.headers, body })
+      sim = { ...sim, running: true, speed_multiplier: body.speed_multiplier ?? 1 }
+      return jsonResponse(sim, 200)
+    }
+    if (path === '/api/admin/vehicles/simulator/step' && method === 'POST') {
+      mutationCalls.push({ path, method, headers: options.headers })
+      sim = { ...sim, total_updates_sent: sim.total_updates_sent + 8 }
+      return jsonResponse(sim, 200)
+    }
+    if (path === '/api/admin/vehicles/simulator/stop' && method === 'POST') {
+      mutationCalls.push({ path, method, headers: options.headers })
+      sim = { ...sim, running: false }
+      return jsonResponse(sim, 200)
+    }
+    if (path === '/api/admin/vehicles/simulator/reset' && method === 'POST') {
+      mutationCalls.push({ path, method, headers: options.headers })
+      sim = { ...sim, running: false, total_updates_sent: 0 }
+      fleet = fleet.filter((v) => !v.is_simulated)
+      return jsonResponse(sim, 200)
+    }
+    throw new Error(`Unexpected request: ${method} ${path}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<App initialPath="/admin/vehicles" />)
+
+  await screen.findByRole('heading', { name: 'Live fleet & vehicle tracking' })
+  await screen.findByText('Bus #2104')
+  expect(screen.getByRole('link', { name: 'Live fleet' })).toHaveAttribute('aria-current', 'page')
+
+  // Validation blocks submission when vehicle number or coordinates are missing
+  await user.click(screen.getByRole('button', { name: 'Submit location update' }))
+  expect(screen.getByRole('alert')).toHaveTextContent(/Vehicle number is required/i)
+
+  // Fill location update using Waterloo Region 1-click preset
+  await user.selectOptions(screen.getByLabelText('Route'), '7')
+  await user.type(screen.getByLabelText('Vehicle number'), 'BUS-707')
+  await user.type(screen.getByLabelText('Trip ID (optional)'), '200')
+  await user.click(screen.getByRole('button', { name: 'University of Waterloo' }))
+  expect(screen.getByLabelText('Latitude')).toHaveValue(43.4723)
+  expect(screen.getByLabelText('Longitude')).toHaveValue(-80.5449)
+  await user.type(screen.getByLabelText('Heading (°)'), '180')
+  await user.type(screen.getByLabelText('Speed (km/h)'), '38')
+  await user.selectOptions(screen.getByLabelText('Status'), 'delayed')
+  await user.click(screen.getByRole('button', { name: 'Submit location update' }))
+
+  await screen.findByText('Submitted location update for bus #BUS-707 on Route 7.')
+  await screen.findByText('Bus #BUS-707')
+
+  // Exercise simulator controls: Start at 2x, Step once, Pause, Reset
+  await user.selectOptions(screen.getByLabelText('Speed'), '2')
+  await user.click(screen.getByRole('button', { name: 'Start simulator' }))
+  await screen.findByText('Live bus simulator started at 2x speed.')
+
+  await user.click(screen.getByRole('button', { name: 'Step once' }))
+  await screen.findByText(/Advanced simulated vehicles by one tick/)
+
+  await user.click(screen.getByRole('button', { name: 'Pause simulator' }))
+  await screen.findByText('Live bus simulator paused.')
+
+  await user.click(screen.getByRole('button', { name: 'Reset simulated buses' }))
+  await screen.findByText('Reset simulated bus positions.')
+  await waitFor(() => expect(screen.queryByText('Bus #2104')).not.toBeInTheDocument())
+  expect(screen.getByText('Bus #BUS-707')).toBeVisible()
+
+  expect(mutationCalls).toHaveLength(5)
+  expect(mutationCalls[0].body).toEqual({
+    vehicle_number: 'BUS-707',
+    route_id: 7,
+    trip_id: 200,
+    latitude: 43.4723,
+    longitude: -80.5449,
+    heading: 180,
+    speed_kmh: 38,
+    status: 'delayed',
+    is_accessible: true,
+  })
+  expect(mutationCalls[1].body).toEqual({ speed_multiplier: 2 })
+  for (const call of mutationCalls) {
+    expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
 })

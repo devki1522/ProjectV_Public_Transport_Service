@@ -19,6 +19,7 @@ func TestTableNames(t *testing.T) {
 		{"Trip", Trip{}, "trips"},
 		{"StopTime", StopTime{}, "stop_times"},
 		{"Vehicle", Vehicle{}, "vehicles"},
+		{"VehicleLocation", VehicleLocation{}, "vehicle_locations"},
 		{"Disruption", Disruption{}, "disruptions"},
 		{"DisruptionRoute", DisruptionRoute{}, "disruption_routes"},
 		{"RouteShape", RouteShape{}, "route_shapes"},
@@ -87,6 +88,43 @@ func TestJSONSerialization(t *testing.T) {
 
 	if unmarshaledD.Title != disruption.Title || unmarshaledD.Status != disruption.Status {
 		t.Errorf("unmarshaled Disruption mismatch: got %+v, want %+v", unmarshaledD, disruption)
+	}
+
+	tripID := 42
+	heading := 135.5
+	speedKmh := 38.2
+	location := VehicleLocation{
+		ID:            7,
+		VehicleID:     11,
+		RouteID:       3,
+		TripID:        &tripID,
+		Latitude:      43.4516,
+		Longitude:     -80.4925,
+		Heading:       &heading,
+		SpeedKmh:      &speedKmh,
+		Status:        "in_service",
+		SourceService: "simulator",
+		IsSimulated:   true,
+		RecordedAt:    now,
+		ReceivedAt:    now,
+	}
+
+	vlData, err := json.Marshal(location)
+	if err != nil {
+		t.Fatalf("failed to marshal VehicleLocation: %v", err)
+	}
+
+	var unmarshaledVL VehicleLocation
+	if err := json.Unmarshal(vlData, &unmarshaledVL); err != nil {
+		t.Fatalf("failed to unmarshal VehicleLocation: %v", err)
+	}
+
+	if unmarshaledVL.VehicleID != location.VehicleID ||
+		unmarshaledVL.RouteID != location.RouteID ||
+		unmarshaledVL.TripID == nil || *unmarshaledVL.TripID != tripID ||
+		!unmarshaledVL.IsSimulated ||
+		unmarshaledVL.SourceService != "simulator" {
+		t.Errorf("unmarshaled VehicleLocation mismatch: got %+v, want %+v", unmarshaledVL, location)
 	}
 }
 

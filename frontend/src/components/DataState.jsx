@@ -10,12 +10,12 @@ export function ErrorNotice({ error, onRetry }) {
   )
 }
 
-export function EmptyState({ title, description, onRetry }) {
+export function EmptyState({ title, description, onRetry, actionLabel = 'Try again' }) {
   return (
     <div className="empty-state" role="status">
       <CalendarDays size={30} aria-hidden="true" />
       <h3>{title}</h3><p>{description}</p>
-      {onRetry && <button className="button button-secondary" type="button" onClick={onRetry}>Try again</button>}
+      {onRetry && <button className="button button-secondary" type="button" onClick={onRetry}>{actionLabel}</button>}
     </div>
   )
 }

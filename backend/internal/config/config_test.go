@@ -26,6 +26,7 @@ func clearAuthEnv(t *testing.T) {
 		"MOCK_ADMIN_PASSWORD",
 		"REGISTRATION_SERVICE_URL", "REGISTRATION_JWT_ISSUER",
 		"REGISTRATION_JWT_AUDIENCE", "REGISTRATION_JWT_SECRET",
+		"SIMULATE_VEHICLES", "SIMULATE_VEHICLES_COUNT", "SIMULATE_TICK_INTERVAL",
 	} {
 		t.Setenv(key, "")
 	}
@@ -81,6 +82,11 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 				AdminPassword: testAdminPassword,
 			},
 		},
+		Vehicles: VehiclesConfig{
+			Simulate:             true,
+			SimulateVehicleCount: 24,
+			SimulateTickInterval: 3 * time.Second,
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load() = %+v, want %+v", got, want)
@@ -104,6 +110,9 @@ func TestLoadProductionDefaultsToRegistration(t *testing.T) {
 	}
 	if got.Auth.Mock != (MockAuthConfig{}) {
 		t.Fatalf("expected empty mock config in production, got %+v", got.Auth.Mock)
+	}
+	if got.Vehicles.Simulate {
+		t.Fatalf("expected Vehicles.Simulate=false in production by default")
 	}
 }
 
@@ -341,4 +350,37 @@ func TestLoadAcceptsBoundaryValues(t *testing.T) {
 			t.Fatalf("equal idle and open limits rejected: %v", err)
 		}
 	})
+}
+
+func TestLoadVehicleSimulatorSettings(t *testing.T) {
+	setMockDevEnv(t)
+	t.Setenv("SIMULATE_VEHICLES", "false")
+	t.Setenv("SIMULATE_VEHICLES_COUNT", "12")
+	t.Setenv("SIMULATE_TICK_INTERVAL", "5s")
+
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Vehicles.Simulate || got.Vehicles.SimulateVehicleCount != 12 || got.Vehicles.SimulateTickInterval != 5*time.Second {
+		t.Fatalf("unexpected vehicle config: %+v", got.Vehicles)
+	}
+
+	for _, tc := range []struct{ name, key, value string }{
+		{"count too low", "SIMULATE_VEHICLES_COUNT", "0"},
+		{"count too high", "SIMULATE_VEHICLES_COUNT", "201"},
+		{"count nonnumeric", "SIMULATE_VEHICLES_COUNT", "abc"},
+		{"interval too short", "SIMULATE_TICK_INTERVAL", "100ms"},
+		{"interval too long", "SIMULATE_TICK_INTERVAL", "61s"},
+		{"interval invalid", "SIMULATE_TICK_INTERVAL", "fast"},
+		{"simulate nonbool", "SIMULATE_VEHICLES", "maybe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setMockDevEnv(t)
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("expected error for %s=%q", tc.key, tc.value)
+			}
+		})
+	}
 }

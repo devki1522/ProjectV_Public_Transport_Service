@@ -352,3 +352,117 @@ export function journeyResult({
     ],
   }
 }
+
+export const activeVehicles = [
+  {
+    vehicle_id: 501,
+    vehicle_number: '2104',
+    is_accessible: true,
+    route_id: 1,
+    route_number: '1',
+    route_name: 'Queen-River',
+    direction: 'direction_0',
+    trip_id: 100,
+    latitude: 43.4516,
+    longitude: -80.4981,
+    heading: 125,
+    speed_kmh: 34,
+    status: 'in_service',
+    source_service: 'simulator',
+    is_simulated: true,
+    recorded_at: '2026-11-10T13:12:00Z',
+    received_at: '2026-11-10T13:12:01Z',
+  },
+  {
+    vehicle_id: 507,
+    vehicle_number: '2207',
+    is_accessible: true,
+    route_id: 7,
+    route_number: '7',
+    route_name: 'King',
+    direction: 'direction_0',
+    trip_id: 200,
+    latitude: 43.4723,
+    longitude: -80.5449,
+    heading: 210,
+    speed_kmh: 22,
+    status: 'delayed',
+    source_service: 'admin',
+    is_simulated: false,
+    recorded_at: '2026-11-10T13:13:00Z',
+    received_at: '2026-11-10T13:13:01Z',
+  },
+]
+
+export function routeShape(routeId = 7) {
+  const route = routes.find((item) => item.id === Number(routeId)) ?? routes[2]
+  return {
+    route_id: route.id,
+    route_number: route.number,
+    route_name: route.name,
+    direction: route.direction,
+    headsign: 'Fairway Station',
+    coordinates: [
+      { lat: 43.4723, lng: -80.5449 },
+      { lat: 43.4516, lng: -80.4981 },
+      { lat: 43.4209, lng: -80.4388 },
+    ],
+  }
+}
+
+export function simulatorStatus(overrides = {}) {
+  return {
+    running: true,
+    vehicle_count: 8,
+    route_count: 4,
+    tick_interval_ms: 3000,
+    speed_multiplier: 1,
+    last_tick_at: '2026-11-10T13:12:00Z',
+    total_updates_sent: 48,
+    ...overrides,
+  }
+}
+
+export function estimatedArrivals(tripId = 100) {
+  const isKing = Number(tripId) === 200
+  return [
+    {
+      trip_id: Number(tripId),
+      route_id: isKing ? 7 : 1,
+      route_number: isKing ? '7' : '1',
+      route_name: isKing ? 'King' : 'Queen-River',
+      direction: 'direction_0',
+      stop_id: 21,
+      stop_name: 'Central Station',
+      stop_sequence: 2,
+      vehicle_id: isKing ? 507 : 501,
+      vehicle_number: isKing ? '2207' : '2104',
+      vehicle_status: isKing ? 'delayed' : 'in_service',
+      scheduled_arrival_time: '2026-11-10T13:15:00Z',
+      estimated_arrival_time: '2026-11-10T13:18:00Z',
+      delay_minutes: 3,
+      distance_meters: 640,
+      is_simulated: !isKing,
+      recorded_at: '2026-11-10T13:12:00Z',
+    },
+    {
+      trip_id: Number(tripId),
+      route_id: isKing ? 7 : 1,
+      route_number: isKing ? '7' : '1',
+      route_name: isKing ? 'King' : 'Queen-River',
+      direction: 'direction_0',
+      stop_id: 22,
+      stop_name: 'Fairway Station',
+      stop_sequence: 5,
+      vehicle_id: isKing ? 507 : 501,
+      vehicle_number: isKing ? '2207' : '2104',
+      vehicle_status: isKing ? 'delayed' : 'in_service',
+      scheduled_arrival_time: '2026-11-10T13:30:00Z',
+      estimated_arrival_time: '2026-11-10T13:30:00Z',
+      delay_minutes: 0,
+      distance_meters: 2450,
+      is_simulated: !isKing,
+      recorded_at: '2026-11-10T13:12:00Z',
+    },
+  ]
+}

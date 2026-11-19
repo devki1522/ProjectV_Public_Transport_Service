@@ -31,6 +31,11 @@ definitions:
       user:
         $ref: '#/definitions/auth.Principal'
     type: object
+  handlers.SimulatorStartInput:
+    properties:
+      speed_multiplier:
+        type: number
+    type: object
   handlers.TransitRouteResponse:
     properties:
       direction:
@@ -288,6 +293,150 @@ definitions:
           $ref: '#/definitions/transit.ScheduledTrip'
         type: array
     type: object
+  vehicles.ActiveVehicle:
+    properties:
+      direction:
+        type: string
+      heading:
+        type: number
+      is_accessible:
+        type: boolean
+      is_simulated:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      received_at:
+        type: string
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+      source_service:
+        type: string
+      speed_kmh:
+        type: number
+      status:
+        type: string
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+    type: object
+  vehicles.Coordinate:
+    properties:
+      lat:
+        type: number
+      lng:
+        type: number
+    type: object
+  vehicles.EstimatedArrival:
+    properties:
+      delay_minutes:
+        type: integer
+      direction:
+        type: string
+      distance_meters:
+        type: integer
+      estimated_arrival_time:
+        type: string
+      is_simulated:
+        type: boolean
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+      scheduled_arrival_time:
+        type: string
+      stop_id:
+        type: integer
+      stop_name:
+        type: string
+      stop_sequence:
+        type: integer
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+      vehicle_status:
+        type: string
+    type: object
+  vehicles.LocationUpdateInput:
+    properties:
+      heading:
+        type: number
+      is_accessible:
+        type: boolean
+      is_simulated:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      recorded_at:
+        type: string
+      route_id:
+        type: integer
+      source_service:
+        type: string
+      speed_kmh:
+        type: number
+      status:
+        type: string
+      trip_id:
+        type: integer
+      vehicle_id:
+        type: integer
+      vehicle_number:
+        type: string
+    type: object
+  vehicles.RouteGeometry:
+    properties:
+      coordinates:
+        items:
+          $ref: '#/definitions/vehicles.Coordinate'
+        type: array
+      direction:
+        type: string
+      headsign:
+        type: string
+      route_id:
+        type: integer
+      route_name:
+        type: string
+      route_number:
+        type: string
+    type: object
+  vehicles.SimulatorStatus:
+    properties:
+      last_tick_at:
+        type: string
+      route_count:
+        type: integer
+      running:
+        type: boolean
+      speed_multiplier:
+        type: number
+      tick_interval_ms:
+        type: integer
+      total_updates_sent:
+        type: integer
+      vehicle_count:
+        type: integer
+    type: object
 info:
   contact: {}
   description: Public resident schedules and cookie-authenticated transit administration.
@@ -360,6 +509,175 @@ paths:
       summary: Administrator health
       tags:
       - administration
+  /api/admin/vehicles/simulator/reset:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset simulated vehicle locations
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Optional simulator speed multiplier
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handlers.SimulatorStartInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start live bus simulator
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/step:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Advance simulated buses by one step
+      tags:
+      - vehicles
+  /api/admin/vehicles/simulator/stop:
+    post:
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Pause live bus simulator
+      tags:
+      - vehicles
   /api/auth/login:
     post:
       consumes:
@@ -850,6 +1168,99 @@ paths:
       summary: Get a route timetable
       tags:
       - schedules
+  /api/routes/{id}/shape:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.RouteGeometry'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get route polyline geometry for map rendering
+      tags:
+      - vehicles
+  /api/routes/{id}/vehicles:
+    get:
+      parameters:
+      - description: Positive route ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Conflicting route_id is rejected
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Optional trip_id filter
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles for a route
+      tags:
+      - vehicles
   /api/routes/{routeID}/departures:
     get:
       parameters:
@@ -968,6 +1379,54 @@ paths:
       summary: Get stop details and upcoming departures
       tags:
       - schedules
+  /api/stops/{id}/arrivals:
+    get:
+      description: Returns estimated arrival times for active vehicles on routes serving
+        the requested stop (optionally filtered by route_id) that have recent location
+        data. Returns an empty array when no active vehicle with recent location data
+        is approaching the stop.
+      parameters:
+      - description: Positive stop ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Optional positive route ID filter
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.EstimatedArrival'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get estimated bus arrivals at a stop
+      tags:
+      - vehicles
   /api/stops/{stopID}/departures:
     get:
       parameters:
@@ -978,6 +1437,105 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/trips/{id}/arrivals:
+    get:
+      description: Returns estimated arrival times for upcoming stops of an active
+        trip that has recent vehicle location data, preserving scheduled arrival times.
+        Returns an empty array when no active vehicle with recent location data is
+        reporting on the trip.
+      parameters:
+      - description: Positive trip ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.EstimatedArrival'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get estimated bus arrivals for a trip
+      tags:
+      - vehicles
+  /api/trips/{id}/vehicles:
+    get:
+      parameters:
+      - description: Positive trip ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Optional route_id filter
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Conflicting trip_id is rejected
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles for a trip
+      tags:
+      - vehicles
   /api/trips/{tripID}/departures:
     get:
       parameters:
@@ -988,4 +1546,141 @@ paths:
         required: true
         type: integer
       responses: {}
+  /api/vehicles:
+    get:
+      description: Filters active non-retired vehicles reported within max_age_seconds
+        (default 900s) by optional route_id, route_number, or trip_id.
+      parameters:
+      - description: Positive route_id
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Public route number (case-insensitive)
+        in: query
+        name: route_number
+        type: string
+      - description: Positive trip_id
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - default: 900
+        description: Freshness window in seconds
+        in: query
+        maximum: 86400
+        minimum: 10
+        name: max_age_seconds
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/vehicles.ActiveVehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List active vehicles
+      tags:
+      - vehicles
+  /api/vehicles/locations:
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator session cookie, trusted Origin, and X-CSRF-Token.
+        Updates the vehicle's latest GPS coordinates, speed, heading, route/trip assignment,
+        and operating status.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Vehicle location payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/vehicles.LocationUpdateInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.ActiveVehicle'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/vehicles.ActiveVehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a vehicle location update
+      tags:
+      - vehicles
+  /api/vehicles/simulator:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vehicles.SimulatorStatus'
+      summary: Get live bus simulator status
+      tags:
+      - vehicles
 swagger: "2.0"

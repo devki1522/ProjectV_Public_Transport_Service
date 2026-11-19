@@ -1,9 +1,9 @@
-import { CalendarDays, Clock3 } from 'lucide-react'
+import { CalendarDays, Clock3, Radio } from 'lucide-react'
 import { directionLabel } from '../lib/transit.js'
 import { ScheduleView } from './schedule/ScheduleView.jsx'
 import { DepartureView } from './departures/DepartureView.jsx'
 
-export function TransitWorkspace({ route, group, onDirectionChange, today, date, onDateChange, view, onViewChange }) {
+export function TransitWorkspace({ route, group, onDirectionChange, today, date, onDateChange, view, onViewChange, onViewLiveMap }) {
   function handleTabKey(event) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
@@ -16,9 +16,17 @@ export function TransitWorkspace({ route, group, onDirectionChange, today, date,
     <>
       <div className="route-heading">
         <div className="selected-route-name"><span className="route-number route-number-large">{route.number}</span><div><h2>{route.name}</h2><p>Route {route.number} · {directionLabel(route.direction)}</p></div></div>
-        <div className="direction-field"><label htmlFor="direction-select">Travel direction</label><select id="direction-select" value={route.id} onChange={(event) => onDirectionChange(Number(event.target.value))}>
-          {group.directions.map((direction) => <option key={direction.id} value={direction.id}>{directionLabel(direction.direction)}</option>)}
-        </select></div>
+        <div className="route-heading-controls">
+          <div className="direction-field"><label htmlFor="direction-select">Travel direction</label><select id="direction-select" value={route.id} onChange={(event) => onDirectionChange(Number(event.target.value))}>
+            {group.directions.map((direction) => <option key={direction.id} value={direction.id}>{directionLabel(direction.direction)}</option>)}
+          </select></div>
+          {onViewLiveMap && (
+            <button type="button" className="button button-secondary live-buses-button" onClick={onViewLiveMap}>
+              <Radio size={15} aria-hidden="true" />
+              <span>Live buses</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="view-tabs" role="tablist" aria-label="Transit information" onKeyDown={handleTabKey}>

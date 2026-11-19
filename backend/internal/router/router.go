@@ -10,6 +10,7 @@ import (
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/services"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/transit"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/vehicles"
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"gorm.io/gorm"
@@ -23,6 +24,7 @@ type Dependencies struct {
 	CSRF           *auth.CSRFProtector
 	RequiredRole   string
 	AdminHandler   *handlers.AdminHandler
+	VehicleHandler *handlers.VehicleHandler
 }
 
 // New builds the HTTP router with default dependencies.
@@ -56,6 +58,12 @@ func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 		r,
 		handlers.NewScheduleHandler(transit.NewService(transit.NewPostgresRepository(db), deps.Estimates)),
 	)
+
+	vehicleHandler := deps.VehicleHandler
+	if vehicleHandler == nil {
+		vehicleHandler = handlers.NewVehicleHandler(vehicles.NewService(vehicles.NewPostgresRepository(db)), nil)
+	}
+	RegisterVehicleRoutes(r, vehicleHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
 
 	if deps.AuthHandler != nil && deps.AuthMiddleware != nil {
 		RegisterAuthRoutes(r, deps.AuthHandler, deps.AuthMiddleware)
@@ -127,6 +135,38 @@ func RegisterTransitRoutes(
 		protected.Post("/api/routes", handler.Create)
 		protected.Patch("/api/routes/{id}", handler.Update)
 		protected.Delete("/api/routes/{id}", handler.Delete)
+	})
+}
+
+// RegisterVehicleRoutes registers public vehicle location/shape/arrival reads and protected vehicle update and simulator endpoints.
+func RegisterVehicleRoutes(
+	r chi.Router,
+	handler *handlers.VehicleHandler,
+	authMiddleware *auth.Middleware,
+	csrf *auth.CSRFProtector,
+	requiredRole string,
+) {
+	r.Get("/api/vehicles", handler.ListActive)
+	r.Get("/api/routes/{id}/vehicles", handler.ListByRoute)
+	r.Get("/api/trips/{id}/vehicles", handler.ListByTrip)
+	r.Get("/api/trips/{id}/arrivals", handler.TripArrivals)
+	r.Get("/api/stops/{id}/arrivals", handler.StopArrivals)
+	r.Get("/api/routes/{id}/shape", handler.RouteShape)
+	r.Get("/api/vehicles/simulator", handler.SimulatorStatus)
+
+	r.Group(func(protected chi.Router) {
+		if authMiddleware == nil || csrf == nil || requiredRole == "" {
+			protected.Use(failClosedAuthMiddleware)
+		} else {
+			protected.Use(authMiddleware.RequireAuthenticated)
+			protected.Use(authMiddleware.RequireRole(requiredRole))
+			protected.Use(csrf.RequireMutationCSRF)
+		}
+		protected.Post("/api/vehicles/locations", handler.SubmitLocation)
+		protected.Post("/api/admin/vehicles/simulator/start", handler.StartSimulator)
+		protected.Post("/api/admin/vehicles/simulator/stop", handler.StopSimulator)
+		protected.Post("/api/admin/vehicles/simulator/step", handler.StepSimulator)
+		protected.Post("/api/admin/vehicles/simulator/reset", handler.ResetSimulator)
 	})
 }
 
