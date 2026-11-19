@@ -26,16 +26,15 @@ var errRedirectsDisabled = errors.New("redirects are not allowed for credential 
 type RegistrationProvider struct {
 	endpoint string
 	client   *http.Client
+	direct   *directRegistrationExchange
 }
 
-// NewRegistrationProvider builds a Registration Service provider using the supplied HTTP client.
-// Redirects are rejected so credentials are never forwarded to an unintended destination.
+// NewRegistrationProvider rejects redirects so credentials cannot be forwarded elsewhere.
 func NewRegistrationProvider(cfg config.RegistrationAuthConfig, client *http.Client) (*RegistrationProvider, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.ServiceURL), "/")
 	if baseURL == "" {
 		return nil, fmt.Errorf("registration service URL is required")
 	}
-
 	safeClient := &http.Client{Timeout: defaultUpstreamTimeout}
 	if client != nil {
 		copied := *client
@@ -44,41 +43,42 @@ func NewRegistrationProvider(cfg config.RegistrationAuthConfig, client *http.Cli
 		}
 		safeClient = &copied
 	}
-	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error {
-		return errRedirectsDisabled
+	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error { return errRedirectsDisabled }
+	p := &RegistrationProvider{endpoint: baseURL + "/api/Login/authenticate", client: safeClient}
+	if cfg.DirectHTTPS {
+		if !strings.HasPrefix(baseURL, "https://") {
+			return nil, fmt.Errorf("direct registration exchange requires HTTPS")
+		}
+		// Use Go's normal TLS certificate and hostname verification, not an injected transport.
+		p.client = &http.Client{Timeout: safeClient.Timeout, CheckRedirect: safeClient.CheckRedirect, Transport: &http.Transport{TLSHandshakeTimeout: defaultUpstreamTimeout}}
+		exchange, err := newDirectRegistrationExchange(cfg)
+		if err != nil {
+			return nil, err
+		}
+		p.direct = exchange
 	}
-
-	return &RegistrationProvider{
-		endpoint: baseURL + "/api/Login/authenticate",
-		client:   safeClient,
-	}, nil
+	return p, nil
 }
 
 type registrationResponse struct {
 	AccessToken  string `json:"accessToken"`
 	TokenType    string `json:"tokenType"`
 	ExpiresAtUTC string `json:"expiresAtUtc"`
-	// Role is intentionally ignored for authorization decisions.
+	// Role intentionally ignored for authorization decisions.
 }
 
-// Authenticate sends credentials once to /api/Login/authenticate without retries.
+// Authenticate sends credentials once to the configured upstream, without retries.
 func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginRequest) (AuthResult, error) {
-	payload, err := json.Marshal(LoginRequest{
-		Username:   req.Username,
-		Password:   req.Password,
-		RememberMe: false,
-	})
+	payload, err := json.Marshal(LoginRequest{Username: req.Username, Password: req.Password, RememberMe: false})
 	if err != nil {
 		return AuthResult{}, fmt.Errorf("encode login request: %w", err)
 	}
-
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return AuthResult{}, fmt.Errorf("build login request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
-
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -93,8 +93,6 @@ func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginReques
 		return AuthResult{}, ErrProviderUnavailable
 	}
 	defer resp.Body.Close()
-
-	// Drain bounded body cleanly.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBodyBytes+1))
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || isTimeoutError(err) {
@@ -105,7 +103,6 @@ func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginReques
 	if len(body) > maxUpstreamBodyBytes {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return AuthResult{}, ErrInvalidCredentials
@@ -116,7 +113,6 @@ func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginReques
 	case resp.StatusCode != http.StatusOK:
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-
 	var parsed registrationResponse
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(&parsed); err != nil {
@@ -125,26 +121,22 @@ func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginReques
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-
 	if strings.TrimSpace(parsed.AccessToken) == "" {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
 	if !strings.EqualFold(strings.TrimSpace(parsed.TokenType), "Bearer") {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-
 	expiresAt, err := parseUTC(parsed.ExpiresAtUTC)
 	if err != nil {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-
-	return AuthResult{
-		AccessToken:  parsed.AccessToken,
-		TokenType:    "Bearer",
-		ExpiresAtUTC: expiresAt,
-	}, nil
+	if p.direct != nil {
+		// This branch is reachable only after a successful direct HTTPS credential exchange.
+		return p.direct.exchange(parsed.AccessToken, req.Username, expiresAt, time.Now().UTC())
+	}
+	return AuthResult{AccessToken: parsed.AccessToken, TokenType: "Bearer", ExpiresAtUTC: expiresAt}, nil
 }
-
 func parseUTC(raw string) (time.Time, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -154,14 +146,12 @@ func parseUTC(raw string) (time.Time, error) {
 	if err == nil {
 		return parsed.UTC(), nil
 	}
-	// Fallback for .NET DateTime without trailing Z when serialized with Kind=Unspecified.
 	parsed, err = time.Parse("2006-01-02T15:04:05.9999999", value)
 	if err == nil {
 		return parsed.UTC(), nil
 	}
 	return time.Time{}, err
 }
-
 func isTimeoutError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && netErr.Timeout()
