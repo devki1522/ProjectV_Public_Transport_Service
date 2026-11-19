@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#f5f6f3" />
+    <meta name="theme-color" content="#f1f3f2" />
+    <script>
+      try {
+        var appearance = JSON.parse(localStorage.getItem('transit-theme'));
+        document.documentElement.dataset.theme = appearance === 'dark' || (appearance !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      } catch (_) {}
+    </script>
     <meta name="description" content="Find Waterloo Region transit timetables, stop times and upcoming departures." />
     <title>Schedules &amp; departures · Public Transport</title>
   </head>

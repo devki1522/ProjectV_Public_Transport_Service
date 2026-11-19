@@ -1,3 +1,5 @@
+import { RouteBadge } from './RouteBadge.jsx'
+import { LoadingRows } from './DataState.jsx'
 import { ArrowUpRight, Search } from 'lucide-react'
 import { useState } from 'react'
 
@@ -18,10 +20,11 @@ export function RouteSidebar({ groups, selected, onSelect, pending }) {
           <input id="route-search" type="search" placeholder="Route number or name" value={search} onChange={(event) => setSearch(event.target.value)} autoComplete="off" />
         </label>
         <div className="route-list" aria-busy={pending}>
+          {pending && !groups.length && <LoadingRows label="Loading route list" variant="routes" />}
           {filtered.map((group) => (
             <button className={`route-option${selected === group.number ? ' is-selected' : ''}`} key={group.number} type="button"
               onClick={() => selectGroup(group.number)} aria-pressed={selected === group.number}>
-              <span className="visually-hidden">Route</span>{' '}<span className="route-number">{group.number}</span>{' '}
+              <span className="visually-hidden">Route</span>{' '}<RouteBadge number={group.number} />{' '}
               <span className="route-option-copy"><span>{group.name}</span>{' '}<small>{group.directions.length} {group.directions.length === 1 ? 'direction' : 'directions'}</small></span>
               {selected === group.number && <ArrowUpRight size={17} aria-hidden="true" />}
             </button>

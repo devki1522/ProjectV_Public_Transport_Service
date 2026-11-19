@@ -27,9 +27,16 @@ export function useResource(key, load, refreshInterval = 0) {
   useEffect(() => {
     if (!key || !refreshInterval) return
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') retry()
+      if (document.visibilityState === 'visible' && navigator.onLine) retry()
     }, refreshInterval)
-    return () => clearInterval(timer)
+    const resume = () => { if (document.visibilityState === 'visible' && navigator.onLine) retry() }
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', resume)
+    }
   }, [key, refreshInterval, retry])
 
   const pending = Boolean(key) && (state.key !== key || state.revision !== revision)

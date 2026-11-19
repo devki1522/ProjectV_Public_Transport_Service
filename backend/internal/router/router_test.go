@@ -117,17 +117,19 @@ func newTestAuthEnv(t *testing.T, service *fakeTransitRoutes, dashboard *fakeDas
 	auditLogger := slog.New(slog.NewJSONHandler(&auditBuf, nil))
 
 	mux := chi.NewRouter()
-	router.RegisterAuthRoutes(mux, authHandler, authMW)
-	router.RegisterTransitRoutes(
-		mux,
-		handlers.NewTransitRouteHandlerWithAudit(service, auditLogger),
-		authMW,
-		csrf,
-		"TransitAdministrator",
-	)
-	if dashboard != nil {
-		router.RegisterAdminRoutes(mux, handlers.NewAdminHandler(dashboard), authMW, "TransitAdministrator")
-	}
+	mux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterAuthRoutes(api, authHandler, authMW)
+		router.RegisterTransitRoutes(
+			api,
+			handlers.NewTransitRouteHandlerWithAudit(service, auditLogger),
+			authMW,
+			csrf,
+			"TransitAdministrator",
+		)
+		if dashboard != nil {
+			router.RegisterAdminRoutes(api, handlers.NewAdminHandler(dashboard), authMW, "TransitAdministrator")
+		}
+	})
 
 	return &testAuthEnv{
 		mux:       mux,
@@ -145,7 +147,7 @@ func loginAs(t *testing.T, handler http.Handler, username, password string) (*ht
 		"password":   password,
 		"rememberMe": false,
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/transport/v1/auth/login", bytes.NewReader(body))
 	req.Header.Set("Origin", routerTestOrigin)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -182,11 +184,11 @@ func TestRouteEndpointsWithAuthorization(t *testing.T) {
 		status                   int
 		needsAuth                bool
 	}{
-		{"GET", "/api/routes", "", "list", 200, false},
-		{"GET", "/api/routes/42", "", "get", 200, false},
-		{"POST", "/api/routes", `{"number":"7","name":"Main","direction":"direction_0"}`, "create", 201, true},
-		{"PATCH", "/api/routes/42", `{"is_active":false}`, "update", 200, true},
-		{"DELETE", "/api/routes/42", "", "deactivate", 204, true},
+		{"GET", "/api/transport/v1/routes", "", "list", 200, false},
+		{"GET", "/api/transport/v1/routes/42", "", "get", 200, false},
+		{"POST", "/api/transport/v1/routes", `{"number":"7","name":"Main","direction":"direction_0"}`, "create", 201, true},
+		{"PATCH", "/api/transport/v1/routes/42", `{"is_active":false}`, "update", 200, true},
+		{"DELETE", "/api/transport/v1/routes/42", "", "deactivate", 204, true},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			service := &fakeTransitRoutes{route: models.Route{ID: 42, Number: "7", Name: "Main", Direction: "direction_0"}}
@@ -206,7 +208,7 @@ func TestRouteEndpointsWithAuthorization(t *testing.T) {
 				t.Fatal("empty list must be []")
 			}
 			if tc.call == "create" {
-				if response.Header().Get("Location") != "/api/routes/42" || service.create.Number != "7" {
+				if response.Header().Get("Location") != "/api/transport/v1/routes/42" || service.create.Number != "7" {
 					t.Fatal("create input or location missing")
 				}
 			}
@@ -264,11 +266,11 @@ func TestRouteWritesEnforceAuthRoleAndCSRF(t *testing.T) {
 
 	// Unauthenticated writes return 401
 	for _, tc := range []struct{ method, path, body string }{
-		{"POST", "/api/routes", `{"number":"7","name":"Main","direction":"direction_0"}`},
-		{"PATCH", "/api/routes/42", `{"is_active":false}`},
-		{"DELETE", "/api/routes/42", ""},
-		{"GET", "/api/admin/health", ""},
-		{"GET", "/api/admin/dashboard", ""},
+		{"POST", "/api/transport/v1/routes", `{"number":"7","name":"Main","direction":"direction_0"}`},
+		{"PATCH", "/api/transport/v1/routes/42", `{"is_active":false}`},
+		{"DELETE", "/api/transport/v1/routes/42", ""},
+		{"GET", "/api/transport/v1/admin/health", ""},
+		{"GET", "/api/transport/v1/admin/dashboard", ""},
 	} {
 		rec := authedRequest(env.mux, tc.method, tc.path, tc.body, nil, "")
 		if rec.Code != http.StatusUnauthorized || service.called != "" {
@@ -278,11 +280,11 @@ func TestRouteWritesEnforceAuthRoleAndCSRF(t *testing.T) {
 
 	// Normal user receives 403 from admin endpoints and route writes
 	for _, tc := range []struct{ method, path, body string }{
-		{"POST", "/api/routes", `{"number":"7","name":"Main","direction":"direction_0"}`},
-		{"PATCH", "/api/routes/42", `{"is_active":false}`},
-		{"DELETE", "/api/routes/42", ""},
-		{"GET", "/api/admin/health", ""},
-		{"GET", "/api/admin/dashboard", ""},
+		{"POST", "/api/transport/v1/routes", `{"number":"7","name":"Main","direction":"direction_0"}`},
+		{"PATCH", "/api/transport/v1/routes/42", `{"is_active":false}`},
+		{"DELETE", "/api/transport/v1/routes/42", ""},
+		{"GET", "/api/transport/v1/admin/health", ""},
+		{"GET", "/api/transport/v1/admin/dashboard", ""},
 	} {
 		rec := authedRequest(env.mux, tc.method, tc.path, tc.body, userCookie, userCSRF)
 		if rec.Code != http.StatusForbidden || service.called != "" {
@@ -291,13 +293,13 @@ func TestRouteWritesEnforceAuthRoleAndCSRF(t *testing.T) {
 	}
 
 	// Admin without CSRF token receives 403
-	recNoCSRF := authedRequest(env.mux, http.MethodPost, "/api/routes", `{"number":"7","name":"Main","direction":"direction_0"}`, adminCookie, "")
+	recNoCSRF := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/routes", `{"number":"7","name":"Main","direction":"direction_0"}`, adminCookie, "")
 	if recNoCSRF.Code != http.StatusForbidden || service.called != "" {
 		t.Fatalf("missing CSRF = %d called=%s", recNoCSRF.Code, service.called)
 	}
 
 	// Admin dashboard returns repository data
-	dashRec := authedRequest(env.mux, http.MethodGet, "/api/admin/dashboard", "", adminCookie, "")
+	dashRec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/admin/dashboard", "", adminCookie, "")
 	if dashRec.Code != http.StatusOK {
 		t.Fatalf("dashboard status=%d body=%s", dashRec.Code, dashRec.Body.String())
 	}
@@ -371,16 +373,17 @@ func TestFakeRegistrationServiceEndToEndFlow(t *testing.T) {
 		AdminHandler:   handlers.NewAdminHandler(dashboard),
 	})
 	// Also test RegisterTransitRoutes with the same authMW/csrf/role
-	mux := chi.NewRouter()
-	mux.Mount("/", h)
-	router.RegisterTransitRoutes(mux, handlers.NewTransitRouteHandler(service), authMW, csrf, "TransitAdministrator")
+	transitMux := chi.NewRouter()
+	transitMux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterTransitRoutes(api, handlers.NewTransitRouteHandler(service), authMW, csrf, "TransitAdministrator")
+	})
 
-	cookie, csrfToken := loginAs(t, mux, "city.transit.admin", "any-password")
-	dashRec := authedRequest(mux, http.MethodGet, "/api/admin/dashboard", "", cookie, "")
+	cookie, csrfToken := loginAs(t, h, "city.transit.admin", "any-password")
+	dashRec := authedRequest(h, http.MethodGet, "/api/transport/v1/admin/dashboard", "", cookie, "")
 	if dashRec.Code != http.StatusOK {
 		t.Fatalf("admin dashboard via registration provider failed: %d %s", dashRec.Code, dashRec.Body.String())
 	}
-	createRec := authedRequest(mux, http.MethodPost, "/api/routes", `{"number":"10","name":"Conestoga","direction":"direction_0"}`, cookie, csrfToken)
+	createRec := authedRequest(transitMux, http.MethodPost, "/api/transport/v1/routes", `{"number":"10","name":"Conestoga","direction":"direction_0"}`, cookie, csrfToken)
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("route create via registration provider failed: %d %s", createRec.Code, createRec.Body.String())
 	}
@@ -388,7 +391,7 @@ func TestFakeRegistrationServiceEndToEndFlow(t *testing.T) {
 
 func TestRouterWithoutAuthDependenciesFailsClosedOnWrites(t *testing.T) {
 	h := router.New(nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/routes", strings.NewReader(`{"number":"7","name":"Main","direction":"direction_0"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/transport/v1/routes", strings.NewReader(`{"number":"7","name":"Main","direction":"direction_0"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -398,11 +401,11 @@ func TestRouterWithoutAuthDependenciesFailsClosedOnWrites(t *testing.T) {
 
 func TestRejectInvalidRouteRequests(t *testing.T) {
 	for _, tc := range []struct{ method, path, body string }{
-		{"GET", "/api/routes/0", ""}, {"GET", "/api/routes/nope", ""}, {"GET", "/api/routes/2147483648", ""},
-		{"POST", "/api/routes", "{"}, {"POST", "/api/routes", "null"}, {"POST", "/api/routes", "[]"},
-		{"POST", "/api/routes", `{"id":42}`}, {"POST", "/api/routes", `{"number":7}`},
-		{"PATCH", "/api/routes/42", `{"is_active":null}`},
-		{"PATCH", "/api/routes/42", `{} {}`},
+		{"GET", "/api/transport/v1/routes/0", ""}, {"GET", "/api/transport/v1/routes/nope", ""}, {"GET", "/api/transport/v1/routes/2147483648", ""},
+		{"POST", "/api/transport/v1/routes", "{"}, {"POST", "/api/transport/v1/routes", "null"}, {"POST", "/api/transport/v1/routes", "[]"},
+		{"POST", "/api/transport/v1/routes", `{"id":42}`}, {"POST", "/api/transport/v1/routes", `{"number":7}`},
+		{"PATCH", "/api/transport/v1/routes/42", `{"is_active":null}`},
+		{"PATCH", "/api/transport/v1/routes/42", `{} {}`},
 	} {
 		service := &fakeTransitRoutes{}
 		env := newTestAuthEnv(t, service, nil)
@@ -424,7 +427,7 @@ func TestRouteErrorResponses(t *testing.T) {
 		{&services.ValidationError{Message: "invalid route"}, 400}, {errors.New("secret database details"), 500},
 	} {
 		env := newTestAuthEnv(t, &fakeTransitRoutes{err: tc.err}, nil)
-		response := authedRequest(env.mux, http.MethodGet, "/api/routes/42", "", nil, "")
+		response := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/routes/42", "", nil, "")
 		if response.Code != tc.status {
 			t.Fatalf("status=%d want=%d", response.Code, tc.status)
 		}
@@ -434,5 +437,23 @@ func TestRouteErrorResponses(t *testing.T) {
 		if strings.Contains(response.Body.String(), "secret") {
 			t.Fatal("internal error leaked")
 		}
+	}
+}
+
+func TestConfigurableAPIVersion(t *testing.T) {
+	h := router.NewWithDependencies(nil, router.Dependencies{
+		APIVersion: "v2",
+	})
+
+	recV2 := httptest.NewRecorder()
+	h.ServeHTTP(recV2, httptest.NewRequest(http.MethodGet, "/api/transport/v2/health", nil))
+	if recV2.Code != http.StatusOK {
+		t.Fatalf("GET /api/transport/v2/health = %d, want 200", recV2.Code)
+	}
+
+	recV1 := httptest.NewRecorder()
+	h.ServeHTTP(recV1, httptest.NewRequest(http.MethodGet, "/api/transport/v1/health", nil))
+	if recV1.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/transport/v1/health = %d, want 404 when APIVersion=v2", recV1.Code)
 	}
 }

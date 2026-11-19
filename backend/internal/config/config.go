@@ -18,6 +18,7 @@ const (
 	AuthProviderMock         = "mock"
 	AuthProviderRegistration = "registration"
 	MinJWTSecretBytes        = 32
+	DefaultAPIVersion        = "v1"
 )
 
 type Config struct {
@@ -32,7 +33,10 @@ type VehiclesConfig struct {
 	SimulateVehicleCount int
 	SimulateTickInterval time.Duration
 }
-type ServerConfig struct{ Port int }
+type ServerConfig struct {
+	Port       int
+	APIVersion string
+}
 type DatabaseConfig struct {
 	DSN             string
 	MaxIdleConns    int
@@ -106,6 +110,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	apiVersion, err := loadAPIVersion()
+	if err != nil {
+		return Config{}, err
+	}
 	authCfg, err := loadAuthConfig(env)
 	if err != nil {
 		return Config{}, err
@@ -114,7 +122,18 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{Env: env, Server: ServerConfig{Port: port}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg}, nil
+	return Config{Env: env, Server: ServerConfig{Port: port, APIVersion: apiVersion}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg}, nil
+}
+
+func loadAPIVersion() (string, error) {
+	version := strings.Trim(strings.TrimSpace(getEnv("API_VERSION", DefaultAPIVersion)), "/")
+	if version == "" {
+		return "", fmt.Errorf("API_VERSION must not be empty")
+	}
+	if strings.ContainsAny(version, "/ \t\r\n?#") {
+		return "", fmt.Errorf("API_VERSION %q must be a single URL path segment", version)
+	}
+	return version, nil
 }
 func loadVehiclesConfig(env string) (VehiclesConfig, error) {
 	simulate, err := parseBoolEnv("SIMULATE_VEHICLES", env == EnvDevelopment)

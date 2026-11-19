@@ -1,3 +1,5 @@
+import { apiPath } from './base.js'
+
 export class AdminApiError extends Error {
   constructor(message, status) {
     super(message)
@@ -29,7 +31,7 @@ async function adminRequest(path, { method = 'GET', body, csrfToken, signal } = 
 
   let response
   try {
-    response = await fetch(path, {
+    response = await fetch(apiPath(path), {
       method,
       credentials: 'same-origin',
       headers,
@@ -80,7 +82,7 @@ async function adminRequest(path, { method = 'GET', body, csrfToken, signal } = 
 }
 
 export async function getAdminDashboard(signal) {
-  const data = await adminRequest('/api/admin/dashboard', { signal })
+  const data = await adminRequest('/admin/dashboard', { signal })
   if (
     !data ||
     typeof data.total_routes !== 'number' ||
@@ -93,7 +95,7 @@ export async function getAdminDashboard(signal) {
 }
 
 export async function getAllRoutes(signal) {
-  const data = await adminRequest('/api/routes', { signal })
+  const data = await adminRequest('/routes', { signal })
   if (!Array.isArray(data)) {
     throw new AdminApiError('Route list returned unexpected data.', 502)
   }
@@ -101,7 +103,7 @@ export async function getAllRoutes(signal) {
 }
 
 export function createAdminRoute(input, csrfToken) {
-  return adminRequest('/api/routes', {
+  return adminRequest('/routes', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -109,7 +111,7 @@ export function createAdminRoute(input, csrfToken) {
 }
 
 export function updateAdminRoute(id, input, csrfToken) {
-  return adminRequest(`/api/routes/${encodeURIComponent(id)}`, {
+  return adminRequest(`/routes/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: input,
     csrfToken,
@@ -117,14 +119,14 @@ export function updateAdminRoute(id, input, csrfToken) {
 }
 
 export function deactivateAdminRoute(id, csrfToken) {
-  return adminRequest(`/api/routes/${encodeURIComponent(id)}`, {
+  return adminRequest(`/routes/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     csrfToken,
   })
 }
 
 export function submitVehicleLocation(input, csrfToken) {
-  return adminRequest('/api/vehicles/locations', {
+  return adminRequest('/vehicles/locations', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -139,7 +141,7 @@ export function startVehicleSimulator(options, csrfToken) {
       body = { speed_multiplier: speedMultiplier }
     }
   }
-  return adminRequest('/api/admin/vehicles/simulator/start', {
+  return adminRequest('/admin/vehicles/simulator/start', {
     method: 'POST',
     body,
     csrfToken,
@@ -147,21 +149,21 @@ export function startVehicleSimulator(options, csrfToken) {
 }
 
 export function stopVehicleSimulator(csrfToken) {
-  return adminRequest('/api/admin/vehicles/simulator/stop', {
+  return adminRequest('/admin/vehicles/simulator/stop', {
     method: 'POST',
     csrfToken,
   })
 }
 
 export function stepVehicleSimulator(csrfToken) {
-  return adminRequest('/api/admin/vehicles/simulator/step', {
+  return adminRequest('/admin/vehicles/simulator/step', {
     method: 'POST',
     csrfToken,
   })
 }
 
 export function resetVehicleSimulator(csrfToken) {
-  return adminRequest('/api/admin/vehicles/simulator/reset', {
+  return adminRequest('/admin/vehicles/simulator/reset', {
     method: 'POST',
     csrfToken,
   })
@@ -172,7 +174,7 @@ export async function getAllDisruptions({ status, type } = {}, signal) {
   if (typeof status === 'string' && status.trim() && status !== 'all') params.set('status', status.trim())
   if (typeof type === 'string' && type.trim() && type !== 'all') params.set('type', type.trim())
   const query = params.toString()
-  const data = await adminRequest(query ? `/api/disruptions?${query}` : '/api/disruptions', { signal })
+  const data = await adminRequest(query ? `/disruptions?${query}` : '/disruptions', { signal })
   if (!Array.isArray(data)) {
     throw new AdminApiError('Disruption list returned unexpected data.', 502)
   }
@@ -180,7 +182,7 @@ export async function getAllDisruptions({ status, type } = {}, signal) {
 }
 
 export function createDisruption(input, csrfToken) {
-  return adminRequest('/api/disruptions', {
+  return adminRequest('/disruptions', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -188,7 +190,7 @@ export function createDisruption(input, csrfToken) {
 }
 
 export function updateDisruption(id, input, csrfToken) {
-  return adminRequest(`/api/disruptions/${encodeURIComponent(id)}`, {
+  return adminRequest(`/disruptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: input,
     csrfToken,
@@ -196,7 +198,7 @@ export function updateDisruption(id, input, csrfToken) {
 }
 
 export function submitUtilitiesNotice(input, csrfToken) {
-  return adminRequest('/api/integrations/utilities/notices', {
+  return adminRequest('/integrations/utilities/notices', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -204,7 +206,7 @@ export function submitUtilitiesNotice(input, csrfToken) {
 }
 
 export function submitEmergencyIncident(input, csrfToken) {
-  return adminRequest('/api/integrations/emergency/incidents', {
+  return adminRequest('/integrations/emergency/incidents', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -212,7 +214,7 @@ export function submitEmergencyIncident(input, csrfToken) {
 }
 
 export function submitSecurityTrafficAlert(input, csrfToken) {
-  return adminRequest('/api/integrations/security/traffic-alerts', {
+  return adminRequest('/integrations/security/traffic-alerts', {
     method: 'POST',
     body: input,
     csrfToken,
@@ -220,7 +222,7 @@ export function submitSecurityTrafficAlert(input, csrfToken) {
 }
 
 export async function getEnterpriseServiceStatus(signal) {
-  const data = await adminRequest('/api/integrations/service-status', { signal })
+  const data = await adminRequest('/integrations/service-status', { signal })
   if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
     throw new AdminApiError('Enterprise service status returned unexpected data.', 502)
   }

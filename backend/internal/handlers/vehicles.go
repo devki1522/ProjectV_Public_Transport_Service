@@ -83,7 +83,7 @@ func NewVehicleHandlerWithAudit(service VehicleService, simulator VehicleSimulat
 // @Failure 404 {object} map[string]string
 // @Failure 409 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/vehicles/locations [post]
+// @Router /api/transport/v1/vehicles/locations [post]
 func (h *VehicleHandler) SubmitLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -131,7 +131,7 @@ func (h *VehicleHandler) SubmitLocation(w http.ResponseWriter, r *http.Request) 
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/vehicles [get]
+// @Router /api/transport/v1/vehicles [get]
 func (h *VehicleHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -163,7 +163,7 @@ func (h *VehicleHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id}/vehicles [get]
+// @Router /api/transport/v1/routes/{id}/vehicles [get]
 func (h *VehicleHandler) ListByRoute(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -204,7 +204,7 @@ func (h *VehicleHandler) ListByRoute(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/trips/{id}/vehicles [get]
+// @Router /api/transport/v1/trips/{id}/vehicles [get]
 func (h *VehicleHandler) ListByTrip(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -242,7 +242,7 @@ func (h *VehicleHandler) ListByTrip(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id}/shape [get]
+// @Router /api/transport/v1/routes/{id}/shape [get]
 func (h *VehicleHandler) RouteShape(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -271,7 +271,7 @@ func (h *VehicleHandler) RouteShape(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/trips/{id}/arrivals [get]
+// @Router /api/transport/v1/trips/{id}/arrivals [get]
 func (h *VehicleHandler) TripArrivals(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -308,7 +308,7 @@ func (h *VehicleHandler) TripArrivals(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/stops/{id}/arrivals [get]
+// @Router /api/transport/v1/stops/{id}/arrivals [get]
 func (h *VehicleHandler) StopArrivals(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "vehicle service is unavailable"})
@@ -340,7 +340,7 @@ func (h *VehicleHandler) StopArrivals(w http.ResponseWriter, r *http.Request) {
 // @Tags vehicles
 // @Produce json
 // @Success 200 {object} vehicles.SimulatorStatus
-// @Router /api/vehicles/simulator [get]
+// @Router /api/transport/v1/vehicles/simulator [get]
 func (h *VehicleHandler) SimulatorStatus(w http.ResponseWriter, _ *http.Request) {
 	if h.simulator == nil {
 		writeJSON(w, http.StatusOK, vehicles.SimulatorStatus{Running: false, SpeedMultiplier: 1})
@@ -362,7 +362,7 @@ func (h *VehicleHandler) SimulatorStatus(w http.ResponseWriter, _ *http.Request)
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 503 {object} map[string]string
-// @Router /api/admin/vehicles/simulator/start [post]
+// @Router /api/transport/v1/admin/vehicles/simulator/start [post]
 func (h *VehicleHandler) StartSimulator(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.simulator == nil {
@@ -391,7 +391,7 @@ func (h *VehicleHandler) StartSimulator(w http.ResponseWriter, r *http.Request) 
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 503 {object} map[string]string
-// @Router /api/admin/vehicles/simulator/stop [post]
+// @Router /api/transport/v1/admin/vehicles/simulator/stop [post]
 func (h *VehicleHandler) StopSimulator(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.simulator == nil {
@@ -412,7 +412,7 @@ func (h *VehicleHandler) StopSimulator(w http.ResponseWriter, _ *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Failure 503 {object} map[string]string
-// @Router /api/admin/vehicles/simulator/step [post]
+// @Router /api/transport/v1/admin/vehicles/simulator/step [post]
 func (h *VehicleHandler) StepSimulator(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.simulator == nil {
@@ -438,7 +438,7 @@ func (h *VehicleHandler) StepSimulator(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Failure 503 {object} map[string]string
-// @Router /api/admin/vehicles/simulator/reset [post]
+// @Router /api/transport/v1/admin/vehicles/simulator/reset [post]
 func (h *VehicleHandler) ResetSimulator(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.simulator == nil {

@@ -1,3 +1,5 @@
+import { apiPath } from './base.js'
+
 export class AuthApiError extends Error {
   constructor(message, status, code = 'error') {
     super(message)
@@ -38,7 +40,7 @@ function validateSessionPayload(data) {
 export async function fetchSession(signal) {
   let response
   try {
-    response = await fetch('/api/auth/me', {
+    response = await fetch(apiPath('/auth/me'), {
       method: 'GET',
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
@@ -67,7 +69,7 @@ export async function fetchSession(signal) {
 export async function loginWithCredentials({ username, password }) {
   let response
   try {
-    response = await fetch('/api/auth/login', {
+    response = await fetch(apiPath('/auth/login'), {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -113,7 +115,7 @@ export async function logoutSession(csrfToken) {
   }
   let response
   try {
-    response = await fetch('/api/auth/logout', {
+    response = await fetch(apiPath('/auth/logout'), {
       method: 'POST',
       credentials: 'same-origin',
       headers,

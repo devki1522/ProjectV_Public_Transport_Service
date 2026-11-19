@@ -12,7 +12,7 @@ import (
 
 // TestHealth verifies health.
 func TestHealth(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/transport/v1/health", nil)
 	recorder := httptest.NewRecorder()
 	newRouter(nil).ServeHTTP(recorder, request)
 	response := recorder.Result()
@@ -64,8 +64,8 @@ func TestBuildRouterSelectsConfiguredProvider(t *testing.T) {
 
 	// Public health remains reachable and admin health requires authentication.
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/health", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/transport/v1/admin/health", nil))
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("GET /api/admin/health status = %d, want 401", rec.Code)
+		t.Fatalf("GET /api/transport/v1/admin/health status = %d, want 401", rec.Code)
 	}
 }

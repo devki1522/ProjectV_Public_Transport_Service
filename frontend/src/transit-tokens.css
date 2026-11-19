@@ -1,0 +1,63 @@
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+}
+:root {
+  --font-ui: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --font-numeric: 'JetBrains Mono', Consolas, monospace;
+  --bg-canvas: #edf0ed;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f5f7f4;
+  --text-primary: #14251d;
+  --text-secondary: #526258;
+  --border-hairline: #d6ddd6;
+  --action: #0b6446;
+  --canvas: var(--bg-canvas);
+  --surface: var(--bg-surface);
+  --elevated: var(--bg-elevated);
+  --soft: var(--bg-elevated);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border-hairline);
+  --accent: var(--action);
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --eta-size: 1.875rem;
+  --row-height: 84px;
+  font-family: var(--font-ui);
+}
+:root[data-theme='dark'] {
+  --bg-canvas: #101a16;
+  --bg-surface: #17241d;
+  --bg-elevated: #213127;
+  --text-primary: #f1f6f1;
+  --text-secondary: #b2c2b5;
+  --border-hairline: #3c4e41;
+  --action: #92dbb1;
+}
+.route-number, .bus-marker-label, time, .stop-sequence, .stop-id, .eta-countdown {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1;
+}
+/* Map paths need brighter inks against dark tiles; route badges retain solid fills. */
+:root[data-theme='dark'] .primary-map .leaflet-overlay-pane {
+  --route-1: #8ab9db;
+  --route-2: #e9a876;
+  --route-3: #baa0e2;
+  --route-4: #8ed2ae;
+  --route-5: #e79fbd;
+  --route-6: #81c9d1;
+  --route-7: #d6c862;
+  --route-8: #a1b5df;
+}

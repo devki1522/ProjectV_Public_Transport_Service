@@ -70,7 +70,7 @@ func transitRouteResponse(route models.Route) TransitRouteResponse {
 // @Produce json
 // @Success 200 {array} TransitRouteResponse
 // @Failure 500 {object} map[string]string
-// @Router /api/routes [get]
+// @Router /api/transport/v1/routes [get]
 func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	routes, err := h.service.List(r.Context())
 	if err != nil {
@@ -93,7 +93,7 @@ func (h *TransitRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id} [get]
+// @Router /api/transport/v1/routes/{id} [get]
 func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -121,7 +121,7 @@ func (h *TransitRouteHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 409 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes [post]
+// @Router /api/transport/v1/routes [post]
 func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	var input services.CreateTransitRouteInput
@@ -136,7 +136,7 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.auditRouteMutation(r.Context(), "create", route.ID, "success")
-	w.Header().Set("Location", "/api/routes/"+strconv.Itoa(route.ID))
+	w.Header().Set("Location", apiBaseFromRequest(r)+"/routes/"+strconv.Itoa(route.ID))
 	writeJSON(w, http.StatusCreated, transitRouteResponse(route))
 }
 
@@ -156,7 +156,7 @@ func (h *TransitRouteHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 409 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id} [patch]
+// @Router /api/transport/v1/routes/{id} [patch]
 func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)
@@ -192,7 +192,7 @@ func (h *TransitRouteHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id} [delete]
+// @Router /api/transport/v1/routes/{id} [delete]
 func (h *TransitRouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id, ok := transitRouteID(w, r)

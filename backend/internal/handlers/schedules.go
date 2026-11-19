@@ -44,7 +44,7 @@ func NewScheduleHandler(service ScheduleService) *ScheduleHandler {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id}/schedule [get]
+// @Router /api/transport/v1/routes/{id}/schedule [get]
 func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -79,7 +79,7 @@ func (h *ScheduleHandler) Timetable(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 
-// @Router /api/departures [get]
+// @Router /api/transport/v1/departures [get]
 func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 	q, err := h.departureQuery(r)
 	if err != nil {
@@ -110,7 +110,7 @@ func (h *ScheduleHandler) Departures(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/stops/{id} [get]
+// @Router /api/transport/v1/stops/{id} [get]
 func (h *ScheduleHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id, ok := transitRouteID(w, r)
 	if !ok {
@@ -315,7 +315,7 @@ func writeScheduleError(w http.ResponseWriter, err error) {
 // @Failure 500 {object} map[string]string
 
 // @Param stopID path int true "Positive resource ID" minimum(1)
-// @Router /api/stops/{stopID}/departures [get]
+// @Router /api/transport/v1/stops/{stopID}/departures [get]
 func (h *ScheduleHandler) StopDepartures(w http.ResponseWriter, r *http.Request) {
 	h.Departures(w, r)
 }
@@ -338,7 +338,7 @@ func (h *ScheduleHandler) StopDepartures(w http.ResponseWriter, r *http.Request)
 // @Failure 500 {object} map[string]string
 
 // @Param routeID path int true "Positive resource ID" minimum(1)
-// @Router /api/routes/{routeID}/departures [get]
+// @Router /api/transport/v1/routes/{routeID}/departures [get]
 func (h *ScheduleHandler) RouteDepartures(w http.ResponseWriter, r *http.Request) {
 	h.Departures(w, r)
 }
@@ -361,7 +361,7 @@ func (h *ScheduleHandler) RouteDepartures(w http.ResponseWriter, r *http.Request
 // @Failure 500 {object} map[string]string
 
 // @Param tripID path int true "Positive resource ID" minimum(1)
-// @Router /api/trips/{tripID}/departures [get]
+// @Router /api/transport/v1/trips/{tripID}/departures [get]
 func (h *ScheduleHandler) TripDepartures(w http.ResponseWriter, r *http.Request) {
 	h.Departures(w, r)
 }
@@ -376,7 +376,7 @@ func (h *ScheduleHandler) TripDepartures(w http.ResponseWriter, r *http.Request)
 // @Success 200 {array} transit.Stop
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/stops [get]
+// @Router /api/transport/v1/stops [get]
 func (h *ScheduleHandler) Stops(w http.ResponseWriter, r *http.Request) {
 	values, err := scheduleQuery(r, "q", "limit")
 	if err != nil {
@@ -418,7 +418,7 @@ func (h *ScheduleHandler) Stops(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/journeys [get]
+// @Router /api/transport/v1/journeys [get]
 func (h *ScheduleHandler) Journeys(w http.ResponseWriter, r *http.Request) {
 	q, err := h.journeyQuery(r)
 	if err != nil {

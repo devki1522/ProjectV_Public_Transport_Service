@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/admin/dashboard": {
+        "/api/transport/v1/admin/dashboard": {
             "get": {
                 "description": "Requires a valid administrator session cookie.",
                 "produces": [
@@ -62,7 +62,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/health": {
+        "/api/transport/v1/admin/health": {
             "get": {
                 "description": "Requires a valid administrator session cookie.",
                 "produces": [
@@ -112,7 +112,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/vehicles/simulator/reset": {
+        "/api/transport/v1/admin/vehicles/simulator/reset": {
             "post": {
                 "produces": [
                     "application/json"
@@ -176,7 +176,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/vehicles/simulator/start": {
+        "/api/transport/v1/admin/vehicles/simulator/start": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -251,7 +251,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/vehicles/simulator/step": {
+        "/api/transport/v1/admin/vehicles/simulator/step": {
             "post": {
                 "produces": [
                     "application/json"
@@ -315,7 +315,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/vehicles/simulator/stop": {
+        "/api/transport/v1/admin/vehicles/simulator/stop": {
             "post": {
                 "produces": [
                     "application/json"
@@ -370,7 +370,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/login": {
+        "/api/transport/v1/auth/login": {
             "post": {
                 "description": "Requires a trusted Origin. Returns a CSRF token and backend-derived isAdmin capability; never returns the JWT.",
                 "consumes": [
@@ -467,7 +467,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/logout": {
+        "/api/transport/v1/auth/logout": {
             "post": {
                 "description": "Requires a trusted Origin. Expired or missing sessions are cleared idempotently.",
                 "produces": [
@@ -507,7 +507,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/me": {
+        "/api/transport/v1/auth/me": {
             "get": {
                 "produces": [
                     "application/json"
@@ -535,12 +535,12 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/departures": {
+        "/api/transport/v1/departures": {
             "get": {
                 "responses": {}
             }
         },
-        "/api/disruptions": {
+        "/api/transport/v1/disruptions": {
             "get": {
                 "description": "Lists transit disruptions filtered by optional status, type, route_id, stop_id, trip_id, vehicle_id, or source_service.",
                 "produces": [
@@ -713,7 +713,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/disruptions/active": {
+        "/api/transport/v1/disruptions/active": {
             "get": {
                 "description": "Returns only active transit disruptions (` + "`" + `status='active'` + "`" + `), optionally filtered by type, route_id, stop_id, or trip_id.",
                 "produces": [
@@ -783,7 +783,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/disruptions/affected": {
+        "/api/transport/v1/disruptions/affected": {
             "get": {
                 "description": "Aggregates all routes, stops, trips, vehicles, and route segments currently impacted by active disruptions along with their derived operational statuses.",
                 "produces": [
@@ -821,7 +821,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/disruptions/{id}": {
+        "/api/transport/v1/disruptions/{id}": {
             "get": {
                 "produces": [
                     "application/json"
@@ -969,7 +969,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/health": {
+        "/api/transport/v1/health": {
             "get": {
                 "produces": [
                     "application/json"
@@ -991,7 +991,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/integrations/emergency/incidents": {
+        "/api/transport/v1/integrations/emergency/incidents": {
             "post": {
                 "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) an emergency disruption.",
                 "consumes": [
@@ -1083,7 +1083,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/integrations/security/traffic-alerts": {
+        "/api/transport/v1/integrations/security/traffic-alerts": {
             "post": {
                 "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a security traffic disruption.",
                 "consumes": [
@@ -1175,7 +1175,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/integrations/service-status": {
+        "/api/transport/v1/integrations/service-status": {
             "get": {
                 "description": "Requires an authenticated administrator/enterprise session cookie. Returns overall network operational status, active disruptions, detours, and affected services.",
                 "produces": [
@@ -1231,7 +1231,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/integrations/utilities/notices": {
+        "/api/transport/v1/integrations/utilities/notices": {
             "post": {
                 "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a utilities disruption.",
                 "consumes": [
@@ -1323,7 +1323,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/journeys": {
+        "/api/transport/v1/journeys": {
             "get": {
                 "description": "Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id and/or destination). Returns direct, multi-transfer (up to 3 transfers), and walking-connected itinerary options with ordered leg stops, optional live estimates, and exclusion of cancelled trips, closed stops, and disrupted route segments, or a meaningful message when no itinerary is found.",
                 "produces": [
@@ -1437,7 +1437,174 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes": {
+        "/api/transport/v1/road-closures": {
+            "get": {
+                "description": "Lists road closure disruptions (` + "`" + `type='road_closure'` + "`" + `) filtered by optional status, route_id, stop_id, trip_id, vehicle_id, or source_service.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "List road closures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Disruption lifecycle status (scheduled, active, resolved)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive route ID",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive stop ID",
+                        "name": "stop_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive trip ID",
+                        "name": "trip_id",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive vehicle ID",
+                        "name": "vehicle_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Originating service identifier",
+                        "name": "source_service",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/disruptions.DisruptionResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "Create a road closure",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Road closure creation payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.CreateDisruptionInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.DisruptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/transport/v1/routes": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1552,7 +1719,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{id}": {
+        "/api/transport/v1/routes/{id}": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1786,7 +1953,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{id}/schedule": {
+        "/api/transport/v1/routes/{id}/schedule": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1850,7 +2017,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{id}/shape": {
+        "/api/transport/v1/routes/{id}/shape": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1906,7 +2073,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{id}/status": {
+        "/api/transport/v1/routes/{id}/status": {
             "get": {
                 "produces": [
                     "application/json"
@@ -1962,7 +2129,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{id}/vehicles": {
+        "/api/transport/v1/routes/{id}/vehicles": {
             "get": {
                 "produces": [
                     "application/json"
@@ -2044,7 +2211,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/routes/{routeID}/departures": {
+        "/api/transport/v1/routes/{routeID}/departures": {
             "get": {
                 "parameters": [
                     {
@@ -2059,7 +2226,7 @@ const docTemplate = `{
                 "responses": {}
             }
         },
-        "/api/service-status": {
+        "/api/transport/v1/service-status": {
             "get": {
                 "description": "Returns overall network operational status (normal or disrupted), active disruptions, active detours, and affected routes, stops, trips, vehicles, and segments.",
                 "produces": [
@@ -2097,7 +2264,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/stops": {
+        "/api/transport/v1/stops": {
             "get": {
                 "produces": [
                     "application/json"
@@ -2154,7 +2321,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/stops/{id}": {
+        "/api/transport/v1/stops/{id}": {
             "get": {
                 "description": "Filters combine with AND. Path IDs fix their filter; conflicting query IDs are rejected. Departure windows are [from, until), at most 24 hours. /api/departures requires at least one ID filter.",
                 "produces": [
@@ -2253,7 +2420,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/stops/{id}/arrivals": {
+        "/api/transport/v1/stops/{id}/arrivals": {
             "get": {
                 "description": "Returns estimated arrival times for active vehicles on routes serving the requested stop (optionally filtered by route_id) that have recent location data. Returns an empty array when no active vehicle with recent location data is approaching the stop.",
                 "produces": [
@@ -2320,7 +2487,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/stops/{id}/status": {
+        "/api/transport/v1/stops/{id}/status": {
             "get": {
                 "produces": [
                     "application/json"
@@ -2376,7 +2543,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/stops/{stopID}/departures": {
+        "/api/transport/v1/stops/{stopID}/departures": {
             "get": {
                 "parameters": [
                     {
@@ -2391,7 +2558,7 @@ const docTemplate = `{
                 "responses": {}
             }
         },
-        "/api/trips/{id}/arrivals": {
+        "/api/transport/v1/trips/{id}/arrivals": {
             "get": {
                 "description": "Returns estimated arrival times for upcoming stops of an active trip that has recent vehicle location data, preserving scheduled arrival times. Returns an empty array when no active vehicle with recent location data is reporting on the trip.",
                 "produces": [
@@ -2451,7 +2618,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/trips/{id}/status": {
+        "/api/transport/v1/trips/{id}/status": {
             "get": {
                 "produces": [
                     "application/json"
@@ -2507,7 +2674,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/trips/{id}/vehicles": {
+        "/api/transport/v1/trips/{id}/vehicles": {
             "get": {
                 "produces": [
                     "application/json"
@@ -2589,7 +2756,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/trips/{tripID}/departures": {
+        "/api/transport/v1/trips/{tripID}/departures": {
             "get": {
                 "parameters": [
                     {
@@ -2604,7 +2771,7 @@ const docTemplate = `{
                 "responses": {}
             }
         },
-        "/api/vehicles": {
+        "/api/transport/v1/vehicles": {
             "get": {
                 "description": "Filters active non-retired vehicles reported within max_age_seconds (default 900s) by optional route_id, route_number, or trip_id.",
                 "produces": [
@@ -2685,7 +2852,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/vehicles/locations": {
+        "/api/transport/v1/vehicles/locations": {
             "post": {
                 "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Updates the vehicle's latest GPS coordinates, speed, heading, route/trip assignment, and operating status.",
                 "consumes": [
@@ -2786,7 +2953,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/vehicles/simulator": {
+        "/api/transport/v1/vehicles/simulator": {
             "get": {
                 "produces": [
                     "application/json"

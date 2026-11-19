@@ -32,7 +32,7 @@ func NewAdminHandler(dashboard DashboardReader) *AdminHandler {
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/admin/health [get]
+// @Router /api/transport/v1/admin/health [get]
 func (h *AdminHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -47,7 +47,7 @@ func (h *AdminHandler) Health(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/admin/dashboard [get]
+// @Router /api/transport/v1/admin/dashboard [get]
 func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	summary, err := h.dashboard.Summary(r.Context())

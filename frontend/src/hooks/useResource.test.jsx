@@ -27,3 +27,14 @@ it('preserves the last result on refresh failure and supports retry', async () =
   await waitFor(() => expect(result.current.data).toEqual(['updated']))
   expect(result.current.error).toBe(null)
 })
+
+it('refreshes active feeds on reconnect while respecting a paused feed', async () => {
+  const load = vi.fn(async () => ['arrivals'])
+  const view = renderHook(({ interval }) => useResource('arrivals', load, interval), { initialProps: { interval: 60_000 } })
+  await waitFor(() => expect(view.result.current.data).toEqual(['arrivals']))
+  act(() => window.dispatchEvent(new Event('online')))
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(2))
+  view.rerender({ interval: 0 })
+  act(() => window.dispatchEvent(new Event('online')))
+  expect(load).toHaveBeenCalledTimes(2)
+})

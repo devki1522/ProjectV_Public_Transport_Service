@@ -898,7 +898,7 @@ info:
   title: Public Transport Service API
   version: "1.0"
 paths:
-  /api/admin/dashboard:
+  /api/transport/v1/admin/dashboard:
     get:
       description: Requires a valid administrator session cookie.
       produces:
@@ -929,7 +929,7 @@ paths:
       summary: Administrator dashboard
       tags:
       - administration
-  /api/admin/health:
+  /api/transport/v1/admin/health:
     get:
       description: Requires a valid administrator session cookie.
       produces:
@@ -962,7 +962,7 @@ paths:
       summary: Administrator health
       tags:
       - administration
-  /api/admin/vehicles/simulator/reset:
+  /api/transport/v1/admin/vehicles/simulator/reset:
     post:
       parameters:
       - description: Session-bound CSRF token
@@ -1004,7 +1004,7 @@ paths:
       summary: Reset simulated vehicle locations
       tags:
       - vehicles
-  /api/admin/vehicles/simulator/start:
+  /api/transport/v1/admin/vehicles/simulator/start:
     post:
       consumes:
       - application/json
@@ -1053,7 +1053,7 @@ paths:
       summary: Start live bus simulator
       tags:
       - vehicles
-  /api/admin/vehicles/simulator/step:
+  /api/transport/v1/admin/vehicles/simulator/step:
     post:
       parameters:
       - description: Session-bound CSRF token
@@ -1095,7 +1095,7 @@ paths:
       summary: Advance simulated buses by one step
       tags:
       - vehicles
-  /api/admin/vehicles/simulator/stop:
+  /api/transport/v1/admin/vehicles/simulator/stop:
     post:
       parameters:
       - description: Session-bound CSRF token
@@ -1131,7 +1131,7 @@ paths:
       summary: Pause live bus simulator
       tags:
       - vehicles
-  /api/auth/login:
+  /api/transport/v1/auth/login:
     post:
       consumes:
       - application/json
@@ -1196,7 +1196,7 @@ paths:
       summary: Sign in and establish an opaque cookie session
       tags:
       - authentication
-  /api/auth/logout:
+  /api/transport/v1/auth/logout:
     post:
       description: Requires a trusted Origin. Expired or missing sessions are cleared
         idempotently.
@@ -1223,7 +1223,7 @@ paths:
       summary: Invalidate the local session and clear its cookie
       tags:
       - authentication
-  /api/auth/me:
+  /api/transport/v1/auth/me:
     get:
       produces:
       - application/json
@@ -1241,10 +1241,10 @@ paths:
       summary: Restore the authenticated session
       tags:
       - authentication
-  /api/departures:
+  /api/transport/v1/departures:
     get:
       responses: {}
-  /api/disruptions:
+  /api/transport/v1/disruptions:
     get:
       description: Lists transit disruptions filtered by optional status, type, route_id,
         stop_id, trip_id, vehicle_id, or source_service.
@@ -1364,7 +1364,7 @@ paths:
       summary: Create a transit disruption
       tags:
       - disruptions
-  /api/disruptions/{id}:
+  /api/transport/v1/disruptions/{id}:
     get:
       parameters:
       - description: Positive disruption ID
@@ -1464,7 +1464,7 @@ paths:
       summary: Update a transit disruption
       tags:
       - disruptions
-  /api/disruptions/active:
+  /api/transport/v1/disruptions/active:
     get:
       description: Returns only active transit disruptions (`status='active'`), optionally
         filtered by type, route_id, stop_id, or trip_id.
@@ -1512,7 +1512,7 @@ paths:
       summary: List active transit disruptions
       tags:
       - disruptions
-  /api/disruptions/affected:
+  /api/transport/v1/disruptions/affected:
     get:
       description: Aggregates all routes, stops, trips, vehicles, and route segments
         currently impacted by active disruptions along with their derived operational
@@ -1539,7 +1539,7 @@ paths:
       summary: Get affected transit services summary
       tags:
       - disruptions
-  /api/health:
+  /api/transport/v1/health:
     get:
       produces:
       - application/json
@@ -1553,7 +1553,7 @@ paths:
       summary: Check API health
       tags:
       - health
-  /api/integrations/emergency/incidents:
+  /api/transport/v1/integrations/emergency/incidents:
     post:
       consumes:
       - application/json
@@ -1617,7 +1617,7 @@ paths:
       summary: Ingest an emergency incident or road restriction
       tags:
       - integrations
-  /api/integrations/security/traffic-alerts:
+  /api/transport/v1/integrations/security/traffic-alerts:
     post:
       consumes:
       - application/json
@@ -1681,7 +1681,7 @@ paths:
       summary: Ingest a security or police traffic alert
       tags:
       - integrations
-  /api/integrations/service-status:
+  /api/transport/v1/integrations/service-status:
     get:
       description: Requires an authenticated administrator/enterprise session cookie.
         Returns overall network operational status, active disruptions, detours, and
@@ -1720,7 +1720,7 @@ paths:
       summary: Retrieve enterprise transit disruption and service status snapshot
       tags:
       - integrations
-  /api/integrations/utilities/notices:
+  /api/transport/v1/integrations/utilities/notices:
     post:
       consumes:
       - application/json
@@ -1784,7 +1784,7 @@ paths:
       summary: Ingest a utilities road closure or construction notice
       tags:
       - integrations
-  /api/journeys:
+  /api/transport/v1/journeys:
     get:
       description: Accepts origin (origin_stop_id and/or origin) and destination (destination_stop_id
         and/or destination). Returns direct, multi-transfer (up to 3 transfers), and
@@ -1868,7 +1868,122 @@ paths:
       summary: Search transit journeys between two locations
       tags:
       - schedules
-  /api/routes:
+  /api/transport/v1/road-closures:
+    get:
+      description: Lists road closure disruptions (`type='road_closure'`) filtered
+        by optional status, route_id, stop_id, trip_id, vehicle_id, or source_service.
+      parameters:
+      - description: Disruption lifecycle status (scheduled, active, resolved)
+        in: query
+        name: status
+        type: string
+      - description: Positive route ID
+        in: query
+        minimum: 1
+        name: route_id
+        type: integer
+      - description: Positive stop ID
+        in: query
+        minimum: 1
+        name: stop_id
+        type: integer
+      - description: Positive trip ID
+        in: query
+        minimum: 1
+        name: trip_id
+        type: integer
+      - description: Positive vehicle ID
+        in: query
+        minimum: 1
+        name: vehicle_id
+        type: integer
+      - description: Originating service identifier
+        in: query
+        name: source_service
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/disruptions.DisruptionResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List road closures
+      tags:
+      - road-closures
+    post:
+      consumes:
+      - application/json
+      description: Requires an administrator session cookie, trusted Origin, and X-CSRF-Token.
+        Creates a road closure disruption and links affected routes, stops, trips,
+        vehicles, and segments.
+      parameters:
+      - description: Session-bound CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: Road closure creation payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.CreateDisruptionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a road closure
+      tags:
+      - road-closures
+  /api/transport/v1/routes:
     get:
       produces:
       - application/json
@@ -1945,7 +2060,7 @@ paths:
       summary: Create a route
       tags:
       - routes
-  /api/routes/{id}:
+  /api/transport/v1/routes/{id}:
     delete:
       description: Requires an administrator session cookie, trusted Origin, and the
         CSRF token from login or /auth/me.
@@ -2104,7 +2219,7 @@ paths:
       summary: Update route fields
       tags:
       - routes
-  /api/routes/{id}/schedule:
+  /api/transport/v1/routes/{id}/schedule:
     get:
       parameters:
       - description: Positive route ID
@@ -2147,7 +2262,7 @@ paths:
       summary: Get a route timetable
       tags:
       - schedules
-  /api/routes/{id}/shape:
+  /api/transport/v1/routes/{id}/shape:
     get:
       parameters:
       - description: Positive route ID
@@ -2184,7 +2299,7 @@ paths:
       summary: Get route polyline geometry for map rendering
       tags:
       - vehicles
-  /api/routes/{id}/status:
+  /api/transport/v1/routes/{id}/status:
     get:
       parameters:
       - description: Positive route ID
@@ -2221,7 +2336,7 @@ paths:
       summary: Get route operational status
       tags:
       - disruptions
-  /api/routes/{id}/vehicles:
+  /api/transport/v1/routes/{id}/vehicles:
     get:
       parameters:
       - description: Positive route ID
@@ -2277,7 +2392,7 @@ paths:
       summary: List active vehicles for a route
       tags:
       - vehicles
-  /api/routes/{routeID}/departures:
+  /api/transport/v1/routes/{routeID}/departures:
     get:
       parameters:
       - description: Positive resource ID
@@ -2287,7 +2402,7 @@ paths:
         required: true
         type: integer
       responses: {}
-  /api/service-status:
+  /api/transport/v1/service-status:
     get:
       description: Returns overall network operational status (normal or disrupted),
         active disruptions, active detours, and affected routes, stops, trips, vehicles,
@@ -2314,7 +2429,7 @@ paths:
       summary: Get overall transit service status
       tags:
       - disruptions
-  /api/stops:
+  /api/transport/v1/stops:
     get:
       parameters:
       - description: Case-insensitive stop name filter
@@ -2352,7 +2467,7 @@ paths:
       summary: Search or list active stops
       tags:
       - schedules
-  /api/stops/{id}:
+  /api/transport/v1/stops/{id}:
     get:
       description: Filters combine with AND. Path IDs fix their filter; conflicting
         query IDs are rejected. Departure windows are [from, until), at most 24 hours.
@@ -2422,7 +2537,7 @@ paths:
       summary: Get stop details and upcoming departures
       tags:
       - schedules
-  /api/stops/{id}/arrivals:
+  /api/transport/v1/stops/{id}/arrivals:
     get:
       description: Returns estimated arrival times for active vehicles on routes serving
         the requested stop (optionally filtered by route_id) that have recent location
@@ -2470,7 +2585,7 @@ paths:
       summary: Get estimated bus arrivals at a stop
       tags:
       - vehicles
-  /api/stops/{id}/status:
+  /api/transport/v1/stops/{id}/status:
     get:
       parameters:
       - description: Positive stop ID
@@ -2507,7 +2622,7 @@ paths:
       summary: Get stop operational status
       tags:
       - disruptions
-  /api/stops/{stopID}/departures:
+  /api/transport/v1/stops/{stopID}/departures:
     get:
       parameters:
       - description: Positive resource ID
@@ -2517,7 +2632,7 @@ paths:
         required: true
         type: integer
       responses: {}
-  /api/trips/{id}/arrivals:
+  /api/transport/v1/trips/{id}/arrivals:
     get:
       description: Returns estimated arrival times for upcoming stops of an active
         trip that has recent vehicle location data, preserving scheduled arrival times.
@@ -2560,7 +2675,7 @@ paths:
       summary: Get estimated bus arrivals for a trip
       tags:
       - vehicles
-  /api/trips/{id}/status:
+  /api/transport/v1/trips/{id}/status:
     get:
       parameters:
       - description: Positive trip ID
@@ -2597,7 +2712,7 @@ paths:
       summary: Get trip operational status
       tags:
       - disruptions
-  /api/trips/{id}/vehicles:
+  /api/transport/v1/trips/{id}/vehicles:
     get:
       parameters:
       - description: Positive trip ID
@@ -2653,7 +2768,7 @@ paths:
       summary: List active vehicles for a trip
       tags:
       - vehicles
-  /api/trips/{tripID}/departures:
+  /api/transport/v1/trips/{tripID}/departures:
     get:
       parameters:
       - description: Positive resource ID
@@ -2663,7 +2778,7 @@ paths:
         required: true
         type: integer
       responses: {}
-  /api/vehicles:
+  /api/transport/v1/vehicles:
     get:
       description: Filters active non-retired vehicles reported within max_age_seconds
         (default 900s) by optional route_id, route_number, or trip_id.
@@ -2719,7 +2834,7 @@ paths:
       summary: List active vehicles
       tags:
       - vehicles
-  /api/vehicles/locations:
+  /api/transport/v1/vehicles/locations:
     post:
       consumes:
       - application/json
@@ -2788,7 +2903,7 @@ paths:
       summary: Submit a vehicle location update
       tags:
       - vehicles
-  /api/vehicles/simulator:
+  /api/transport/v1/vehicles/simulator:
     get:
       produces:
       - application/json

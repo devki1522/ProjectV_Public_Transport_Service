@@ -10,6 +10,9 @@ import { AdminVehiclesPage } from './pages/AdminVehiclesPage.jsx'
 import { LoginPage } from './pages/LoginPage.jsx'
 import { UnauthorizedPage } from './pages/UnauthorizedPage.jsx'
 import './App.css'
+import './resident.css'
+import './transit-tokens.css'
+import './features/live/primary.css'
 
 function AppRoutes() {
   const { pathname } = useRouter()

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
@@ -73,7 +74,7 @@ func NewDisruptionHandlerWithAudit(service DisruptionService, audit *slog.Logger
 // @Success 200 {array} disruptions.DisruptionResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions [get]
+// @Router /api/transport/v1/disruptions [get]
 func (h *DisruptionHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -108,7 +109,7 @@ func (h *DisruptionHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} disruptions.DisruptionResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions/active [get]
+// @Router /api/transport/v1/disruptions/active [get]
 func (h *DisruptionHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -139,7 +140,7 @@ func (h *DisruptionHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} disruptions.AffectedServicesSummary
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions/affected [get]
+// @Router /api/transport/v1/disruptions/affected [get]
 func (h *DisruptionHandler) AffectedServices(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -167,7 +168,7 @@ func (h *DisruptionHandler) AffectedServices(w http.ResponseWriter, r *http.Requ
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions/{id} [get]
+// @Router /api/transport/v1/disruptions/{id} [get]
 func (h *DisruptionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -198,7 +199,7 @@ func (h *DisruptionHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} disruptions.ServiceStatusResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/service-status [get]
+// @Router /api/transport/v1/service-status [get]
 func (h *DisruptionHandler) ServiceStatus(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -227,7 +228,7 @@ func (h *DisruptionHandler) ServiceStatus(w http.ResponseWriter, r *http.Request
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/integrations/service-status [get]
+// @Router /api/transport/v1/integrations/service-status [get]
 func (h *DisruptionHandler) EnterpriseServiceStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -259,7 +260,7 @@ func (h *DisruptionHandler) EnterpriseServiceStatus(w http.ResponseWriter, r *ht
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/routes/{id}/status [get]
+// @Router /api/transport/v1/routes/{id}/status [get]
 func (h *DisruptionHandler) RouteStatus(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -291,7 +292,7 @@ func (h *DisruptionHandler) RouteStatus(w http.ResponseWriter, r *http.Request) 
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/stops/{id}/status [get]
+// @Router /api/transport/v1/stops/{id}/status [get]
 func (h *DisruptionHandler) StopStatus(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -323,7 +324,7 @@ func (h *DisruptionHandler) StopStatus(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/trips/{id}/status [get]
+// @Router /api/transport/v1/trips/{id}/status [get]
 func (h *DisruptionHandler) TripStatus(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
@@ -360,7 +361,7 @@ func (h *DisruptionHandler) TripStatus(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions [post]
+// @Router /api/transport/v1/disruptions [post]
 func (h *DisruptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -382,7 +383,98 @@ func (h *DisruptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.auditDisruptionEvent(r.Context(), "create", "disruption", created.ID, created.SourceService, "success")
-	w.Header().Set("Location", "/api/disruptions/"+strconv.Itoa(created.ID))
+	w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(created.ID))
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// ListRoadClosures returns road closures (`type='road_closure'`) matching optional filter criteria.
+//
+// @Summary List road closures
+// @Description Lists road closure disruptions (`type='road_closure'`) filtered by optional status, route_id, stop_id, trip_id, vehicle_id, or source_service.
+// @Tags road-closures
+// @Produce json
+// @Param status query string false "Disruption lifecycle status (scheduled, active, resolved)"
+// @Param route_id query int false "Positive route ID" minimum(1)
+// @Param stop_id query int false "Positive stop ID" minimum(1)
+// @Param trip_id query int false "Positive trip ID" minimum(1)
+// @Param vehicle_id query int false "Positive vehicle ID" minimum(1)
+// @Param source_service query string false "Originating service identifier"
+// @Success 200 {array} disruptions.DisruptionResponse
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/transport/v1/road-closures [get]
+func (h *DisruptionHandler) ListRoadClosures(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
+		return
+	}
+	filter, err := parseDisruptionListQuery(r, true)
+	if err != nil {
+		writeDisruptionError(w, err)
+		return
+	}
+	if filter.Type != "" && filter.Type != disruptions.TypeRoadClosure {
+		writeDisruptionError(w, &disruptions.InvalidInput{Message: "type must be road_closure for road-closures endpoint"})
+		return
+	}
+	filter.Type = disruptions.TypeRoadClosure
+	list, err := h.service.List(r.Context(), filter)
+	if err != nil {
+		writeDisruptionError(w, err)
+		return
+	}
+	if list == nil {
+		list = []disruptions.DisruptionResponse{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// CreateRoadClosure validates and creates a new road closure disruption (`type='road_closure'`).
+//
+// @Summary Create a road closure
+// @Description Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.
+// @Tags road-closures
+// @Accept json
+// @Produce json
+// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Param body body disruptions.CreateDisruptionInput true "Road closure creation payload"
+// @Success 201 {object} disruptions.DisruptionResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/transport/v1/road-closures [post]
+func (h *DisruptionHandler) CreateRoadClosure(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
+		return
+	}
+
+	var input disruptions.CreateDisruptionInput
+	if !decodeStrictJSONObject(w, r, &input) {
+		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, "invalid_request")
+		return
+	}
+
+	if strings.TrimSpace(input.Type) == "" {
+		input.Type = disruptions.TypeRoadClosure
+	} else if input.Type != disruptions.TypeRoadClosure {
+		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, "validation_error")
+		writeDisruptionError(w, &disruptions.InvalidInput{Message: "type must be road_closure for road-closures endpoint"})
+		return
+	}
+
+	created, err := h.service.Create(r.Context(), input, disruptions.SourceTransitAdmin)
+	if err != nil {
+		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, disruptionAuditOutcome(err))
+		writeDisruptionError(w, err)
+		return
+	}
+
+	h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", created.ID, created.SourceService, "success")
+	w.Header().Set("Location", apiBaseFromRequest(r)+"/road-closures/"+strconv.Itoa(created.ID))
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -402,7 +494,7 @@ func (h *DisruptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/disruptions/{id} [patch]
+// @Router /api/transport/v1/disruptions/{id} [patch]
 func (h *DisruptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -459,7 +551,7 @@ func (h *DisruptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/integrations/utilities/notices [post]
+// @Router /api/transport/v1/integrations/utilities/notices [post]
 func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -483,7 +575,7 @@ func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http
 	status := http.StatusOK
 	if result.Created {
 		status = http.StatusCreated
-		w.Header().Set("Location", "/api/disruptions/"+strconv.Itoa(result.Disruption.ID))
+		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
 	}
 	h.auditDisruptionEvent(r.Context(), "ingest_utilities_notice", "disruption", result.Disruption.ID, disruptions.SourceUtilities, "success")
 	writeJSON(w, status, result)
@@ -505,7 +597,7 @@ func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/integrations/emergency/incidents [post]
+// @Router /api/transport/v1/integrations/emergency/incidents [post]
 func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -529,7 +621,7 @@ func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *ht
 	status := http.StatusOK
 	if result.Created {
 		status = http.StatusCreated
-		w.Header().Set("Location", "/api/disruptions/"+strconv.Itoa(result.Disruption.ID))
+		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
 	}
 	h.auditDisruptionEvent(r.Context(), "ingest_emergency_incident", "disruption", result.Disruption.ID, disruptions.SourceEmergency, "success")
 	writeJSON(w, status, result)
@@ -551,7 +643,7 @@ func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *ht
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/integrations/security/traffic-alerts [post]
+// @Router /api/transport/v1/integrations/security/traffic-alerts [post]
 func (h *DisruptionHandler) IngestSecurityTrafficAlert(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.service == nil {
@@ -575,7 +667,7 @@ func (h *DisruptionHandler) IngestSecurityTrafficAlert(w http.ResponseWriter, r 
 	status := http.StatusOK
 	if result.Created {
 		status = http.StatusCreated
-		w.Header().Set("Location", "/api/disruptions/"+strconv.Itoa(result.Disruption.ID))
+		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
 	}
 	h.auditDisruptionEvent(r.Context(), "ingest_security_traffic_alert", "disruption", result.Disruption.ID, disruptions.SourceSecurity, "success")
 	writeJSON(w, status, result)
@@ -715,4 +807,18 @@ func writeDisruptionError(w http.ResponseWriter, err error) {
 		log.Printf("disruption operation failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "unable to complete disruption operation"})
 	}
+}
+
+func apiBaseFromRequest(r *http.Request) string {
+	const prefix = "/api/transport/"
+	if r != nil && strings.HasPrefix(r.URL.Path, prefix) {
+		rest := strings.TrimPrefix(r.URL.Path, prefix)
+		if idx := strings.IndexByte(rest, '/'); idx > 0 {
+			return prefix + rest[:idx]
+		}
+		if rest != "" {
+			return prefix + rest
+		}
+	}
+	return "/api/transport/v1"
 }

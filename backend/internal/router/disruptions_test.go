@@ -157,8 +157,10 @@ func newTestDisruptionEnv(t *testing.T, svc handlers.DisruptionService) (*testAu
 	handler := handlers.NewDisruptionHandlerWithAudit(svc, auditLogger)
 
 	mux := chi.NewRouter()
-	router.RegisterAuthRoutes(mux, authHandler, authMW)
-	router.RegisterDisruptionRoutes(mux, handler, authMW, csrf, "TransitAdministrator")
+	mux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterAuthRoutes(api, authHandler, authMW)
+		router.RegisterDisruptionRoutes(api, handler, authMW, csrf, "TransitAdministrator")
+	})
 
 	fakeSvc, _ := svc.(*fakeDisruptionService)
 	return &testAuthEnv{
@@ -242,7 +244,7 @@ func TestDisruptionPublicReadEndpoints(t *testing.T) {
 		DisruptionHandler: handlers.NewDisruptionHandler(svc),
 	})
 
-	rec := authedRequest(fullMux, http.MethodGet, "/api/disruptions?status=active&type=detour&route_id=7&stop_id=3&trip_id=100&vehicle_id=55&source_service=utilities", "", nil, "")
+	rec := authedRequest(fullMux, http.MethodGet, "/api/transport/v1/disruptions?status=active&type=detour&route_id=7&stop_id=3&trip_id=100&vehicle_id=55&source_service=utilities", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "list" || svc.listFilter.RouteID != 7 || svc.listFilter.StopID != 3 || svc.listFilter.SourceService != "utilities" {
 		t.Fatalf("GET /api/disruptions failed: code=%d filter=%+v body=%s", rec.Code, svc.listFilter, rec.Body.String())
 	}
@@ -254,22 +256,22 @@ func TestDisruptionPublicReadEndpoints(t *testing.T) {
 		t.Fatalf("unexpected decoded disruptions list: %+v", gotList)
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/disruptions/active?type=detour&route_id=7&stop_id=3&trip_id=100", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/disruptions/active?type=detour&route_id=7&stop_id=3&trip_id=100", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "list_active" || svc.listFilter.RouteID != 7 {
 		t.Fatalf("GET /api/disruptions/active failed: code=%d filter=%+v body=%s", rec.Code, svc.listFilter, rec.Body.String())
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/disruptions/affected", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/disruptions/affected", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "affected" {
 		t.Fatalf("GET /api/disruptions/affected failed: code=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/disruptions/12", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/disruptions/12", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "get" || svc.getID != 12 {
 		t.Fatalf("GET /api/disruptions/12 failed: code=%d id=%d body=%s", rec.Code, svc.getID, rec.Body.String())
 	}
 
-	rec = authedRequest(fullMux, http.MethodGet, "/api/service-status", "", nil, "")
+	rec = authedRequest(fullMux, http.MethodGet, "/api/transport/v1/service-status", "", nil, "")
 	if rec.Code != http.StatusOK || svc.called != "service_status" {
 		t.Fatalf("GET /api/service-status failed: code=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -279,9 +281,9 @@ func TestDisruptionPublicReadEndpoints(t *testing.T) {
 		called string
 		id     int
 	}{
-		{"/api/routes/7/status", "route_status", 7},
-		{"/api/stops/3/status", "stop_status", 3},
-		{"/api/trips/100/status", "trip_status", 100},
+		{"/api/transport/v1/routes/7/status", "route_status", 7},
+		{"/api/transport/v1/stops/3/status", "stop_status", 3},
+		{"/api/transport/v1/trips/100/status", "trip_status", 100},
 	} {
 		rec = authedRequest(fullMux, http.MethodGet, ep.path, "", nil, "")
 		if rec.Code != http.StatusOK || svc.called != ep.called || svc.entityID != ep.id {
@@ -293,10 +295,10 @@ func TestDisruptionPublicReadEndpoints(t *testing.T) {
 	svc.getErr = disruptions.ErrNotFound
 	svc.entityStatusErr = disruptions.ErrNotFound
 	for _, notFoundPath := range []string{
-		"/api/disruptions/999",
-		"/api/routes/999/status",
-		"/api/stops/999/status",
-		"/api/trips/999/status",
+		"/api/transport/v1/disruptions/999",
+		"/api/transport/v1/routes/999/status",
+		"/api/transport/v1/stops/999/status",
+		"/api/transport/v1/trips/999/status",
 	} {
 		nfRec := authedRequest(fullMux, http.MethodGet, notFoundPath, "", nil, "")
 		if nfRec.Code != http.StatusNotFound {
@@ -308,21 +310,21 @@ func TestDisruptionPublicReadEndpoints(t *testing.T) {
 
 	// Invalid IDs and unexpected/disallowed query parameters return 400.
 	for _, badPath := range []string{
-		"/api/disruptions?bogus=1",
-		"/api/disruptions?route_id=0",
-		"/api/disruptions?route_id=abc",
-		"/api/disruptions?status=",
-		"/api/disruptions/active?status=resolved",
-		"/api/disruptions/active?bogus=1",
-		"/api/disruptions/affected?bogus=1",
-		"/api/disruptions/0",
-		"/api/disruptions/abc",
-		"/api/disruptions/12?bogus=1",
-		"/api/service-status?bogus=1",
-		"/api/routes/0/status",
-		"/api/routes/7/status?bogus=1",
-		"/api/stops/0/status",
-		"/api/trips/0/status",
+		"/api/transport/v1/disruptions?bogus=1",
+		"/api/transport/v1/disruptions?route_id=0",
+		"/api/transport/v1/disruptions?route_id=abc",
+		"/api/transport/v1/disruptions?status=",
+		"/api/transport/v1/disruptions/active?status=resolved",
+		"/api/transport/v1/disruptions/active?bogus=1",
+		"/api/transport/v1/disruptions/affected?bogus=1",
+		"/api/transport/v1/disruptions/0",
+		"/api/transport/v1/disruptions/abc",
+		"/api/transport/v1/disruptions/12?bogus=1",
+		"/api/transport/v1/service-status?bogus=1",
+		"/api/transport/v1/routes/0/status",
+		"/api/transport/v1/routes/7/status?bogus=1",
+		"/api/transport/v1/stops/0/status",
+		"/api/transport/v1/trips/0/status",
 	} {
 		badRec := authedRequest(fullMux, http.MethodGet, badPath, "", nil, "")
 		if badRec.Code != http.StatusBadRequest {
@@ -341,12 +343,12 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		method string
 		path   string
 	}{
-		{http.MethodPost, "/api/disruptions"},
-		{http.MethodPatch, "/api/disruptions/1"},
-		{http.MethodPost, "/api/integrations/utilities/notices"},
-		{http.MethodPost, "/api/integrations/emergency/incidents"},
-		{http.MethodPost, "/api/integrations/security/traffic-alerts"},
-		{http.MethodGet, "/api/integrations/service-status"},
+		{http.MethodPost, "/api/transport/v1/disruptions"},
+		{http.MethodPatch, "/api/transport/v1/disruptions/1"},
+		{http.MethodPost, "/api/transport/v1/integrations/utilities/notices"},
+		{http.MethodPost, "/api/transport/v1/integrations/emergency/incidents"},
+		{http.MethodPost, "/api/transport/v1/integrations/security/traffic-alerts"},
+		{http.MethodGet, "/api/transport/v1/integrations/service-status"},
 	} {
 		rec := authedRequest(unconfiguredMux, tc.method, tc.path, `{}`, nil, "")
 		if rec.Code != http.StatusUnauthorized {
@@ -417,12 +419,12 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		path   string
 		body   string
 	}{
-		{http.MethodPost, "/api/disruptions", `{"type":"detour","title":"Detour"}`},
-		{http.MethodPatch, "/api/disruptions/42", `{"status":"resolved"}`},
-		{http.MethodPost, "/api/integrations/utilities/notices", `{"title":"Watermain Break"}`},
-		{http.MethodPost, "/api/integrations/emergency/incidents", `{"title":"Collision"}`},
-		{http.MethodPost, "/api/integrations/security/traffic-alerts", `{"title":"Police Closure"}`},
-		{http.MethodGet, "/api/integrations/service-status", ""},
+		{http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"Detour"}`},
+		{http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved"}`},
+		{http.MethodPost, "/api/transport/v1/integrations/utilities/notices", `{"title":"Watermain Break"}`},
+		{http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", `{"title":"Collision"}`},
+		{http.MethodPost, "/api/transport/v1/integrations/security/traffic-alerts", `{"title":"Police Closure"}`},
+		{http.MethodGet, "/api/transport/v1/integrations/service-status", ""},
 	} {
 		unauthRec := authedRequest(env.mux, tc.method, tc.path, tc.body, nil, "")
 		if unauthRec.Code != http.StatusUnauthorized {
@@ -441,19 +443,19 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 	}
 
 	// Enterprise service status GET works with admin cookie and no CSRF token.
-	entRec := authedRequest(env.mux, http.MethodGet, "/api/integrations/service-status", "", adminCookie, "")
+	entRec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/integrations/service-status", "", adminCookie, "")
 	if entRec.Code != http.StatusOK || svc.called != "service_status" {
 		t.Fatalf("GET /api/integrations/service-status failed: code=%d body=%s", entRec.Code, entRec.Body.String())
 	}
 
 	// Admin POST /api/disruptions -> 201 Created + Location header + audit event.
-	createRec := authedRequest(env.mux, http.MethodPost, "/api/disruptions", `{"type":"detour","title":"King Detour","route_ids":[7]}`, adminCookie, adminCSRF)
-	if createRec.Code != http.StatusCreated || createRec.Header().Get("Location") != "/api/disruptions/42" {
+	createRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"King Detour","route_ids":[7]}`, adminCookie, adminCSRF)
+	if createRec.Code != http.StatusCreated || createRec.Header().Get("Location") != "/api/transport/v1/disruptions/42" {
 		t.Fatalf("POST /api/disruptions failed: code=%d loc=%q body=%s", createRec.Code, createRec.Header().Get("Location"), createRec.Body.String())
 	}
 
 	// Admin PATCH /api/disruptions/42 with explicit null end_time -> 200 OK.
-	patchRec := authedRequest(env.mux, http.MethodPatch, "/api/disruptions/42", `{"status":"resolved","end_time":null}`, adminCookie, adminCSRF)
+	patchRec := authedRequest(env.mux, http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved","end_time":null}`, adminCookie, adminCSRF)
 	if patchRec.Code != http.StatusOK || svc.updateID != 42 || !svc.updateInput.EndTimeSet {
 		t.Fatalf("PATCH /api/disruptions/42 failed: code=%d input=%+v body=%s", patchRec.Code, svc.updateInput, patchRec.Body.String())
 	}
@@ -463,9 +465,9 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		path string
 		body string
 	}{
-		{"/api/integrations/utilities/notices", `{"external_id":"UTIL-101","notice_type":"road_closure","title":"Watermain Break","latitude":43.45,"longitude":-80.49,"radius_meters":400}`},
-		{"/api/integrations/emergency/incidents", `{"external_id":"EMG-202","incident_type":"emergency","severity":"high","title":"Major Collision"}`},
-		{"/api/integrations/security/traffic-alerts", `{"external_id":"SEC-303","alert_type":"traffic_restriction","title":"VIP Escort"}`},
+		{"/api/transport/v1/integrations/utilities/notices", `{"external_id":"UTIL-101","notice_type":"road_closure","title":"Watermain Break","latitude":43.45,"longitude":-80.49,"radius_meters":400}`},
+		{"/api/transport/v1/integrations/emergency/incidents", `{"external_id":"EMG-202","incident_type":"emergency","severity":"high","title":"Major Collision"}`},
+		{"/api/transport/v1/integrations/security/traffic-alerts", `{"external_id":"SEC-303","alert_type":"traffic_restriction","title":"VIP Escort"}`},
 	} {
 		svc.externalResult.Created = true
 		rec201 := authedRequest(env.mux, http.MethodPost, feed.path, feed.body, adminCookie, adminCSRF)
@@ -484,7 +486,7 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 	}
 
 	// Unknown JSON fields return 400; service errors map to 400/404/500 without leaking secrets.
-	badJSON := authedRequest(env.mux, http.MethodPost, "/api/disruptions", `{"unknown":1}`, adminCookie, adminCSRF)
+	badJSON := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/disruptions", `{"unknown":1}`, adminCookie, adminCSRF)
 	if badJSON.Code != http.StatusBadRequest {
 		t.Fatalf("unknown JSON field = %d, want 400", badJSON.Code)
 	}
@@ -498,9 +500,57 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		{errors.New("secret postgres failure"), http.StatusInternalServerError},
 	} {
 		svc.createErr = errCase.err
-		errRec := authedRequest(env.mux, http.MethodPost, "/api/disruptions", `{"type":"delay","title":"Test"}`, adminCookie, adminCSRF)
+		errRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/disruptions", `{"type":"delay","title":"Test"}`, adminCookie, adminCSRF)
 		if errRec.Code != errCase.status || strings.Contains(errRec.Body.String(), "secret") {
 			t.Fatalf("err=%v status=%d body=%s, want %d", errCase.err, errRec.Code, errRec.Body.String(), errCase.status)
 		}
+	}
+}
+
+func TestRoadClosuresGetAndPost(t *testing.T) {
+	svc := &fakeDisruptionService{
+		listResult: []disruptions.DisruptionResponse{{ID: 10, Type: disruptions.TypeRoadClosure, Title: "King St Closure", Status: "active"}},
+		createResult: disruptions.DisruptionResponse{
+			ID:     11,
+			Type:   disruptions.TypeRoadClosure,
+			Title:  "Weber St Closure",
+			Status: "active",
+		},
+	}
+	env, _ := newTestDisruptionEnv(t, svc)
+
+	getRec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/road-closures?status=active", "", nil, "")
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET /api/transport/v1/road-closures = %d, want 200: %s", getRec.Code, getRec.Body.String())
+	}
+	if svc.listFilter.Type != disruptions.TypeRoadClosure || svc.listFilter.Status != "active" {
+		t.Fatalf("unexpected filter: %+v", svc.listFilter)
+	}
+
+	badTypeGet := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/road-closures?type=delay", "", nil, "")
+	if badTypeGet.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/transport/v1/road-closures?type=delay = %d, want 400", badTypeGet.Code)
+	}
+
+	unauthPost := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Weber St Closure"}`, nil, "")
+	if unauthPost.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST /road-closures = %d, want 401", unauthPost.Code)
+	}
+
+	adminCookie, adminCSRF := loginAs(t, env.mux, "transit.admin", routerAdminPass)
+	postRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Weber St Closure","affected_area":"Weber St"}`, adminCookie, adminCSRF)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transport/v1/road-closures = %d, want 201: %s", postRec.Code, postRec.Body.String())
+	}
+	if svc.createInput.Type != disruptions.TypeRoadClosure {
+		t.Fatalf("expected type road_closure, got %q", svc.createInput.Type)
+	}
+	if loc := postRec.Header().Get("Location"); loc != "/api/transport/v1/road-closures/11" {
+		t.Fatalf("Location = %q, want /api/transport/v1/road-closures/11", loc)
+	}
+
+	badTypePost := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"type":"delay","title":"Not a closure"}`, adminCookie, adminCSRF)
+	if badTypePost.Code != http.StatusBadRequest {
+		t.Fatalf("POST /road-closures with non-road_closure type = %d, want 400", badTypePost.Code)
 	}
 }

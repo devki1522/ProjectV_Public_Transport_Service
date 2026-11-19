@@ -152,6 +152,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 	}
 
 	h := router.NewWithDependencies(db, router.Dependencies{
+		APIVersion:        cfg.Server.APIVersion,
 		Estimates:         estimates,
 		AuthHandler:       authHandler,
 		AuthMiddleware:    authMiddleware,

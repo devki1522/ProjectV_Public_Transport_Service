@@ -1,3 +1,5 @@
+import { apiPath } from './base.js'
+
 export class TransitApiError extends Error {
   constructor(message, status) {
     super(message)
@@ -9,7 +11,7 @@ export class TransitApiError extends Error {
 async function getJSON(path, signal) {
   let response
   try {
-    response = await fetch(path, { signal, headers: { Accept: 'application/json' } })
+    response = await fetch(apiPath(path), { signal, headers: { Accept: 'application/json' } })
   } catch (error) {
     if (error.name === 'AbortError') throw error
     throw new TransitApiError('Transit information is unavailable. Check your connection and try again.')
@@ -33,11 +35,11 @@ function requireArray(data) {
 }
 
 export async function getRoutes(signal) {
-  return requireArray(await getJSON('/api/routes', signal)).filter((route) => route.is_active)
+  return requireArray(await getJSON('/routes', signal)).filter((route) => route.is_active)
 }
 
 export async function getTimetable(routeId, date, signal) {
-  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/schedule?${new URLSearchParams({ date })}`, signal)
+  const data = await getJSON(`/routes/${encodeURIComponent(routeId)}/schedule?${new URLSearchParams({ date })}`, signal)
   if (!data || !Array.isArray(data.trips)) throw new TransitApiError('The timetable is unavailable. Please try again.')
   return data
 }
@@ -50,13 +52,13 @@ export async function getDepartures({ routeId, stopId, tripId, hours = 2 }, sign
   })
   if (stopId) params.set('stop_id', stopId)
   if (tripId) params.set('trip_id', tripId)
-  return requireArray(await getJSON(`/api/departures?${params}`, signal))
+  return requireArray(await getJSON(`/departures?${params}`, signal))
 }
 
 export async function getStopsCatalog(query = '', signal) {
   const params = new URLSearchParams({ limit: '100' })
   if (typeof query === 'string' && query.trim()) params.set('q', query.trim())
-  return requireArray(await getJSON(`/api/stops?${params}`, signal))
+  return requireArray(await getJSON(`/stops?${params}`, signal))
 }
 
 export async function getJourneys({
@@ -81,7 +83,7 @@ export async function getJourneys({
   else if (origin?.trim()) params.set('origin', origin.trim())
   if (destinationStopId) params.set('destination_stop_id', destinationStopId)
   else if (destination?.trim()) params.set('destination', destination.trim())
-  const data = await getJSON(`/api/journeys?${params}`, signal)
+  const data = await getJSON(`/journeys?${params}`, signal)
   if (!data || !Array.isArray(data.itineraries)) {
     throw new TransitApiError('Journey results are unavailable. Please try again.')
   }
@@ -95,11 +97,11 @@ export async function getActiveVehicles({ routeId, routeNumber, tripId, maxAgeSe
   if (tripId) params.set('trip_id', String(tripId))
   if (maxAgeSeconds) params.set('max_age_seconds', String(maxAgeSeconds))
   const query = params.toString()
-  return requireArray(await getJSON(query ? `/api/vehicles?${query}` : '/api/vehicles', signal))
+  return requireArray(await getJSON(query ? `/vehicles?${query}` : '/vehicles', signal))
 }
 
 export async function getRouteShape(routeId, signal) {
-  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/shape`, signal)
+  const data = await getJSON(`/routes/${encodeURIComponent(routeId)}/shape`, signal)
   if (!data || !Array.isArray(data.coordinates)) {
     throw new TransitApiError('Route map path is unavailable. Please try again.')
   }
@@ -107,7 +109,7 @@ export async function getRouteShape(routeId, signal) {
 }
 
 export async function getSimulatorStatus(signal) {
-  const data = await getJSON('/api/vehicles/simulator', signal)
+  const data = await getJSON('/vehicles/simulator', signal)
   if (!data || typeof data.running !== 'boolean') {
     throw new TransitApiError('Simulator status is unavailable. Please try again.')
   }
@@ -115,14 +117,14 @@ export async function getSimulatorStatus(signal) {
 }
 
 export async function getTripArrivals(tripId, signal) {
-  return requireArray(await getJSON(`/api/trips/${encodeURIComponent(tripId)}/arrivals`, signal))
+  return requireArray(await getJSON(`/trips/${encodeURIComponent(tripId)}/arrivals`, signal))
 }
 
 export async function getStopArrivals(stopId, routeId, signal) {
   const params = new URLSearchParams()
   if (routeId) params.set('route_id', String(routeId))
   const query = params.toString()
-  const path = `/api/stops/${encodeURIComponent(stopId)}/arrivals${query ? `?${query}` : ''}`
+  const path = `/stops/${encodeURIComponent(stopId)}/arrivals${query ? `?${query}` : ''}`
   return requireArray(await getJSON(path, signal))
 }
 
@@ -132,12 +134,12 @@ export async function getActiveDisruptions({ type, routeId, stopId } = {}, signa
   if (routeId) params.set('route_id', String(routeId))
   if (stopId) params.set('stop_id', String(stopId))
   const query = params.toString()
-  const path = query ? `/api/disruptions/active?${query}` : '/api/disruptions/active'
+  const path = query ? `/disruptions/active?${query}` : '/disruptions/active'
   return requireArray(await getJSON(path, signal))
 }
 
 export async function getServiceStatus(signal) {
-  const data = await getJSON('/api/service-status', signal)
+  const data = await getJSON('/service-status', signal)
   if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.active_disruptions)) {
     throw new TransitApiError('Service status is unavailable. Please try again.')
   }
@@ -145,7 +147,7 @@ export async function getServiceStatus(signal) {
 }
 
 export async function getAffectedServices(signal) {
-  const data = await getJSON('/api/disruptions/affected', signal)
+  const data = await getJSON('/disruptions/affected', signal)
   if (
     !data ||
     typeof data !== 'object' ||
@@ -159,7 +161,7 @@ export async function getAffectedServices(signal) {
 }
 
 export async function getRouteStatus(routeId, signal) {
-  const data = await getJSON(`/api/routes/${encodeURIComponent(routeId)}/status`, signal)
+  const data = await getJSON(`/routes/${encodeURIComponent(routeId)}/status`, signal)
   if (
     !data ||
     typeof data !== 'object' ||
