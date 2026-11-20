@@ -729,20 +729,21 @@ it('opens with the map first and draws the full selected route in schedules', as
 })
 
 
-it('persists a theme choice across reloads and exposes a system appearance option', async () => {
+it('persists a theme choice across reloads', async () => {
   mockTransit()
   const user = userEvent.setup()
   const mounted = render(<App />)
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Appearance' }), 'dark')
+  const toggleBtn = screen.getByRole('button', { name: /switch to dark mode/i })
+  await user.click(toggleBtn)
   expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
   expect(JSON.parse(localStorage.getItem('transit-theme'))).toBe('dark')
   mounted.unmount()
   render(<App />)
-  expect(screen.getByRole('combobox', { name: 'Appearance' })).toHaveValue('dark')
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Appearance' }), 'light')
+  const toggleLightBtn = screen.getByRole('button', { name: /switch to light mode/i })
+  expect(toggleLightBtn).toBeInTheDocument()
+  await user.click(toggleLightBtn)
   expect(document.documentElement).toHaveAttribute('data-theme', 'light')
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Appearance' }), 'system')
-  expect(screen.getByRole('combobox', { name: 'Appearance' })).toHaveValue('system')
+  expect(JSON.parse(localStorage.getItem('transit-theme'))).toBe('light')
 })
 
 it('saves stops locally, restores them and loads their estimated arrivals without an account', async () => {

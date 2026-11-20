@@ -5,8 +5,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: true,
     proxy: {
       '/api': process.env.API_PROXY_TARGET || 'http://backend:8080',
+      '/swagger': process.env.API_PROXY_TARGET || 'http://backend:8080',
     },
   },
   test: {

@@ -9,8 +9,9 @@
 .resident-nav-tab[aria-selected='true'] { background: transparent; color: var(--ink); border-color: var(--accent); }
 .header-tools { display: flex; align-items: center; gap: var(--space-4); }
 .header-location { font-size: var(--text-caption); }
-.theme-control { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); }
-.theme-control select { width: auto; min-height: 40px; font-size: var(--text-caption); border-color: var(--line); }
+.theme-toggle-btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: 6px 12px; min-height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--control-radius); color: var(--ink); cursor: pointer; font-size: var(--text-caption); font-weight: 500; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.theme-toggle-btn:hover { background: var(--surface-subtle); border-color: var(--line-strong, var(--line)); }
+.theme-toggle-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .resident-shell .page-heading { padding-block: var(--space-6) var(--space-4); align-items: center; }
 .resident-shell .page-heading h1 { font-size: var(--text-title); font-weight: 700; letter-spacing: -.025em; }
 .resident-shell .page-heading p { margin-top: var(--space-1); font-size: var(--text-small); }
@@ -204,9 +205,8 @@
   .resident-shell .resident-header { min-height: 72px; flex-wrap: nowrap; padding-block: var(--space-3); }
   .resident-shell .brand { font-size: var(--text-small); }
   .resident-shell .brand-region { font-size: var(--text-caption); }
-  .resident-shell .theme-control { gap: var(--space-1); }
-  .resident-shell .theme-control select { min-height: 44px; padding-inline: 8px 24px; font-size: 1rem; max-width: 112px; }
-  .resident-shell .theme-control > svg { display: none; }
+  .resident-shell .theme-toggle-btn { min-height: 38px; padding: 6px 10px; }
+  .resident-shell .theme-toggle-label { display: none; }
   .resident-nav { position: fixed; inset: auto 0 0; z-index: 900; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 8px 8px max(8px, env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
   .resident-nav-tab { flex-direction: column; gap: var(--space-1); min-height: 60px; padding: 8px 4px; border: 0; border-radius: var(--control-radius); font-size: .75rem; line-height: 1.25; position: relative; }
   .resident-nav-tab[aria-selected='true'] { background: var(--accent-soft); color: var(--accent-dark); }
