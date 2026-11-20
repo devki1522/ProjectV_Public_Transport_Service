@@ -27,7 +27,7 @@ services:
       - AUTH_REQUIRED_ROLE=TransitAdministrator
       - AUTH_SESSION_COOKIE=transit_session
       - AUTH_COOKIE_SECURE=false
-      - AUTH_TRUSTED_ORIGINS=http://localhost:3000,https://app-public-transport-grt.azurewebsites.net,http://app-public-transport-grt.azurewebsites.net
+      - AUTH_TRUSTED_ORIGINS=http://localhost:3000,https://app-public-transport-grt.azurewebsites.net,http://app-public-transport-grt.azurewebsites.net,https://rg-public-transport.azurewebsites.net,http://rg-public-transport.azurewebsites.net
       - AUTH_TRUSTED_PROXY=true
       - MOCK_JWT_ISSUER=transit-dev
       - MOCK_JWT_AUDIENCE=transit-api

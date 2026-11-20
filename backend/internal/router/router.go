@@ -56,6 +56,9 @@ func APIBasePath(version string) string {
 // protected route mutations, disruption and external incident endpoints, and administrator endpoints.
 func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 	r := chi.NewRouter()
+	r.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/index.html", http.StatusMovedPermanently)
+	})
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("./doc.json")))
 
 	r.Route(APIBasePath(deps.APIVersion), func(api chi.Router) {
