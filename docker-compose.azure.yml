@@ -17,25 +17,29 @@ services:
       - "8080"
     environment:
       - PORT=8080
-      - API_VERSION=v1
       - DATABASE_URL=postgres://projectv:local_dev_password@database:5432/public_transport?sslmode=disable
       - DB_MAX_IDLE_CONNS=5
       - DB_MAX_OPEN_CONNS=20
       - DB_CONN_MAX_LIFETIME=1h
+      - API_VERSION=v1
       - APP_ENV=development
-      - AUTH_PROVIDER=mock
+      - AUTH_PROVIDER=registration
       - AUTH_REQUIRED_ROLE=TransitAdministrator
+      - AUTH_ADMIN_WHITELIST=transit
       - AUTH_SESSION_COOKIE=transit_session
       - AUTH_COOKIE_SECURE=false
-      - AUTH_TRUSTED_ORIGINS=http://localhost:3000,https://app-public-transport-grt.azurewebsites.net,http://app-public-transport-grt.azurewebsites.net,https://rg-public-transport.azurewebsites.net,http://rg-public-transport.azurewebsites.net
+      - AUTH_TRUSTED_ORIGINS=http://localhost:3000,https://rg-public-transport.azurewebsites.net
       - AUTH_TRUSTED_PROXY=true
-      - MOCK_JWT_ISSUER=transit-dev
-      - MOCK_JWT_AUDIENCE=transit-api
-      - MOCK_JWT_SECRET=c29tZXJhbmRvbXNlY3JldGtleWZvcmF6dXJlZGVwbG95bWVudDEyMzQ1Ng
-      - MOCK_ADMIN_PASSWORD=AdminPassword2026!
+      - REGISTRATION_TRUST_HTTPS=true
+      - REGISTRATION_SERVICE_URL=https://cm-rs-api-gbgrffa8h5e5fdcy.canadaeast-01.azurewebsites.net/
+      - REGISTRATION_JWT_ISSUER=CmRegistrationService
+      - REGISTRATION_JWT_AUDIENCE=CmRegistrationClients
+      - REGISTRATION_JWT_SECRET=
       - SIMULATE_VEHICLES=true
-      - SIMULATE_VEHICLES_COUNT=10
+      - SIMULATE_VEHICLES_COUNT=24
       - SIMULATE_TICK_INTERVAL=3s
+      - STAFF_HR_SERVICE_URL=https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net
+      - STAFF_HR_DEPARTMENT_CODE=PTR
     depends_on:
       - database
     restart: always
