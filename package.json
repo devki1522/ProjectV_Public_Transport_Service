@@ -9,7 +9,12 @@
     "lint:go:format": "node scripts/check-go.mjs format",
     "lint:go:vet": "node scripts/check-go.mjs vet",
     "docs:build": "node scripts/build-backend-docs.mjs",
-    "test": "node scripts/check-go.mjs test",
+    "test": "node scripts/test-all.mjs",
+    "test:all": "node scripts/test-all.mjs",
+    "test:backend": "node scripts/test-all.mjs --backend",
+    "test:frontend": "node scripts/test-all.mjs --frontend",
+    "test:scripts": "node scripts/test-all.mjs --scripts",
+    "test:go": "node scripts/check-go.mjs test",
     "db:seed": "node scripts/seed-grt.mjs",
     "docs:api": "node scripts/generate-swagger.mjs",
     "auth:setup": "node scripts/setup-auth.mjs"
