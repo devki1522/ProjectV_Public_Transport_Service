@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/budget"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/database"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
@@ -154,6 +155,8 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 
 	staffClient := staffhr.NewClient(cfg.StaffHR, nil)
 	staffHandler := handlers.NewStaffHRHandler(staffClient)
+	budgetClient := budget.NewClient(cfg.Budget, nil)
+	budgetHandler := handlers.NewBudgetHandler(budgetClient)
 
 	h := router.NewWithDependencies(db, router.Dependencies{
 		APIVersion:        cfg.Server.APIVersion,
@@ -166,6 +169,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		VehicleHandler:    vehicleHandler,
 		DisruptionHandler: disruptionHandler,
 		StaffHRHandler:    staffHandler,
+		BudgetHandler:     budgetHandler,
 	})
 
 	cleanup := func() {

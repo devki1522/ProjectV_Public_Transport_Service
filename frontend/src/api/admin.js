@@ -254,3 +254,41 @@ export function addAdminEmployee(input, csrfToken) {
     csrfToken,
   })
 }
+
+export async function getAdminBudget(signal) {
+  const data = await adminRequest('/admin/budget', { signal })
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof data.allocated !== 'number' ||
+    typeof data.spent !== 'number' ||
+    typeof data.remaining !== 'number'
+  ) {
+    throw new AdminApiError('Budget allocation summary returned unexpected data.', 502)
+  }
+  return data
+}
+
+export function submitAdminExpense(input, csrfToken) {
+  return adminRequest('/admin/budget/expenses', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitAdminRevenue(input, csrfToken) {
+  return adminRequest('/admin/budget/revenue', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}
+
+export function submitAdminFundingRequest(input, csrfToken) {
+  return adminRequest('/admin/budget/funding-requests', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}

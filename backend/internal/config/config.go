@@ -21,6 +21,8 @@ const (
 	DefaultAPIVersion        = "v1"
 	DefaultStaffHRURL        = "https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net"
 	DefaultStaffHRDepartment = "PTR"
+	DefaultBudgetURL         = "https://budget-service.mock.example.com"
+	DefaultBudgetDepartment  = "TRANSIT"
 )
 
 type Config struct {
@@ -30,7 +32,18 @@ type Config struct {
 	Auth     AuthConfig
 	Vehicles VehiclesConfig
 	StaffHR  StaffHRConfig
+	Budget   BudgetConfig
 }
+type BudgetConfig struct {
+	ServiceURL     string
+	DepartmentCode string
+	BearerToken    string
+}
+
+func (c BudgetConfig) String() string {
+	return fmt.Sprintf("BudgetConfig{ServiceURL:%q, DepartmentCode:%q, BearerToken:[REDACTED len=%d]}", c.ServiceURL, c.DepartmentCode, len(c.BearerToken))
+}
+
 type StaffHRConfig struct {
 	ServiceURL     string
 	DepartmentCode string
@@ -139,7 +152,32 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{Env: env, Server: ServerConfig{Port: port, APIVersion: apiVersion}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg, StaffHR: staffHRCfg}, nil
+	budgetCfg, err := loadBudgetConfig(env)
+	if err != nil {
+		return Config{}, err
+	}
+	return Config{Env: env, Server: ServerConfig{Port: port, APIVersion: apiVersion}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg, StaffHR: staffHRCfg, Budget: budgetCfg}, nil
+}
+
+func loadBudgetConfig(env string) (BudgetConfig, error) {
+	rawURL := strings.TrimSpace(os.Getenv("BUDGET_SERVICE_URL"))
+	if rawURL == "" && env == EnvDevelopment {
+		rawURL = DefaultBudgetURL
+	}
+	var serviceURL string
+	if rawURL != "" {
+		parsedURL, err := parseServiceURL("BUDGET_SERVICE_URL", rawURL, env)
+		if err != nil {
+			return BudgetConfig{}, err
+		}
+		serviceURL = parsedURL
+	}
+	dept := strings.ToUpper(strings.TrimSpace(getEnv("BUDGET_DEPARTMENT_CODE", DefaultBudgetDepartment)))
+	if dept == "" || len([]rune(dept)) > 20 {
+		return BudgetConfig{}, fmt.Errorf("BUDGET_DEPARTMENT_CODE must be between 1 and 20 characters")
+	}
+	token := strings.TrimSpace(os.Getenv("BUDGET_BEARER_TOKEN"))
+	return BudgetConfig{ServiceURL: serviceURL, DepartmentCode: dept, BearerToken: token}, nil
 }
 
 func loadStaffHRConfig(env string) (StaffHRConfig, error) {

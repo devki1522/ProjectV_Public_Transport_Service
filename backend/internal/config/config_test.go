@@ -92,6 +92,10 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 			ServiceURL:     DefaultStaffHRURL,
 			DepartmentCode: DefaultStaffHRDepartment,
 		},
+		Budget: BudgetConfig{
+			ServiceURL:     DefaultBudgetURL,
+			DepartmentCode: DefaultBudgetDepartment,
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load() = %+v, want %+v", got, want)
@@ -433,6 +437,61 @@ func TestLoadStaffHRSettings(t *testing.T) {
 			{"http localhost in prod", "STAFF_HR_SERVICE_URL", "http://localhost:5000", true},
 			{"invalid url", "STAFF_HR_SERVICE_URL", "ftp://hr.example.com", false},
 			{"dept too long", "STAFF_HR_DEPARTMENT_CODE", strings.Repeat("A", 21), false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.prod {
+					setRegistrationProdEnv(t)
+				} else {
+					setMockDevEnv(t)
+				}
+				t.Setenv(tc.key, tc.value)
+				if _, err := Load(); err == nil {
+					t.Fatalf("expected error for %s=%q", tc.key, tc.value)
+				}
+			})
+		}
+	})
+}
+
+func TestLoadBudgetSettings(t *testing.T) {
+	t.Run("custom development URL and bearer token redaction", func(t *testing.T) {
+		setMockDevEnv(t)
+		t.Setenv("BUDGET_SERVICE_URL", "http://localhost:5250/")
+		t.Setenv("BUDGET_DEPARTMENT_CODE", " transit ")
+		t.Setenv("BUDGET_BEARER_TOKEN", "super-secret-budget-token")
+
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Budget.ServiceURL != "http://localhost:5250" || got.Budget.DepartmentCode != "TRANSIT" || got.Budget.BearerToken != "super-secret-budget-token" {
+			t.Fatalf("unexpected Budget config: %+v", got.Budget)
+		}
+		if strings.Contains(got.Budget.String(), "super-secret-budget-token") {
+			t.Fatalf("bearer token leaked in String(): %s", got.Budget.String())
+		}
+	})
+
+	t.Run("production leaves Budget URL empty when unset", func(t *testing.T) {
+		setRegistrationProdEnv(t)
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Budget.ServiceURL != "" || got.Budget.DepartmentCode != "TRANSIT" {
+			t.Fatalf("unexpected production Budget config: %+v", got.Budget)
+		}
+	})
+
+	t.Run("rejects insecure non-loopback Budget URL and long department code", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, key, value string
+			prod             bool
+		}{
+			{"non-loopback http in dev", "BUDGET_SERVICE_URL", "http://budget.internal:5000", false},
+			{"http localhost in prod", "BUDGET_SERVICE_URL", "http://localhost:5000", true},
+			{"invalid url", "BUDGET_SERVICE_URL", "ftp://budget.example.com", false},
+			{"dept too long", "BUDGET_DEPARTMENT_CODE", strings.Repeat("A", 21), false},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				if tc.prod {

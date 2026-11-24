@@ -3,6 +3,7 @@ import { ProtectedAdminRoute } from './features/admin/ProtectedAdminRoute.jsx'
 import { ResidentPage } from './features/resident/ResidentPage.jsx'
 import { useRouter } from './lib/routerState.js'
 import { RouterProvider } from './lib/router.jsx'
+import { AdminBudgetPage } from './pages/AdminBudgetPage.jsx'
 import { AdminDashboardPage } from './pages/AdminDashboardPage.jsx'
 import { AdminDisruptionsPage } from './pages/AdminDisruptionsPage.jsx'
 import { AdminRoutesPage } from './pages/AdminRoutesPage.jsx'
@@ -51,6 +52,12 @@ function AppRoutes() {
       return (
         <ProtectedAdminRoute>
           <AdminStaffPage />
+        </ProtectedAdminRoute>
+      )
+    case '/admin/budget':
+      return (
+        <ProtectedAdminRoute>
+          <AdminBudgetPage />
         </ProtectedAdminRoute>
       )
     default:

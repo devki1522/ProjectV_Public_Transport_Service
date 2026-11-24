@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/devki1522/ProjectV_Public_Transport_Service/backend/docs"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
+	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/budget"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/config"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/handlers"
@@ -32,6 +33,7 @@ type Dependencies struct {
 	VehicleHandler    *handlers.VehicleHandler
 	DisruptionHandler *handlers.DisruptionHandler
 	StaffHRHandler    *handlers.StaffHRHandler
+	BudgetHandler     *handlers.BudgetHandler
 }
 
 // New builds the HTTP router with default dependencies.
@@ -109,6 +111,12 @@ func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 			staffHandler = handlers.NewStaffHRHandler(staffhr.NewClient(config.StaffHRConfig{}, nil))
 		}
 		RegisterStaffHRRoutes(api, staffHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
+
+		budgetHandler := deps.BudgetHandler
+		if budgetHandler == nil {
+			budgetHandler = handlers.NewBudgetHandler(budget.NewClient(config.BudgetConfig{}, nil))
+		}
+		RegisterBudgetRoutes(api, budgetHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
 	})
 
 	return r
@@ -278,6 +286,38 @@ func RegisterStaffHRRoutes(
 		}
 		protectedMutation.Post("/admin/staff/employees", handler.AddEmployee)
 		protectedMutation.Put("/admin/staff/employees", handler.PutEmployee)
+	})
+}
+
+// RegisterBudgetRoutes registers administrator-only Budget & Finance integration routes.
+func RegisterBudgetRoutes(
+	r chi.Router,
+	handler *handlers.BudgetHandler,
+	authMiddleware *auth.Middleware,
+	csrf *auth.CSRFProtector,
+	requiredRole string,
+) {
+	r.Group(func(protectedRead chi.Router) {
+		if authMiddleware == nil || requiredRole == "" {
+			protectedRead.Use(failClosedAuthMiddleware)
+		} else {
+			protectedRead.Use(authMiddleware.RequireAuthenticated)
+			protectedRead.Use(authMiddleware.RequireRole(requiredRole))
+		}
+		protectedRead.Get("/admin/budget", handler.Allocation)
+	})
+
+	r.Group(func(protectedMutation chi.Router) {
+		if authMiddleware == nil || csrf == nil || requiredRole == "" {
+			protectedMutation.Use(failClosedAuthMiddleware)
+		} else {
+			protectedMutation.Use(authMiddleware.RequireAuthenticated)
+			protectedMutation.Use(authMiddleware.RequireRole(requiredRole))
+			protectedMutation.Use(csrf.RequireMutationCSRF)
+		}
+		protectedMutation.Post("/admin/budget/expenses", handler.SubmitExpense)
+		protectedMutation.Post("/admin/budget/revenue", handler.SubmitRevenue)
+		protectedMutation.Post("/admin/budget/funding-requests", handler.SubmitFundingRequest)
 	})
 }
 

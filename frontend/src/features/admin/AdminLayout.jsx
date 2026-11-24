@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { AlertTriangle, BusFront, ExternalLink, LayoutDashboard, LogOut, Radio, Route, Users } from 'lucide-react'
+import { AlertTriangle, BusFront, ExternalLink, LayoutDashboard, LogOut, Radio, Route, Users, Wallet } from 'lucide-react'
 import { useAuth } from '../../auth/authState.js'
 import { Link } from '../../lib/router.jsx'
 import { useRouter } from '../../lib/routerState.js'
@@ -61,6 +61,14 @@ export function AdminLayout({ title, children }) {
           >
             <Users size={16} aria-hidden="true" />
             <span>Staff &amp; HR</span>
+          </Link>
+          <Link
+            to="/admin/budget"
+            className={`admin-nav-link ${pathname === '/admin/budget' ? 'is-active' : ''}`}
+            aria-current={pathname === '/admin/budget' ? 'page' : undefined}
+          >
+            <Wallet size={16} aria-hidden="true" />
+            <span>Budget &amp; Finance</span>
           </Link>
           <Link to="/" className="admin-nav-link">
             <ExternalLink size={16} aria-hidden="true" />

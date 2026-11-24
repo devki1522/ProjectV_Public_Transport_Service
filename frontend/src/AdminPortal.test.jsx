@@ -874,3 +874,124 @@ it('loads Staff & HR employee counts, adds an employee with CSRF token, and hand
   await user.click(screen.getByRole('button', { name: 'Add employee' }))
   await screen.findByText('Work email already exists.')
 })
+
+it('loads Budget & Finance allocation and submits expenses, fare revenue, and funding requests with CSRF', async () => {
+  let allocation = {
+    department_code: 'TRANSIT',
+    allocated: 250000,
+    spent: 90000,
+    remaining: 160000,
+    currency: 'CAD',
+  }
+  const postCalls = []
+  let failNextExpense = null
+
+  const fetchMock = vi.fn(async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost')
+    const method = (init.method || 'GET').toUpperCase()
+    if (url.pathname === '/api/transport/v1/auth/me' && method === 'GET') {
+      return jsonResponse(adminSession, 200)
+    }
+    if (url.pathname === '/api/transport/v1/admin/budget' && method === 'GET') {
+      return jsonResponse(allocation, 200)
+    }
+    if (url.pathname === '/api/transport/v1/admin/budget/expenses' && method === 'POST') {
+      const body = JSON.parse(init.body)
+      postCalls.push({ path: url.pathname, headers: init.headers || {}, body })
+      if (failNextExpense) {
+        const failure = failNextExpense
+        failNextExpense = null
+        return jsonResponse({ error: failure.message }, failure.status)
+      }
+      allocation = {
+        ...allocation,
+        spent: allocation.spent + body.amount,
+        remaining: allocation.remaining - body.amount,
+      }
+      return jsonResponse({
+        id: 'exp-101',
+        department_code: body.department_code,
+        amount: body.amount,
+        description: body.description,
+        status: 'approved',
+      }, 201)
+    }
+    if (url.pathname === '/api/transport/v1/admin/budget/revenue' && method === 'POST') {
+      const body = JSON.parse(init.body)
+      postCalls.push({ path: url.pathname, headers: init.headers || {}, body })
+      return jsonResponse({
+        id: 'rev-202',
+        source: body.source,
+        department_code: body.department_code,
+        amount: body.amount,
+        description: body.description,
+      }, 201)
+    }
+    if (url.pathname === '/api/transport/v1/admin/budget/funding-requests' && method === 'POST') {
+      const body = JSON.parse(init.body)
+      postCalls.push({ path: url.pathname, headers: init.headers || {}, body })
+      return jsonResponse({
+        id: 'fund-303',
+        department_code: body.department_code,
+        amount: body.amount,
+        reason: body.reason,
+        urgent: body.urgent,
+        status: 'pending',
+      }, 201)
+    }
+    throw new Error(`Unexpected request: ${method} ${url.pathname}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<App initialPath="/admin/budget" />)
+
+  await screen.findByRole('heading', { name: 'Transit budget & fare revenue' })
+  await screen.findByText('$250,000.00')
+  expect(screen.getByText('$160,000.00')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Budget & Finance' })).toHaveAttribute('aria-current', 'page')
+
+  const amountInputs = screen.getAllByLabelText('Amount (CAD)')
+  const descriptionInputs = screen.getAllByLabelText('Description')
+
+  await user.type(amountInputs[0], '1000')
+  await user.type(descriptionInputs[0], 'Diesel fuel')
+  await user.click(screen.getByRole('button', { name: 'Submit expense' }))
+
+  await screen.findByText(/Expense \$1,000\.00 \(approved\) recorded for TRANSIT\./i)
+  expect(postCalls[0].headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
+  expect(postCalls[0].body).toEqual({
+    department_code: 'TRANSIT',
+    amount: 1000,
+    description: 'Diesel fuel',
+  })
+
+  failNextExpense = { status: 400, message: 'Expense exceeds remaining transit budget' }
+  await user.type(amountInputs[0], '999999')
+  await user.type(descriptionInputs[0], 'New bus')
+  await user.click(screen.getByRole('button', { name: 'Submit expense' }))
+  await screen.findByText('Expense exceeds remaining transit budget')
+
+  await user.type(amountInputs[1], '4320')
+  await user.type(descriptionInputs[1], 'Daily bus fares')
+  await user.click(screen.getByRole('button', { name: 'Report fare revenue' }))
+  await screen.findByText(/Fare revenue \$4,320\.00 reported under FARES\./i)
+  expect(postCalls[2].body).toEqual({
+    source: 'FARES',
+    department_code: 'TRANSIT',
+    amount: 4320,
+    description: 'Daily bus fares',
+  })
+
+  await user.type(screen.getByLabelText('Requested amount (CAD)'), '50000')
+  await user.type(screen.getByLabelText('Reason'), 'Winter tires')
+  await user.click(screen.getByLabelText('Mark request as urgent'))
+  await user.click(screen.getByRole('button', { name: 'Send funding request' }))
+  await screen.findByText(/Funding request for \$50,000\.00 submitted \(pending\)\./i)
+  expect(postCalls[3].body).toEqual({
+    department_code: 'TRANSIT',
+    amount: 50000,
+    reason: 'Winter tires',
+    urgent: true,
+  })
+})
