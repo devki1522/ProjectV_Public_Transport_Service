@@ -19,6 +19,8 @@ const (
 	AuthProviderRegistration = "registration"
 	MinJWTSecretBytes        = 32
 	DefaultAPIVersion        = "v1"
+	DefaultStaffHRURL        = "https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net"
+	DefaultStaffHRDepartment = "PTR"
 )
 
 type Config struct {
@@ -27,7 +29,18 @@ type Config struct {
 	Database DatabaseConfig
 	Auth     AuthConfig
 	Vehicles VehiclesConfig
+	StaffHR  StaffHRConfig
 }
+type StaffHRConfig struct {
+	ServiceURL     string
+	DepartmentCode string
+	BearerToken    string
+}
+
+func (c StaffHRConfig) String() string {
+	return fmt.Sprintf("StaffHRConfig{ServiceURL:%q, DepartmentCode:%q, BearerToken:[REDACTED len=%d]}", c.ServiceURL, c.DepartmentCode, len(c.BearerToken))
+}
+
 type VehiclesConfig struct {
 	Simulate             bool
 	SimulateVehicleCount int
@@ -122,7 +135,32 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{Env: env, Server: ServerConfig{Port: port, APIVersion: apiVersion}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg}, nil
+	staffHRCfg, err := loadStaffHRConfig(env)
+	if err != nil {
+		return Config{}, err
+	}
+	return Config{Env: env, Server: ServerConfig{Port: port, APIVersion: apiVersion}, Database: DatabaseConfig{DSN: dsn, MaxIdleConns: maxIdle, MaxOpenCons: maxOpen, ConnMaxLifetime: lifetime}, Auth: authCfg, Vehicles: vehiclesCfg, StaffHR: staffHRCfg}, nil
+}
+
+func loadStaffHRConfig(env string) (StaffHRConfig, error) {
+	rawURL := strings.TrimSpace(os.Getenv("STAFF_HR_SERVICE_URL"))
+	if rawURL == "" && env == EnvDevelopment {
+		rawURL = DefaultStaffHRURL
+	}
+	var serviceURL string
+	if rawURL != "" {
+		parsedURL, err := parseServiceURL("STAFF_HR_SERVICE_URL", rawURL, env)
+		if err != nil {
+			return StaffHRConfig{}, err
+		}
+		serviceURL = parsedURL
+	}
+	dept := strings.ToUpper(strings.TrimSpace(getEnv("STAFF_HR_DEPARTMENT_CODE", DefaultStaffHRDepartment)))
+	if dept == "" || len([]rune(dept)) > 20 {
+		return StaffHRConfig{}, fmt.Errorf("STAFF_HR_DEPARTMENT_CODE must be between 1 and 20 characters")
+	}
+	token := strings.TrimSpace(os.Getenv("STAFF_HR_BEARER_TOKEN"))
+	return StaffHRConfig{ServiceURL: serviceURL, DepartmentCode: dept, BearerToken: token}, nil
 }
 
 func loadAPIVersion() (string, error) {
@@ -331,13 +369,17 @@ func parseTrustedOrigins(raw, env string) ([]string, error) {
 	return origins, nil
 }
 func parseRegistrationURL(raw, env string) (string, error) {
+	return parseServiceURL("REGISTRATION_SERVICE_URL", raw, env)
+}
+
+func parseServiceURL(envKey, raw, env string) (string, error) {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
-		return "", fmt.Errorf("REGISTRATION_SERVICE_URL is required when AUTH_PROVIDER=registration")
+		return "", fmt.Errorf("%s is required when configured", envKey)
 	}
 	parsed, err := url.Parse(candidate)
 	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("REGISTRATION_SERVICE_URL %q is invalid", candidate)
+		return "", fmt.Errorf("%s %q is invalid", envKey, candidate)
 	}
 	switch strings.ToLower(parsed.Scheme) {
 	case "https":
@@ -345,10 +387,10 @@ func parseRegistrationURL(raw, env string) (string, error) {
 		host := strings.ToLower(parsed.Hostname())
 		isLoopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
 		if env != EnvDevelopment || !isLoopback {
-			return "", fmt.Errorf("REGISTRATION_SERVICE_URL must use https outside explicit local development")
+			return "", fmt.Errorf("%s must use https outside explicit local development", envKey)
 		}
 	default:
-		return "", fmt.Errorf("REGISTRATION_SERVICE_URL must use https (or http for local development)")
+		return "", fmt.Errorf("%s must use https (or http for local development)", envKey)
 	}
 	return strings.TrimRight(parsed.String(), "/"), nil
 }

@@ -67,6 +67,8 @@ func TestSwaggerDocumentation(t *testing.T) {
 			"/api/transport/v1/integrations/emergency/incidents":     {"post"},
 			"/api/transport/v1/integrations/security/traffic-alerts": {"post"},
 			"/api/transport/v1/integrations/service-status":          {"get"},
+			"/api/transport/v1/admin/staff":                          {"get"},
+			"/api/transport/v1/admin/staff/employees":                {"post", "put"},
 		} {
 			for _, method := range methods {
 				if len(spec.Paths[route][method]) == 0 {

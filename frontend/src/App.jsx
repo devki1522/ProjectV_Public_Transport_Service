@@ -6,6 +6,7 @@ import { RouterProvider } from './lib/router.jsx'
 import { AdminDashboardPage } from './pages/AdminDashboardPage.jsx'
 import { AdminDisruptionsPage } from './pages/AdminDisruptionsPage.jsx'
 import { AdminRoutesPage } from './pages/AdminRoutesPage.jsx'
+import { AdminStaffPage } from './pages/AdminStaffPage.jsx'
 import { AdminVehiclesPage } from './pages/AdminVehiclesPage.jsx'
 import { LoginPage } from './pages/LoginPage.jsx'
 import { UnauthorizedPage } from './pages/UnauthorizedPage.jsx'
@@ -44,6 +45,12 @@ function AppRoutes() {
       return (
         <ProtectedAdminRoute>
           <AdminDisruptionsPage />
+        </ProtectedAdminRoute>
+      )
+    case '/admin/staff':
+      return (
+        <ProtectedAdminRoute>
+          <AdminStaffPage />
         </ProtectedAdminRoute>
       )
     default:

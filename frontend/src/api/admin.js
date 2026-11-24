@@ -228,3 +228,29 @@ export async function getEnterpriseServiceStatus(signal) {
   }
   return data
 }
+
+export async function getAdminStaff(department = '', signal) {
+  const params = new URLSearchParams()
+  if (typeof department === 'string' && department.trim()) {
+    params.set('department', department.trim())
+  }
+  const query = params.toString()
+  const data = await adminRequest(query ? `/admin/staff?${query}` : '/admin/staff', { signal })
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof data.active_count !== 'number' ||
+    !Array.isArray(data.employees)
+  ) {
+    throw new AdminApiError('Staff & HR summary returned unexpected data.', 502)
+  }
+  return data
+}
+
+export function addAdminEmployee(input, csrfToken) {
+  return adminRequest('/admin/staff/employees', {
+    method: 'POST',
+    body: input,
+    csrfToken,
+  })
+}

@@ -766,3 +766,111 @@ it('preserves multi-line segments and clears end_time when editing a disruption,
   await screen.findByRole('status', { name: 'External integration result' })
   expect(mutationCalls[1].path).toBe('/api/transport/v1/integrations/utilities/notices')
 })
+
+it('loads Staff & HR employee counts, adds an employee with CSRF token, and handles conflicts/unavailability', async () => {
+  const postCalls = []
+  let employees = [
+    {
+      staff_number: 'STF-0000013',
+      display_name: 'Greta Pikeworth',
+      first_name: 'Greta',
+      last_name: 'Pikeworth',
+      email: 'greta.pikeworth@cmes.example',
+      employment_status: 'Active',
+      employment_type: 'FullTime',
+      home_department_code: 'PTR',
+      home_department_name: 'Public Transport',
+      current_role: 'Light Rail Operator',
+      current_service: 'Light Rail Operations',
+      credential_state: 'Valid',
+    },
+  ]
+  let failNextPost = null
+
+  const fetchMock = vi.fn(async (input, options = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost')
+    const method = (options.method ?? 'GET').toUpperCase()
+    if (url.pathname === '/api/transport/v1/auth/me') return jsonResponse(adminSession)
+    if (url.pathname === '/api/transport/v1/admin/staff' && method === 'GET') {
+      return jsonResponse({
+        department_code: url.searchParams.get('department') || 'PTR',
+        department_name: 'Public Transport',
+        active_count: employees.length,
+        on_duty_count: 1,
+        vacancies_count: 2,
+        total_employees: employees.length,
+        citywide_active: 20 + employees.length,
+        departments: [
+          { code: 'PTR', name: 'Public Transport', active: employees.length, on_duty: 1, vacancies: 2 },
+          { code: 'EMS', name: 'Emergency Services', active: 7, on_duty: 2, vacancies: 2 },
+        ],
+        employees,
+      })
+    }
+    if (url.pathname === '/api/transport/v1/admin/staff/employees' && method === 'POST') {
+      const body = JSON.parse(options.body)
+      postCalls.push({ headers: options.headers, body })
+      if (failNextPost) {
+        const nextErr = failNextPost
+        failNextPost = null
+        return jsonResponse({ error: nextErr.message }, nextErr.status)
+      }
+      const created = {
+        staff_number: 'STF-0000099',
+        display_name: `${body.first_name} ${body.last_name}`,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        email: body.email,
+        employment_status: body.employment_status,
+        employment_type: body.employment_type,
+        home_department_code: body.home_department_code,
+        home_department_name: 'Public Transport',
+        current_role: null,
+        current_service: null,
+        credential_state: null,
+      }
+      employees = [created, ...employees]
+      return jsonResponse(created, 201)
+    }
+    throw new Error(`Unexpected request: ${method} ${url.pathname}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<App initialPath="/admin/staff" />)
+
+  await screen.findByRole('heading', { name: 'Staff & HR directory' })
+  await screen.findByText('Greta Pikeworth')
+  expect(screen.getByText('STF-0000013')).toBeVisible()
+
+  await user.type(screen.getByLabelText('First name'), 'Jordan')
+  await user.type(screen.getByLabelText('Last name'), 'Chen')
+  await user.type(screen.getByLabelText('Work email'), 'jordan.chen@cmes.example')
+  fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1994-06-15' } })
+  fireEvent.change(screen.getByLabelText('Hire date'), { target: { value: '2026-11-19' } })
+  await user.click(screen.getByRole('button', { name: 'Add employee' }))
+
+  await screen.findByText(/Added employee Jordan Chen \(STF-0000099\) to PTR\./i)
+  expect(postCalls).toHaveLength(1)
+  expect(postCalls[0].headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
+  expect(postCalls[0].body).toMatchObject({
+    first_name: 'Jordan',
+    last_name: 'Chen',
+    email: 'jordan.chen@cmes.example',
+    date_of_birth: '1994-06-15',
+    hire_date: '2026-11-19',
+    employment_type: 'FullTime',
+    employment_status: 'Active',
+    home_department_code: 'PTR',
+  })
+  await screen.findByText('STF-0000099')
+
+  failNextPost = { status: 409, message: 'Work email already exists.' }
+  await user.type(screen.getByLabelText('First name'), 'Dup')
+  await user.type(screen.getByLabelText('Last name'), 'User')
+  await user.type(screen.getByLabelText('Work email'), 'jordan.chen@cmes.example')
+  fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1992-01-10' } })
+  fireEvent.change(screen.getByLabelText('Hire date'), { target: { value: '2026-11-19' } })
+  await user.click(screen.getByRole('button', { name: 'Add employee' }))
+  await screen.findByText('Work email already exists.')
+})

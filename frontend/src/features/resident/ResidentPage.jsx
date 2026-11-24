@@ -37,9 +37,9 @@ export function ResidentPage() {
   const serviceStatus = useResource(serviceStatusKey, getServiceStatus)
   const validServiceStatus =
     serviceStatus.data &&
-    typeof serviceStatus.data === 'object' &&
-    !Array.isArray(serviceStatus.data) &&
-    Array.isArray(serviceStatus.data.active_disruptions)
+      typeof serviceStatus.data === 'object' &&
+      !Array.isArray(serviceStatus.data) &&
+      Array.isArray(serviceStatus.data.active_disruptions)
       ? serviceStatus.data
       : null
 
@@ -60,10 +60,10 @@ export function ResidentPage() {
     () =>
       selectedRoute && Array.isArray(validServiceStatus?.active_disruptions)
         ? validServiceStatus.active_disruptions.filter(
-            (disruption) =>
-              Array.isArray(disruption.affected_routes) &&
-              disruption.affected_routes.some((route) => route.route_id === selectedRoute.id),
-          )
+          (disruption) =>
+            Array.isArray(disruption.affected_routes) &&
+            disruption.affected_routes.some((route) => route.route_id === selectedRoute.id),
+        )
         : [],
     [selectedRoute, validServiceStatus],
   )
@@ -160,7 +160,7 @@ export function ResidentPage() {
             onClick={() => setSection('schedules')}
           >
             <CalendarDays size={16} aria-hidden="true" />
-            <span>{section === 'map' ? 'Schedules' : 'Schedules & Departures'}</span>
+            <span>Schedules & Departures</span>
           </button>
           <button
             id="section-tab-journey"
@@ -174,7 +174,7 @@ export function ResidentPage() {
             onClick={() => setSection('journey')}
           >
             <ArrowRightLeft size={16} aria-hidden="true" />
-            <span>{section === 'map' ? 'Journey' : 'Journey Search'}</span>
+            <span>Journey Search</span>
           </button>
           <button
             id="section-tab-alerts"
@@ -188,7 +188,7 @@ export function ResidentPage() {
             onClick={() => setSection('alerts')}
           >
             <AlertTriangle size={16} aria-hidden="true" />
-            <span>{section === 'map' ? 'Alerts' : 'Service Alerts'}</span>
+            <span>Service Alerts</span>
             {activeDisruptionCount > 0 && (
               <span className="nav-alert-badge" aria-hidden="true">
                 {activeDisruptionCount}
