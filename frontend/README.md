@@ -131,9 +131,8 @@ The frontend returns to sign-in at session expiration. If a logout request fails
 it keeps the session and CSRF token available and shows an error so sign-out can
 be retried; it does not report successful logout before backend invalidation.
 
-Run `npm run auth:setup` from the repository root for local mock setup. It preserves
-existing nonempty environment values and database configuration. Mock passwords
-are stored only in the ignored `backend/.env`.
+Local mock login needs no setup: in development, sign in as `transit.admin` /
+`Test!123`.
 
 ## Commuter redesign and local skills
 

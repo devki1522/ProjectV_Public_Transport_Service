@@ -200,70 +200,11 @@ async function runFrontendTests() {
   })
 }
 
-// 3. Run Node Scripts Tests
-async function runScriptTests() {
-  printHeader('3. Integration & Auth Setup Tests (Node:Test)')
-
-  return new Promise((resolve) => {
-    const startTime = Date.now()
-    const proc = spawn('node', ['--test', '--test-reporter=spec', 'scripts/setup-auth.test.mjs'], {
-      cwd: rootDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '1' },
-    })
-
-    let stdout = ''
-    proc.stdout.on('data', (d) => {
-      const str = d.toString()
-      stdout += str
-      for (const line of str.split('\n')) {
-        if (line.trim()) {
-          console.log('  ' + line)
-        }
-      }
-    })
-
-    proc.stderr.on('data', (d) => {
-      process.stderr.write(d)
-    })
-
-    proc.on('close', (code) => {
-      const duration = ((Date.now() - startTime) / 1000).toFixed(2)
-
-      let passed = 0
-      let failed = 0
-      let total = 0
-
-      const passMatch = stdout.match(/ℹ pass (\d+)/)
-      const failMatch = stdout.match(/ℹ fail (\d+)/)
-      const totalMatch = stdout.match(/ℹ tests (\d+)/)
-
-      if (passMatch) passed = parseInt(passMatch[1], 10)
-      if (failMatch) failed = parseInt(failMatch[1], 10)
-      if (totalMatch) total = parseInt(totalMatch[1], 10)
-
-      const success = code === 0 && failed === 0
-      console.log(`\n  ${c.bold}Scripts Result:${c.reset} ${success ? c.green + 'ALL TESTS PASSED' : c.red + 'SOME TESTS FAILED'} ${c.reset} ` +
-        `${c.gray}[${passed}/${total || passed} tests passed in ${duration}s]${c.reset}`)
-
-      resolve({
-        name: 'Scripts (Node:Test)',
-        passed,
-        failed,
-        total: total || passed,
-        duration: `${duration}s`,
-        success,
-      })
-    })
-  })
-}
-
 // Main execution
 async function main() {
   const args = process.argv.slice(2)
   const runOnlyBackend = args.includes('--backend') || args.includes('-b')
   const runOnlyFrontend = args.includes('--frontend') || args.includes('-f')
-  const runOnlyScripts = args.includes('--scripts') || args.includes('-s')
 
   console.log(`${c.bold}${c.cyan}======================================================================${c.reset}`)
   console.log(`${c.bold}            PROJECT V: UNIFIED TEST SUITE RUNNER                      ${c.reset}`)
@@ -276,12 +217,9 @@ async function main() {
     suites.push(await runBackendTests())
   } else if (runOnlyFrontend) {
     suites.push(await runFrontendTests())
-  } else if (runOnlyScripts) {
-    suites.push(await runScriptTests())
   } else {
     suites.push(await runBackendTests())
     suites.push(await runFrontendTests())
-    suites.push(await runScriptTests())
   }
 
   const overallDuration = ((Date.now() - overallStart) / 1000).toFixed(2)
