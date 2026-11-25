@@ -4,7 +4,7 @@
 # Configuration > Application setting into all containers as environment
 # variables, so secrets live there instead (see AZURE_DEPLOYMENT.md):
 #   DATABASE_URL, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
-#   REGISTRATION_JWT_SECRET, STAFF_HR_BEARER_TOKEN, BUDGET_SERVICE_URL, BUDGET_BEARER_TOKEN
+#   REGISTRATION_JWT_SECRET, STAFF_HR_BEARER_TOKEN, BUDGET_BEARER_TOKEN
 # Do not add those keys here: App Service does not support ${VAR} substitution
 # in compose files, and a value here could shadow the app setting.
 
@@ -36,6 +36,7 @@ services:
       - REGISTRATION_JWT_AUDIENCE=CmRegistrationClients
       - SIMULATE_VEHICLES=true
       - STAFF_HR_SERVICE_URL=https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net
+      - BUDGET_SERVICE_URL=https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net
     depends_on:
       - database
     restart: always

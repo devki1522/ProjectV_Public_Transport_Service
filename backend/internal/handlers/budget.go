@@ -46,7 +46,7 @@ func NewBudgetHandlerWithAudit(service BudgetService, audit *slog.Logger) *Budge
 // Allocation returns the transit department operating budget allocation from Budget & Finance.
 //
 // @Summary Get transit operating budget allocation
-// @Description Requires an administrator session cookie. Queries Budget & Finance GET /api/budget/v1/allocations/transit.
+// @Description Requires an administrator session cookie. Queries Budget & Finance GET /api/budget/v1/allocations/TRANSIT.
 // @Tags budget
 // @Produce json
 // @Success 200 {object} budget.Allocation

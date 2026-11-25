@@ -36,7 +36,6 @@ Service passes these into every container as environment variables.
 | `DATABASE_URL` | `postgres://projectv:<POSTGRES_PASSWORD>@database:5432/public_transport?sslmode=disable` | Same password as above. URL-encode any special characters in it |
 | `REGISTRATION_JWT_SECRET` | *from the Registration team* | The HS256 key their service signs login tokens with. Must be at least 32 bytes |
 | `STAFF_HR_BEARER_TOKEN` | *from the Staff/HR team, if they issued one* | Optional |
-| `BUDGET_SERVICE_URL` | *Budget & Finance team's HTTPS URL* | Optional. The Budget tab shows "not configured" until it's set |
 | `BUDGET_BEARER_TOKEN` | *from the Budget & Finance team, if they issued one* | Optional |
 
 You can mark the secret values as Key Vault references if the subscription has a
@@ -75,6 +74,7 @@ real environment, and tell the Public Transport team if any differ:
 | `REGISTRATION_SERVICE_URL` | `https://cm-rs-api-gbgrffa8h5e5fdcy.canadaeast-01.azurewebsites.net` |
 | `REGISTRATION_JWT_ISSUER` / `_AUDIENCE` | `CmRegistrationService` / `CmRegistrationClients` (must match the Registration service's token config) |
 | `STAFF_HR_SERVICE_URL` | `https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net` |
+| `BUDGET_SERVICE_URL` | `https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net` |
 
 ## 3. Deploy the new compose file
 

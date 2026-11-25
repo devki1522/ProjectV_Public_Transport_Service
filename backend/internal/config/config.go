@@ -21,7 +21,7 @@ const (
 	DefaultAPIVersion        = "v1"
 	DefaultStaffHRURL        = "https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net"
 	DefaultStaffHRDepartment = "PTR"
-	DefaultBudgetURL         = "https://budget-service.mock.example.com"
+	DefaultBudgetURL         = "https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net"
 	DefaultBudgetDepartment  = "TRANSIT"
 	// Development-only mock login defaults. Mock mode is rejected outside APP_ENV=development.
 	DefaultMockJWTIssuer     = "transit-dev"
