@@ -84,15 +84,14 @@ func TestClientOverviewAndAddEmployee(t *testing.T) {
 	client := NewClientWithClock(config.StaffHRConfig{
 		ServiceURL:     server.URL,
 		DepartmentCode: "PTR",
-		BearerToken:    "dev-token",
 	}, server.Client(), now)
 
 	overview, err := client.Overview(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if capturedAuth != "Bearer dev-token" {
-		t.Fatalf("Authorization = %q, want Bearer dev-token", capturedAuth)
+	if capturedAuth != "" {
+		t.Fatalf("Authorization = %q, want no credentials", capturedAuth)
 	}
 	if overview.DepartmentCode != "PTR" || overview.DepartmentName != "Public Transport" || overview.ActiveCount != 3 || overview.OnDutyCount != 1 || overview.VacanciesCount != 1 || overview.TotalEmployees != 4 || overview.CitywideActive != 10 {
 		t.Fatalf("unexpected overview: %+v", overview)

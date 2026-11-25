@@ -20,7 +20,8 @@ before deploying it.
   default `https://rg-public-transport.azurewebsites.net` address already works.
 - Only HTTPS origins are trusted for sign-in.
 - Mock login is rejected. Sign-in goes through the Registration Service, which
-  validates tokens with a shared signing key.
+  authenticates credentials over HTTPS. Our backend generates its own session
+  signing key and grants administrator access through `AUTH_ADMIN_WHITELIST`.
 
 ## 1. Add the application settings
 
@@ -33,10 +34,8 @@ Service passes these into every container as environment variables.
 | `POSTGRES_USER` | `projectv` | Read by the database container |
 | `POSTGRES_PASSWORD` | *new strong password* | Generate one. Don't reuse `local_dev_password` |
 | `POSTGRES_DB` | `public_transport` | |
+| `AUTH_ADMIN_WHITELIST` | *Registration usernames, comma-separated* | Required; exact, case-sensitive usernames allowed to administer transit |
 | `DATABASE_URL` | `postgres://projectv:<POSTGRES_PASSWORD>@database:5432/public_transport?sslmode=disable` | Same password as above. URL-encode any special characters in it |
-| `REGISTRATION_JWT_SECRET` | *from the Registration team* | The HS256 key their service signs login tokens with. Must be at least 32 bytes |
-| `STAFF_HR_BEARER_TOKEN` | *from the Staff/HR team, if they issued one* | Optional |
-| `BUDGET_BEARER_TOKEN` | *from the Budget & Finance team, if they issued one* | Optional |
 
 You can mark the secret values as Key Vault references if the subscription has a
 Key Vault. Plain app settings are also encrypted at rest.
@@ -52,7 +51,7 @@ az webapp config appsettings set \
     POSTGRES_PASSWORD='<new-password>' \
     POSTGRES_DB=public_transport \
     DATABASE_URL='postgres://projectv:<new-password>@database:5432/public_transport?sslmode=disable' \
-    REGISTRATION_JWT_SECRET='<registration-signing-key>'
+    AUTH_ADMIN_WHITELIST='<admin-username>'
 ```
 
 ### Database password note
@@ -93,10 +92,10 @@ doesn't change.
 
 1. Open **Log stream**. The backend should log
    `Backend running on port 8080 (env=production auth_provider=registration)`.
-   - `REGISTRATION_JWT_SECRET must be at least 32 bytes`: step 1's secret is missing or too short.
+   - `AUTH_ADMIN_WHITELIST must contain at least one username`: add the administrator usernames.
    - `DATABASE_URL is required`, or database connection errors: check `DATABASE_URL` and `POSTGRES_*`.
 2. Visit `https://rg-public-transport.azurewebsites.net/login` and sign in with a
-   Registration Service account that has the `TransitAdministrator` role.
+   Registration Service account listed in `AUTH_ADMIN_WHITELIST`.
 3. Visiting the site over plain `http://` should no longer keep you signed in. This is expected.
 
 ## Rollback

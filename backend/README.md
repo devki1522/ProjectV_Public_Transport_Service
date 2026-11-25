@@ -61,7 +61,7 @@ upstream response, `503` provider unavailable, and `504` upstream timeout.
 #### Providers and Registration Service integration
 
 - **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`, both defaults for local development): Authenticates `transit.admin` (`TransitAdministrator`) against `MOCK_ADMIN_PASSWORD` (default `Test!123`) and signs real 15-minute `HS256` JWTs. The signing key comes from `MOCK_JWT_SECRET` (>= 32 bytes) when set, and is otherwise generated randomly at startup. Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
-- **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate`, validates the returned `HS256` JWT locally against `REGISTRATION_JWT_ISSUER`, `REGISTRATION_JWT_AUDIENCE`, and `REGISTRATION_JWT_SECRET`, and reads authorization exclusively from the signed `role` claim (string or array), ignoring top-level `role`. HTTPS is required outside explicit local development.
+- **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate` over HTTPS. Trusts identity from that direct response, checks the token's issuer, audience, username and expiry, and creates a session token using a generated local signing key. The external signature is not verified; tokens supplied by browsers are never accepted. Administrator access comes exclusively from the case-sensitive `AUTH_ADMIN_WHITELIST`, not upstream roles. No other team's signing key is needed.
 - **External team dependency**: Inspected source (`CmRegistrationService`) seeds only `Administrator` and `User` roles. The Registration Service team must create and assign `TransitAdministrator` and provide production URL/issuer/audience/secret values before live integration verification.
 
 ### Resident schedules and departures
@@ -365,8 +365,8 @@ The supplied `CmRegistrationService-master.zip` was inspected directly:
 `LoginController.cs` issues HS256 tokens with configured issuer/audience, 15-minute
 expiration, and signed `role` claims. Its response's first-role field is ignored.
 `RememberMe` does not extend JWT lifetime. `DatabaseSeeder.cs` seeds only
-`Administrator` and `User`; the other team must create and assign
-`TransitAdministrator`. Its logout clears its own cookie without revoking JWTs.
+`Administrator` and `User`; configure our administrator usernames in
+`AUTH_ADMIN_WHITELIST`. Its logout clears its own cookie without revoking JWTs.
 No refresh tokens are implemented. Automated fake-server tests verify our adapter,
 not a deployed Registration Service. Deployment URL, verification credentials,
 and an assigned administrator account are still required for live verification.

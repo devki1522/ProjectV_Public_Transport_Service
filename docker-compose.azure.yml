@@ -4,7 +4,6 @@
 # Configuration > Application setting into all containers as environment
 # variables, so secrets live there instead (see AZURE_DEPLOYMENT.md):
 #   DATABASE_URL, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
-#   REGISTRATION_JWT_SECRET, STAFF_HR_BEARER_TOKEN, BUDGET_BEARER_TOKEN
 # Do not add those keys here: App Service does not support ${VAR} substitution
 # in compose files, and a value here could shadow the app setting.
 

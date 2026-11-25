@@ -41,21 +41,11 @@ type Config struct {
 type BudgetConfig struct {
 	ServiceURL     string
 	DepartmentCode string
-	BearerToken    string
-}
-
-func (c BudgetConfig) String() string {
-	return fmt.Sprintf("BudgetConfig{ServiceURL:%q, DepartmentCode:%q, BearerToken:[REDACTED len=%d]}", c.ServiceURL, c.DepartmentCode, len(c.BearerToken))
 }
 
 type StaffHRConfig struct {
 	ServiceURL     string
 	DepartmentCode string
-	BearerToken    string
-}
-
-func (c StaffHRConfig) String() string {
-	return fmt.Sprintf("StaffHRConfig{ServiceURL:%q, DepartmentCode:%q, BearerToken:[REDACTED len=%d]}", c.ServiceURL, c.DepartmentCode, len(c.BearerToken))
 }
 
 type VehiclesConfig struct {
@@ -88,9 +78,7 @@ type MockAuthConfig struct{ AdminPassword string }
 func (c MockAuthConfig) String() string { return "MockAuthConfig{AdminPassword:[REDACTED]}" }
 
 type RegistrationAuthConfig struct {
-	ServiceURL string
-	// DirectHTTPS is a development-only credential exchange, never a client token validator.
-	DirectHTTPS      bool
+	ServiceURL       string
 	UpstreamIssuer   string
 	UpstreamAudience string
 	LocalTrust       JWTTrustConfig
@@ -180,8 +168,7 @@ func loadBudgetConfig(env string) (BudgetConfig, error) {
 	if dept == "" || len([]rune(dept)) > 20 {
 		return BudgetConfig{}, fmt.Errorf("BUDGET_DEPARTMENT_CODE must be between 1 and 20 characters")
 	}
-	token := strings.TrimSpace(os.Getenv("BUDGET_BEARER_TOKEN"))
-	return BudgetConfig{ServiceURL: serviceURL, DepartmentCode: dept, BearerToken: token}, nil
+	return BudgetConfig{ServiceURL: serviceURL, DepartmentCode: dept}, nil
 }
 
 func loadStaffHRConfig(env string) (StaffHRConfig, error) {
@@ -201,8 +188,7 @@ func loadStaffHRConfig(env string) (StaffHRConfig, error) {
 	if dept == "" || len([]rune(dept)) > 20 {
 		return StaffHRConfig{}, fmt.Errorf("STAFF_HR_DEPARTMENT_CODE must be between 1 and 20 characters")
 	}
-	token := strings.TrimSpace(os.Getenv("STAFF_HR_BEARER_TOKEN"))
-	return StaffHRConfig{ServiceURL: serviceURL, DepartmentCode: dept, BearerToken: token}, nil
+	return StaffHRConfig{ServiceURL: serviceURL, DepartmentCode: dept}, nil
 }
 
 func loadAPIVersion() (string, error) {
@@ -290,13 +276,6 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 		return AuthConfig{}, err
 	}
 	cfg := AuthConfig{Provider: provider, RequiredRole: requiredRole, SessionCookie: sessionCookie, CookieSecure: cookieSecure, TrustedOrigins: trustedOrigins, TrustedProxy: trustedProxy}
-	direct, err := parseBoolEnv("REGISTRATION_TRUST_HTTPS", false)
-	if err != nil {
-		return AuthConfig{}, err
-	}
-	if direct && (env != EnvDevelopment || provider != AuthProviderRegistration) {
-		return AuthConfig{}, fmt.Errorf("REGISTRATION_TRUST_HTTPS requires development and registration provider")
-	}
 	switch provider {
 	case AuthProviderMock:
 		// Mock mode is development-only (enforced above), so every setting has a
@@ -329,39 +308,27 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 		}
 		issuer := strings.TrimSpace(os.Getenv("REGISTRATION_JWT_ISSUER"))
 		audience := strings.TrimSpace(os.Getenv("REGISTRATION_JWT_AUDIENCE"))
-		secret := os.Getenv("REGISTRATION_JWT_SECRET")
 		if issuer == "" || audience == "" {
 			return AuthConfig{}, fmt.Errorf("REGISTRATION_JWT_ISSUER and REGISTRATION_JWT_AUDIENCE are required when AUTH_PROVIDER=registration")
 		}
-		cfg.Registration = RegistrationAuthConfig{ServiceURL: serviceURL}
-		if direct {
-			if !strings.HasPrefix(serviceURL, "https://") {
-				return AuthConfig{}, fmt.Errorf("REGISTRATION_TRUST_HTTPS requires HTTPS")
-			}
-			if secret != "" {
-				return AuthConfig{}, fmt.Errorf("leave REGISTRATION_JWT_SECRET empty in direct HTTPS mode")
-			}
-			var users []string
-			for _, raw := range strings.Split(os.Getenv("AUTH_ADMIN_WHITELIST"), ",") {
-				if u := strings.TrimSpace(raw); u != "" {
-					users = append(users, u)
-				}
-			}
-			if len(users) == 0 {
-				return AuthConfig{}, fmt.Errorf("AUTH_ADMIN_WHITELIST must contain at least one username")
-			}
-			key := make([]byte, MinJWTSecretBytes)
-			if _, err := rand.Read(key); err != nil {
-				return AuthConfig{}, fmt.Errorf("generate local JWT key: %w", err)
-			}
-			cfg.JWTTrust = JWTTrustConfig{Issuer: "public-transport-local", Audience: "public-transport-api", Secret: key}
-			cfg.Registration = RegistrationAuthConfig{ServiceURL: serviceURL, DirectHTTPS: true, UpstreamIssuer: issuer, UpstreamAudience: audience, LocalTrust: cfg.JWTTrust, AdminUsers: users, RequiredRole: requiredRole}
-		} else {
-			if len(secret) < MinJWTSecretBytes {
-				return AuthConfig{}, fmt.Errorf("REGISTRATION_JWT_SECRET must be at least %d bytes", MinJWTSecretBytes)
-			}
-			cfg.JWTTrust = JWTTrustConfig{Issuer: issuer, Audience: audience, Secret: []byte(secret)}
+		if !strings.HasPrefix(serviceURL, "https://") {
+			return AuthConfig{}, fmt.Errorf("registration login requires HTTPS")
 		}
+		var users []string
+		for _, raw := range strings.Split(os.Getenv("AUTH_ADMIN_WHITELIST"), ",") {
+			if u := strings.TrimSpace(raw); u != "" {
+				users = append(users, u)
+			}
+		}
+		if len(users) == 0 {
+			return AuthConfig{}, fmt.Errorf("AUTH_ADMIN_WHITELIST must contain at least one username")
+		}
+		key := make([]byte, MinJWTSecretBytes)
+		if _, err := rand.Read(key); err != nil {
+			return AuthConfig{}, fmt.Errorf("generate local JWT key: %w", err)
+		}
+		cfg.JWTTrust = JWTTrustConfig{Issuer: "public-transport-local", Audience: "public-transport-api", Secret: key}
+		cfg.Registration = RegistrationAuthConfig{ServiceURL: serviceURL, UpstreamIssuer: issuer, UpstreamAudience: audience, LocalTrust: cfg.JWTTrust, AdminUsers: users, RequiredRole: requiredRole}
 	}
 	return cfg, nil
 }

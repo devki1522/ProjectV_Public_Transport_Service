@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,18 +46,22 @@ func NewRegistrationProvider(cfg config.RegistrationAuthConfig, client *http.Cli
 	}
 	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error { return errRedirectsDisabled }
 	p := &RegistrationProvider{endpoint: baseURL + "/api/Login/authenticate", client: safeClient}
-	if cfg.DirectHTTPS {
-		if !strings.HasPrefix(baseURL, "https://") {
-			return nil, fmt.Errorf("direct registration exchange requires HTTPS")
-		}
-		// Use Go's normal TLS certificate and hostname verification, not an injected transport.
-		p.client = &http.Client{Timeout: safeClient.Timeout, CheckRedirect: safeClient.CheckRedirect, Transport: &http.Transport{TLSHandshakeTimeout: defaultUpstreamTimeout}}
-		exchange, err := newDirectRegistrationExchange(cfg)
-		if err != nil {
-			return nil, err
-		}
-		p.direct = exchange
+	if !strings.HasPrefix(baseURL, "https://") {
+		return nil, fmt.Errorf("direct registration exchange requires HTTPS")
 	}
+	// Always verify the server certificate and hostname. An injected client may
+	// supply a trusted CA pool, but cannot disable TLS verification or intercept credentials.
+	transport := &http.Transport{TLSHandshakeTimeout: defaultUpstreamTimeout}
+	if supplied, ok := safeClient.Transport.(*http.Transport); ok && supplied.TLSClientConfig != nil {
+		transport.TLSClientConfig = &tls.Config{RootCAs: supplied.TLSClientConfig.RootCAs, MinVersion: tls.VersionTLS12}
+	}
+	p.client = &http.Client{Timeout: safeClient.Timeout, CheckRedirect: safeClient.CheckRedirect, Transport: transport}
+
+	exchange, err := newDirectRegistrationExchange(cfg)
+	if err != nil {
+		return nil, err
+	}
+	p.direct = exchange
 	return p, nil
 }
 
@@ -131,11 +136,7 @@ func (p *RegistrationProvider) Authenticate(ctx context.Context, req LoginReques
 	if err != nil {
 		return AuthResult{}, ErrInvalidUpstreamResponse
 	}
-	if p.direct != nil {
-		// This branch is reachable only after a successful direct HTTPS credential exchange.
-		return p.direct.exchange(parsed.AccessToken, req.Username, expiresAt, time.Now().UTC())
-	}
-	return AuthResult{AccessToken: parsed.AccessToken, TokenType: "Bearer", ExpiresAtUTC: expiresAt}, nil
+	return p.direct.exchange(parsed.AccessToken, req.Username, expiresAt, time.Now().UTC())
 }
 func parseUTC(raw string) (time.Time, error) {
 	value := strings.TrimSpace(raw)

@@ -251,7 +251,7 @@ func TestJWTValidatorStrictValidation(t *testing.T) {
 }
 
 func TestRegistrationProviderHTTPContracts(t *testing.T) {
-	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	trust := testTrust()
 	validator, err := NewJWTValidator(trust, func() time.Time { return now })
 	if err != nil {
@@ -267,7 +267,7 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 			"aud":         testAudience,
 			"exp":         now.Add(15 * time.Minute).Unix(),
 		})
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/api/Login/authenticate" {
 				t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 			}
@@ -281,7 +281,7 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: server.URL}, server.Client())
+		provider, err := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: server.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, server.Client())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,13 +299,13 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 	})
 
 	t.Run("maps 401 to ErrInvalidCredentials", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"message":"Account is temporarily locked."}`))
 		}))
 		defer server.Close()
 
-		provider, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: server.URL}, server.Client())
+		provider, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: server.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, server.Client())
 		_, err := provider.Authenticate(context.Background(), LoginRequest{Username: "a", Password: "b"})
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("got %v, want ErrInvalidCredentials", err)
@@ -314,10 +314,10 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 
 	t.Run("handles 5xx, timeout, malformed JSON, and rejects redirects", func(t *testing.T) {
 		// 503 upstream failure
-		s503 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s503 := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}))
-		p503, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: s503.URL}, s503.Client())
+		p503, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: s503.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, s503.Client())
 		_, err := p503.Authenticate(context.Background(), LoginRequest{Username: "a", Password: "b"})
 		s503.Close()
 		if !errors.Is(err, ErrProviderUnavailable) {
@@ -325,24 +325,25 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 		}
 
 		// Timeout
-		sSlow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sSlow := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(150 * time.Millisecond)
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer sSlow.Close()
-		slowClient := &http.Client{Timeout: 30 * time.Millisecond}
-		pSlow, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: sSlow.URL}, slowClient)
+		slowClient := sSlow.Client()
+		slowClient.Timeout = 30 * time.Millisecond
+		pSlow, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: sSlow.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, slowClient)
 		_, err = pSlow.Authenticate(context.Background(), LoginRequest{Username: "a", Password: "b"})
 		if !errors.Is(err, ErrProviderTimeout) {
 			t.Fatalf("timeout got %v, want ErrProviderTimeout", err)
 		}
 
 		// Malformed response & wrong tokenType
-		sMalformed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sMalformed := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"accessToken":"abc","tokenType":"Basic","expiresAtUtc":"2026-11-10T12:15:00Z"}`))
 		}))
 		defer sMalformed.Close()
-		pMalformed, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: sMalformed.URL}, sMalformed.Client())
+		pMalformed, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: sMalformed.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, sMalformed.Client())
 		_, err = pMalformed.Authenticate(context.Background(), LoginRequest{Username: "a", Password: "b"})
 		if !errors.Is(err, ErrInvalidUpstreamResponse) {
 			t.Fatalf("wrong tokenType got %v, want ErrInvalidUpstreamResponse", err)
@@ -350,16 +351,16 @@ func TestRegistrationProviderHTTPContracts(t *testing.T) {
 
 		// Redirect rejected
 		redirectHits := 0
-		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			redirectHits++
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer target.Close()
-		redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirector := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
 		}))
 		defer redirector.Close()
-		pRedirect, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: redirector.URL}, redirector.Client())
+		pRedirect, _ := NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: redirector.URL, UpstreamIssuer: testIssuer, UpstreamAudience: testAudience, LocalTrust: trust, AdminUsers: []string{"jdoe"}, RequiredRole: "TransitAdministrator"}, redirector.Client())
 		_, err = pRedirect.Authenticate(context.Background(), LoginRequest{Username: "a", Password: "b"})
 		if !errors.Is(err, ErrInvalidUpstreamResponse) || redirectHits != 0 {
 			t.Fatalf("redirect got %v hits=%d, want ErrInvalidUpstreamResponse and 0 redirect hits", err, redirectHits)

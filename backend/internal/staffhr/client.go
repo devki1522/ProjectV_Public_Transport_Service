@@ -42,7 +42,6 @@ var (
 type Client struct {
 	baseURL     string
 	defaultDept string
-	bearerToken string
 	client      *http.Client
 	now         func() time.Time
 }
@@ -75,7 +74,6 @@ func NewClientWithClock(cfg config.StaffHRConfig, httpClient *http.Client, now f
 	return &Client{
 		baseURL:     strings.TrimRight(strings.TrimSpace(cfg.ServiceURL), "/"),
 		defaultDept: defaultDept,
-		bearerToken: strings.TrimSpace(cfg.BearerToken),
 		client:      safeClient,
 		now:         now,
 	}
@@ -377,9 +375,6 @@ func (c *Client) doJSON(ctx context.Context, method, targetURL string, reqBody a
 	req.Header.Set("Accept", "application/json")
 	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
-	}
-	if c.bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.bearerToken)
 	}
 
 	resp, err := c.client.Do(req)

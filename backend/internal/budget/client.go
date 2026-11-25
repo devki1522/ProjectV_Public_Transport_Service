@@ -30,7 +30,6 @@ var errRedirectsDisabled = errors.New("redirects are not allowed for Budget & Fi
 type Client struct {
 	baseURL     string
 	defaultDept string
-	bearerToken string
 	client      *http.Client
 }
 
@@ -54,7 +53,6 @@ func NewClient(cfg config.BudgetConfig, httpClient *http.Client) *Client {
 	return &Client{
 		baseURL:     strings.TrimRight(strings.TrimSpace(cfg.ServiceURL), "/"),
 		defaultDept: defaultDept,
-		bearerToken: strings.TrimSpace(cfg.BearerToken),
 		client:      safeClient,
 	}
 }
@@ -424,9 +422,6 @@ func (c *Client) doJSON(ctx context.Context, method, path string, reqBody any, e
 	req.Header.Set("Accept", "application/json")
 	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
-	}
-	if c.bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.bearerToken)
 	}
 
 	resp, err := c.client.Do(req)

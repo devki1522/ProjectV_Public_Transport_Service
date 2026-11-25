@@ -15,7 +15,7 @@ import (
 
 func TestClientBudgetEndpoints(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer budget-secret" {
+		if r.Header.Get("Authorization") != "" {
 			t.Errorf("unexpected Authorization header: %q", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -99,7 +99,6 @@ func TestClientBudgetEndpoints(t *testing.T) {
 	client := NewClient(config.BudgetConfig{
 		ServiceURL:     server.URL,
 		DepartmentCode: "TRANSIT",
-		BearerToken:    "budget-secret",
 	}, server.Client())
 
 	alloc, err := client.GetAllocation(context.Background())

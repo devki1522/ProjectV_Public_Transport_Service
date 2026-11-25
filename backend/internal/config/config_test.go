@@ -12,7 +12,6 @@ const (
 	testDSN           = "postgres://test:test@localhost:5432/test?sslmode=disable"
 	testValidSecret   = "0123456789abcdef0123456789abcdef" // 32 bytes
 	testShortSecret   = "too-short-secret"
-	testRegSecret     = "fedcba9876543210fedcba9876543210"
 	testAdminPassword = "dev-admin-password"
 )
 
@@ -25,11 +24,11 @@ func clearAuthEnv(t *testing.T) {
 		"MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_JWT_SECRET",
 		"MOCK_ADMIN_PASSWORD",
 		"REGISTRATION_SERVICE_URL", "REGISTRATION_JWT_ISSUER",
-		"REGISTRATION_JWT_AUDIENCE", "REGISTRATION_JWT_SECRET",
+		"REGISTRATION_JWT_AUDIENCE",
 		"SIMULATE_VEHICLES", "SIMULATE_VEHICLES_COUNT", "SIMULATE_TICK_INTERVAL",
-		"STAFF_HR_SERVICE_URL", "STAFF_HR_DEPARTMENT_CODE", "STAFF_HR_BEARER_TOKEN",
-		"BUDGET_SERVICE_URL", "BUDGET_DEPARTMENT_CODE", "BUDGET_BEARER_TOKEN",
-		"REGISTRATION_TRUST_HTTPS", "AUTH_ADMIN_WHITELIST",
+		"STAFF_HR_SERVICE_URL", "STAFF_HR_DEPARTMENT_CODE",
+		"BUDGET_SERVICE_URL", "BUDGET_DEPARTMENT_CODE",
+		"AUTH_ADMIN_WHITELIST",
 	} {
 		t.Setenv(key, "")
 	}
@@ -54,7 +53,7 @@ func setRegistrationProdEnv(t *testing.T) {
 	t.Setenv("REGISTRATION_SERVICE_URL", "https://auth.example.com")
 	t.Setenv("REGISTRATION_JWT_ISSUER", "CmRegistrationService")
 	t.Setenv("REGISTRATION_JWT_AUDIENCE", "CmRegistrationClients")
-	t.Setenv("REGISTRATION_JWT_SECRET", testRegSecret)
+	t.Setenv("AUTH_ADMIN_WHITELIST", "transit.admin")
 }
 
 func TestLoadMockDevelopmentDefaults(t *testing.T) {
@@ -120,7 +119,7 @@ func TestLoadProductionDefaultsToRegistration(t *testing.T) {
 	if !got.Auth.CookieSecure {
 		t.Fatal("expected CookieSecure=true in production")
 	}
-	if got.Auth.JWTTrust.Issuer != "CmRegistrationService" || string(got.Auth.JWTTrust.Secret) != testRegSecret {
+	if got.Auth.JWTTrust.Issuer != "public-transport-local" || len(got.Auth.JWTTrust.Secret) < MinJWTSecretBytes {
 		t.Fatalf("unexpected JWTTrust: %+v", got.Auth.JWTTrust)
 	}
 	if got.Auth.Mock != (MockAuthConfig{}) {
@@ -251,20 +250,13 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		}
 	})
 
-	t.Run("http registration URL allowed for localhost in development", func(t *testing.T) {
-		clearAuthEnv(t)
+	t.Run("http registration URL rejected even for localhost", func(t *testing.T) {
+		setRegistrationProdEnv(t)
 		t.Setenv("APP_ENV", "development")
 		t.Setenv("AUTH_PROVIDER", "registration")
-		t.Setenv("REGISTRATION_SERVICE_URL", "http://localhost:5000/")
-		t.Setenv("REGISTRATION_JWT_ISSUER", "CmRegistrationService")
-		t.Setenv("REGISTRATION_JWT_AUDIENCE", "CmRegistrationClients")
-		t.Setenv("REGISTRATION_JWT_SECRET", testRegSecret)
-		got, err := Load()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.Auth.Registration.ServiceURL != "http://localhost:5000" {
-			t.Fatalf("ServiceURL = %q", got.Auth.Registration.ServiceURL)
+		t.Setenv("REGISTRATION_SERVICE_URL", "http://localhost:5000")
+		if _, err := Load(); err == nil {
+			t.Fatal("expected HTTPS requirement")
 		}
 	})
 
@@ -275,7 +267,7 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		t.Setenv("REGISTRATION_SERVICE_URL", "http://auth.internal:5000")
 		t.Setenv("REGISTRATION_JWT_ISSUER", "CmRegistrationService")
 		t.Setenv("REGISTRATION_JWT_AUDIENCE", "CmRegistrationClients")
-		t.Setenv("REGISTRATION_JWT_SECRET", testRegSecret)
+		t.Setenv("AUTH_ADMIN_WHITELIST", "transit.admin")
 		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "https") {
 			t.Fatalf("got %v", err)
 		}
@@ -289,10 +281,10 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		}
 	})
 
-	t.Run("short registration secret rejected", func(t *testing.T) {
+	t.Run("registration requires explicit administrators", func(t *testing.T) {
 		setRegistrationProdEnv(t)
-		t.Setenv("REGISTRATION_JWT_SECRET", testShortSecret)
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "32 bytes") {
+		t.Setenv("AUTH_ADMIN_WHITELIST", "")
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_ADMIN_WHITELIST") {
 			t.Fatalf("got %v", err)
 		}
 	})
@@ -351,12 +343,12 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		t.Setenv("REGISTRATION_SERVICE_URL", "https://auth.example.com")
 		t.Setenv("REGISTRATION_JWT_ISSUER", "real-iss")
 		t.Setenv("REGISTRATION_JWT_AUDIENCE", "real-aud")
-		t.Setenv("REGISTRATION_JWT_SECRET", testRegSecret)
+		t.Setenv("AUTH_ADMIN_WHITELIST", "transit.admin")
 		got, err := Load()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Auth.JWTTrust.Issuer != "real-iss" || string(got.Auth.JWTTrust.Secret) != testRegSecret {
+		if got.Auth.Registration.UpstreamIssuer != "real-iss" || string(got.Auth.JWTTrust.Secret) == testValidSecret {
 			t.Fatalf("unexpected JWTTrust: %+v", got.Auth.JWTTrust)
 		}
 	})
@@ -431,21 +423,17 @@ func TestLoadVehicleSimulatorSettings(t *testing.T) {
 }
 
 func TestLoadStaffHRSettings(t *testing.T) {
-	t.Run("custom development URL and bearer token redaction", func(t *testing.T) {
+	t.Run("custom development URL and department", func(t *testing.T) {
 		setMockDevEnv(t)
 		t.Setenv("STAFF_HR_SERVICE_URL", "http://localhost:5150/")
 		t.Setenv("STAFF_HR_DEPARTMENT_CODE", " ems ")
-		t.Setenv("STAFF_HR_BEARER_TOKEN", "super-secret-hr-token")
 
 		got, err := Load()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.StaffHR.ServiceURL != "http://localhost:5150" || got.StaffHR.DepartmentCode != "EMS" || got.StaffHR.BearerToken != "super-secret-hr-token" {
+		if got.StaffHR.ServiceURL != "http://localhost:5150" || got.StaffHR.DepartmentCode != "EMS" {
 			t.Fatalf("unexpected StaffHR config: %+v", got.StaffHR)
-		}
-		if strings.Contains(got.StaffHR.String(), "super-secret-hr-token") {
-			t.Fatalf("bearer token leaked in String(): %s", got.StaffHR.String())
 		}
 	})
 
@@ -486,21 +474,17 @@ func TestLoadStaffHRSettings(t *testing.T) {
 }
 
 func TestLoadBudgetSettings(t *testing.T) {
-	t.Run("custom development URL and bearer token redaction", func(t *testing.T) {
+	t.Run("custom development URL and department", func(t *testing.T) {
 		setMockDevEnv(t)
 		t.Setenv("BUDGET_SERVICE_URL", "http://localhost:5250/")
 		t.Setenv("BUDGET_DEPARTMENT_CODE", " transit ")
-		t.Setenv("BUDGET_BEARER_TOKEN", "super-secret-budget-token")
 
 		got, err := Load()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Budget.ServiceURL != "http://localhost:5250" || got.Budget.DepartmentCode != "TRANSIT" || got.Budget.BearerToken != "super-secret-budget-token" {
+		if got.Budget.ServiceURL != "http://localhost:5250" || got.Budget.DepartmentCode != "TRANSIT" {
 			t.Fatalf("unexpected Budget config: %+v", got.Budget)
-		}
-		if strings.Contains(got.Budget.String(), "super-secret-budget-token") {
-			t.Fatalf("bearer token leaked in String(): %s", got.Budget.String())
 		}
 	})
 

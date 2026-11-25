@@ -327,7 +327,7 @@ func TestFakeRegistrationServiceEndToEndFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fakeRegServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fakeRegServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/Login/authenticate" {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -347,7 +347,7 @@ func TestFakeRegistrationServiceEndToEndFlow(t *testing.T) {
 		Audience: "CmRegistrationClients",
 		Secret:   []byte(routerTestSecret),
 	}
-	provider, err := auth.NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: fakeRegServer.URL}, fakeRegServer.Client())
+	provider, err := auth.NewRegistrationProvider(config.RegistrationAuthConfig{ServiceURL: fakeRegServer.URL, UpstreamIssuer: "CmRegistrationService", UpstreamAudience: "CmRegistrationClients", LocalTrust: trust, AdminUsers: []string{"city.transit.admin"}, RequiredRole: "TransitAdministrator"}, fakeRegServer.Client())
 	if err != nil {
 		t.Fatal(err)
 	}
