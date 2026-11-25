@@ -59,9 +59,33 @@ func EnsureSeeded(db *gorm.DB) {
 		log.Printf("Auto-seed error accessing db: %v", err)
 		return
 	}
-	query := fmt.Sprintf("BEGIN;\nSET LOCAL standard_conforming_strings = on;\nSET LOCAL search_path = public;\nSELECT pg_advisory_xact_lock(714208301);\n%s\nCOMMIT;\n", string(seedBytes))
-	if _, err := sqlDB.Exec(query); err != nil {
+
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		log.Printf("Auto-seed failed to begin transaction: %v", err)
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	for _, stmt := range []string{
+		"SET LOCAL standard_conforming_strings = on",
+		"SET LOCAL search_path = public",
+		"SELECT pg_advisory_xact_lock(714208301)",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			log.Printf("Auto-seed setup failed: %v", err)
+			return
+		}
+	}
+
+	if _, err := tx.Exec(string(seedBytes)); err != nil {
 		log.Printf("Auto-seed execution failed: %v", err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("Auto-seed commit failed: %v", err)
 		return
 	}
 	log.Println("Database auto-seeded successfully!")
