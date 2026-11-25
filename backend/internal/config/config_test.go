@@ -28,6 +28,8 @@ func clearAuthEnv(t *testing.T) {
 		"REGISTRATION_JWT_AUDIENCE", "REGISTRATION_JWT_SECRET",
 		"SIMULATE_VEHICLES", "SIMULATE_VEHICLES_COUNT", "SIMULATE_TICK_INTERVAL",
 		"STAFF_HR_SERVICE_URL", "STAFF_HR_DEPARTMENT_CODE", "STAFF_HR_BEARER_TOKEN",
+		"BUDGET_SERVICE_URL", "BUDGET_DEPARTMENT_CODE", "BUDGET_BEARER_TOKEN",
+		"REGISTRATION_TRUST_HTTPS", "AUTH_ADMIN_WHITELIST",
 	} {
 		t.Setenv(key, "")
 	}
@@ -295,13 +297,43 @@ func TestLoadRejectsAuthTrustBoundaryViolations(t *testing.T) {
 		}
 	})
 
-	t.Run("missing mock administrator password rejected", func(t *testing.T) {
-		for _, key := range []string{"MOCK_ADMIN_PASSWORD"} {
-			setMockDevEnv(t)
-			t.Setenv(key, "")
-			if _, err := Load(); err == nil || !strings.Contains(err.Error(), key) {
-				t.Fatalf("key=%s got %v", key, err)
-			}
+	t.Run("missing mock administrator password falls back to development default", func(t *testing.T) {
+		setMockDevEnv(t)
+		t.Setenv("MOCK_ADMIN_PASSWORD", "")
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Auth.Mock.AdminPassword != DefaultMockAdminPassword {
+			t.Fatalf("AdminPassword = %q, want development default", got.Auth.Mock.AdminPassword)
+		}
+	})
+
+	t.Run("development mock login needs no MOCK_* settings", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv("APP_ENV", "development")
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Auth.Provider != AuthProviderMock {
+			t.Fatalf("Provider = %q, want mock", got.Auth.Provider)
+		}
+		if got.Auth.JWTTrust.Issuer != DefaultMockJWTIssuer || got.Auth.JWTTrust.Audience != DefaultMockJWTAudience {
+			t.Fatalf("unexpected default mock trust: %+v", got.Auth.JWTTrust)
+		}
+		if len(got.Auth.JWTTrust.Secret) < MinJWTSecretBytes {
+			t.Fatalf("generated secret length = %d, want >= %d", len(got.Auth.JWTTrust.Secret), MinJWTSecretBytes)
+		}
+		if got.Auth.Mock.AdminPassword != DefaultMockAdminPassword {
+			t.Fatalf("AdminPassword = %q, want development default", got.Auth.Mock.AdminPassword)
+		}
+		again, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(again.Auth.JWTTrust.Secret) == string(got.Auth.JWTTrust.Secret) {
+			t.Fatal("expected a fresh random mock signing key per load")
 		}
 	})
 

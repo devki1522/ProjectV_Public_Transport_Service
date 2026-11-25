@@ -5,8 +5,10 @@ PostgreSQL stores routes, stops, timetables and service disruptions. Complete th
 
 ## Configuration
 
-The root `.env` defines `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`.
-The username, password and database in `backend/.env`'s `DATABASE_URL` must match.
+`compose.yaml` defaults `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` to
+`projectv` / `local_dev_password` / `public_transport`. Override them in the root
+`.env` if needed. The backend's `DATABASE_URL` is built from the same values, so
+they always match.
 Existing volumes keep the credentials used when first initialized: changing
 environment variables does not rename roles or change stored passwords.
 

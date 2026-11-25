@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/api/transport/v1/admin/budget": {
             "get": {
-                "description": "Requires an administrator session cookie. Queries Budget \u0026 Finance GET /api/budget/v1/allocations/transit.",
+                "description": "Requires an administrator session cookie. Queries Budget \u0026 Finance GET /api/budget/v1/allocations/TRANSIT.",
                 "produces": [
                     "application/json"
                 ],

@@ -1086,7 +1086,7 @@ paths:
   /api/transport/v1/admin/budget:
     get:
       description: Requires an administrator session cookie. Queries Budget & Finance
-        GET /api/budget/v1/allocations/transit.
+        GET /api/budget/v1/allocations/TRANSIT.
       produces:
       - application/json
       responses:

@@ -1,3 +1,13 @@
+# Local development stack. Works with no .env files: every value below has a
+# development default, and the backend fills in the rest from APP_ENV=development.
+# Optional overrides:
+#   - root .env      -> POSTGRES_* and APP_ENV (used for ${...} interpolation below)
+#   - backend/.env   -> any other backend setting (see backend/.env.example)
+x-postgres: &postgres
+  POSTGRES_USER: ${POSTGRES_USER:-projectv}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+  POSTGRES_DB: ${POSTGRES_DB:-public_transport}
+
 services:
   frontend:
     build: ./frontend
@@ -11,7 +21,12 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - "./backend/.env"
+      - path: ./backend/.env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      # Built from the same POSTGRES_* values as the database service, so they can't drift.
+      DATABASE_URL: postgres://${POSTGRES_USER:-projectv}:${POSTGRES_PASSWORD:-local_dev_password}@database:5432/${POSTGRES_DB:-public_transport}?sslmode=disable
 
   database:
     image: postgres:18
@@ -22,10 +37,7 @@ services:
       retries: 12
       start_period: 10s
 
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the root .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env}
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the root .env}
+    environment: *postgres
 
     ports:
       - "127.0.0.1:5432:5432"

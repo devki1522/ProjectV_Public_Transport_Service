@@ -236,7 +236,7 @@ export function AdminBudgetPage() {
 
         <div className="admin-panel-footer">
           <Wallet size={16} aria-hidden="true" />
-          <span>Connected to Budget &amp; Finance endpoints (GET /allocations/transit, POST /expenses, POST /revenue, POST /funding-requests).</span>
+          <span>Connected to Budget &amp; Finance endpoints (GET /allocations/TRANSIT, POST /expenses, POST /revenue, POST /funding-requests).</span>
         </div>
       </section>
 

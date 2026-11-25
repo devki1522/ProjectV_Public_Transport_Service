@@ -10,6 +10,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -72,14 +73,27 @@ type upstreamExpenseRequest struct {
 	Description    string  `json:"description"`
 }
 
+type upstreamExpense struct {
+	ID             string  `json:"id"`
+	DepartmentCode string  `json:"departmentCode"`
+	Amount         float64 `json:"amount"`
+	Description    string  `json:"description"`
+	CreatedAtUtc   string  `json:"createdAtUtc"`
+	CreatedAt      string  `json:"createdAt"`
+}
+
 type upstreamExpenseResponse struct {
-	ID             string   `json:"id"`
-	DepartmentCode string   `json:"departmentCode"`
-	Amount         float64  `json:"amount"`
-	Description    string   `json:"description"`
-	Status         string   `json:"status"`
-	Remaining      *float64 `json:"remaining"`
-	CreatedAt      string   `json:"createdAt"`
+	Approved        *bool            `json:"approved"`
+	Message         string           `json:"message"`
+	RemainingBudget *float64         `json:"remainingBudget"`
+	Expense         *upstreamExpense `json:"expense"`
+	ID              string           `json:"id"`
+	DepartmentCode  string           `json:"departmentCode"`
+	Amount          float64          `json:"amount"`
+	Description     string           `json:"description"`
+	Status          string           `json:"status"`
+	Remaining       *float64         `json:"remaining"`
+	CreatedAt       string           `json:"createdAt"`
 }
 
 type upstreamRevenueRequest struct {
@@ -89,13 +103,26 @@ type upstreamRevenueRequest struct {
 	Description    string  `json:"description"`
 }
 
-type upstreamRevenueResponse struct {
+type upstreamRevenue struct {
 	ID             string  `json:"id"`
 	Source         string  `json:"source"`
 	DepartmentCode string  `json:"departmentCode"`
 	Amount         float64 `json:"amount"`
 	Description    string  `json:"description"`
+	CreatedAtUtc   string  `json:"createdAtUtc"`
 	CreatedAt      string  `json:"createdAt"`
+}
+
+type upstreamRevenueResponse struct {
+	Approved       *bool            `json:"approved"`
+	Message        string           `json:"message"`
+	Revenue        *upstreamRevenue `json:"revenue"`
+	ID             string           `json:"id"`
+	Source         string           `json:"source"`
+	DepartmentCode string           `json:"departmentCode"`
+	Amount         float64          `json:"amount"`
+	Description    string           `json:"description"`
+	CreatedAt      string           `json:"createdAt"`
 }
 
 type upstreamFundingRequest struct {
@@ -105,14 +132,45 @@ type upstreamFundingRequest struct {
 	Urgent         bool    `json:"urgent"`
 }
 
+type fundingRequestStatus string
+
+func (s *fundingRequestStatus) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if bytes.Equal(trimmed, []byte("null")) {
+		*s = ""
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(trimmed, &str); err == nil {
+		*s = fundingRequestStatus(strings.ToLower(strings.TrimSpace(str)))
+		return nil
+	}
+	var code int
+	if err := json.Unmarshal(trimmed, &code); err == nil {
+		switch code {
+		case 0:
+			*s = "pending"
+		case 1:
+			*s = "approved"
+		case 2:
+			*s = "rejected"
+		default:
+			*s = fundingRequestStatus(fmt.Sprintf("status_%d", code))
+		}
+		return nil
+	}
+	return fmt.Errorf("invalid funding request status: %s", string(trimmed))
+}
+
 type upstreamFundingResponse struct {
-	ID             string  `json:"id"`
-	DepartmentCode string  `json:"departmentCode"`
-	Amount         float64 `json:"amount"`
-	Reason         string  `json:"reason"`
-	Urgent         bool    `json:"urgent"`
-	Status         string  `json:"status"`
-	CreatedAt      string  `json:"createdAt"`
+	ID             string               `json:"id"`
+	DepartmentCode string               `json:"departmentCode"`
+	Amount         float64              `json:"amount"`
+	Reason         string               `json:"reason"`
+	Urgent         bool                 `json:"urgent"`
+	Status         fundingRequestStatus `json:"status"`
+	CreatedAtUtc   string               `json:"createdAtUtc"`
+	CreatedAt      string               `json:"createdAt"`
 }
 
 type upstreamError struct {
@@ -121,14 +179,15 @@ type upstreamError struct {
 	TraceID string `json:"traceId"`
 }
 
-// GetAllocation retrieves the transit operating budget allocation from GET /api/budget/v1/allocations/transit.
+// GetAllocation retrieves the transit operating budget allocation from GET /api/budget/v1/allocations/{dept}.
 func (c *Client) GetAllocation(ctx context.Context) (Allocation, error) {
 	if c.baseURL == "" {
 		return Allocation{}, &UpstreamUnavailableError{Message: "budget service URL is not configured"}
 	}
 
 	var raw upstreamAllocation
-	if err := c.doJSON(ctx, http.MethodGet, "/api/budget/v1/allocations/transit", nil, http.StatusOK, &raw); err != nil {
+	path := "/api/budget/v1/allocations/" + url.PathEscape(c.defaultDept)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, http.StatusOK, &raw); err != nil {
 		return Allocation{}, err
 	}
 
@@ -175,15 +234,42 @@ func (c *Client) SubmitExpense(ctx context.Context, input ExpenseInput) (Expense
 	if err := c.doJSON(ctx, http.MethodPost, "/api/budget/v1/expenses", reqBody, http.StatusCreated, &raw); err != nil {
 		return ExpenseRecord{}, err
 	}
+	if raw.Approved != nil && !*raw.Approved {
+		return ExpenseRecord{}, &RejectedError{
+			StatusCode: http.StatusBadRequest,
+			Message:    fallbackString(raw.Message, "expense was rejected by budget service"),
+		}
+	}
+
+	id := raw.ID
+	respDept := raw.DepartmentCode
+	amount := raw.Amount
+	respDesc := raw.Description
+	createdAt := raw.CreatedAt
+	if raw.Expense != nil {
+		id = fallbackString(raw.Expense.ID, id)
+		respDept = fallbackString(raw.Expense.DepartmentCode, respDept)
+		amount = fallbackAmount(raw.Expense.Amount, amount)
+		respDesc = fallbackString(raw.Expense.Description, respDesc)
+		createdAt = fallbackString(raw.Expense.CreatedAtUtc, fallbackString(raw.Expense.CreatedAt, createdAt))
+	}
+	remaining := raw.RemainingBudget
+	if remaining == nil {
+		remaining = raw.Remaining
+	}
+	status := fallbackString(raw.Status, "approved")
+	if raw.Approved != nil && *raw.Approved {
+		status = "approved"
+	}
 
 	return ExpenseRecord{
-		ID:             raw.ID,
-		DepartmentCode: fallbackString(raw.DepartmentCode, dept),
-		Amount:         fallbackAmount(raw.Amount, input.Amount),
-		Description:    fallbackString(raw.Description, desc),
-		Status:         fallbackString(raw.Status, "approved"),
-		Remaining:      raw.Remaining,
-		CreatedAt:      raw.CreatedAt,
+		ID:             id,
+		DepartmentCode: fallbackString(respDept, dept),
+		Amount:         fallbackAmount(amount, input.Amount),
+		Description:    fallbackString(respDesc, desc),
+		Status:         status,
+		Remaining:      remaining,
+		CreatedAt:      createdAt,
 	}, nil
 }
 
@@ -221,14 +307,35 @@ func (c *Client) SubmitRevenue(ctx context.Context, input RevenueInput) (Revenue
 	if err := c.doJSON(ctx, http.MethodPost, "/api/budget/v1/revenue", reqBody, http.StatusCreated, &raw); err != nil {
 		return RevenueRecord{}, err
 	}
+	if raw.Approved != nil && !*raw.Approved {
+		return RevenueRecord{}, &RejectedError{
+			StatusCode: http.StatusBadRequest,
+			Message:    fallbackString(raw.Message, "revenue submission was rejected by budget service"),
+		}
+	}
+
+	id := raw.ID
+	respSource := raw.Source
+	respDept := raw.DepartmentCode
+	amount := raw.Amount
+	respDesc := raw.Description
+	createdAt := raw.CreatedAt
+	if raw.Revenue != nil {
+		id = fallbackString(raw.Revenue.ID, id)
+		respSource = fallbackString(raw.Revenue.Source, respSource)
+		respDept = fallbackString(raw.Revenue.DepartmentCode, respDept)
+		amount = fallbackAmount(raw.Revenue.Amount, amount)
+		respDesc = fallbackString(raw.Revenue.Description, respDesc)
+		createdAt = fallbackString(raw.Revenue.CreatedAtUtc, fallbackString(raw.Revenue.CreatedAt, createdAt))
+	}
 
 	return RevenueRecord{
-		ID:             raw.ID,
-		Source:         fallbackString(raw.Source, source),
-		DepartmentCode: fallbackString(raw.DepartmentCode, dept),
-		Amount:         fallbackAmount(raw.Amount, input.Amount),
-		Description:    fallbackString(raw.Description, desc),
-		CreatedAt:      raw.CreatedAt,
+		ID:             id,
+		Source:         fallbackString(respSource, source),
+		DepartmentCode: fallbackString(respDept, dept),
+		Amount:         fallbackAmount(amount, input.Amount),
+		Description:    fallbackString(respDesc, desc),
+		CreatedAt:      createdAt,
 	}, nil
 }
 
@@ -266,8 +373,8 @@ func (c *Client) SubmitFundingRequest(ctx context.Context, input FundingRequestI
 		Amount:         fallbackAmount(raw.Amount, input.Amount),
 		Reason:         fallbackString(raw.Reason, reason),
 		Urgent:         input.Urgent || raw.Urgent,
-		Status:         fallbackString(raw.Status, "submitted"),
-		CreatedAt:      raw.CreatedAt,
+		Status:         fallbackString(string(raw.Status), "pending"),
+		CreatedAt:      fallbackString(raw.CreatedAtUtc, raw.CreatedAt),
 	}, nil
 }
 

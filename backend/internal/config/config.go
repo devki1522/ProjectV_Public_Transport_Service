@@ -21,8 +21,12 @@ const (
 	DefaultAPIVersion        = "v1"
 	DefaultStaffHRURL        = "https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net"
 	DefaultStaffHRDepartment = "PTR"
-	DefaultBudgetURL         = "https://budget-service.mock.example.com"
+	DefaultBudgetURL         = "https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net"
 	DefaultBudgetDepartment  = "TRANSIT"
+	// Development-only mock login defaults. Mock mode is rejected outside APP_ENV=development.
+	DefaultMockJWTIssuer     = "transit-dev"
+	DefaultMockJWTAudience   = "transit-api"
+	DefaultMockAdminPassword = "Test!123"
 )
 
 type Config struct {
@@ -295,20 +299,28 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 	}
 	switch provider {
 	case AuthProviderMock:
-		issuer := strings.TrimSpace(os.Getenv("MOCK_JWT_ISSUER"))
-		audience := strings.TrimSpace(os.Getenv("MOCK_JWT_AUDIENCE"))
-		secret := os.Getenv("MOCK_JWT_SECRET")
-		adminPassword := os.Getenv("MOCK_ADMIN_PASSWORD")
+		// Mock mode is development-only (enforced above), so every setting has a
+		// safe default and local runs need no manual configuration.
+		issuer := strings.TrimSpace(getEnv("MOCK_JWT_ISSUER", DefaultMockJWTIssuer))
+		audience := strings.TrimSpace(getEnv("MOCK_JWT_AUDIENCE", DefaultMockJWTAudience))
+		adminPassword := getEnv("MOCK_ADMIN_PASSWORD", DefaultMockAdminPassword)
+		var secret []byte
+		if raw := os.Getenv("MOCK_JWT_SECRET"); raw != "" {
+			if len(raw) < MinJWTSecretBytes {
+				return AuthConfig{}, fmt.Errorf("MOCK_JWT_SECRET must be at least %d bytes", MinJWTSecretBytes)
+			}
+			secret = []byte(raw)
+		} else {
+			// Sessions are in-memory, so a per-boot signing key loses nothing on restart.
+			secret = make([]byte, MinJWTSecretBytes)
+			if _, err := rand.Read(secret); err != nil {
+				return AuthConfig{}, fmt.Errorf("generate mock JWT key: %w", err)
+			}
+		}
 		if issuer == "" || audience == "" {
-			return AuthConfig{}, fmt.Errorf("MOCK_JWT_ISSUER and MOCK_JWT_AUDIENCE are required when AUTH_PROVIDER=mock")
+			return AuthConfig{}, fmt.Errorf("MOCK_JWT_ISSUER and MOCK_JWT_AUDIENCE must not be blank")
 		}
-		if len(secret) < MinJWTSecretBytes {
-			return AuthConfig{}, fmt.Errorf("MOCK_JWT_SECRET must be at least %d bytes", MinJWTSecretBytes)
-		}
-		if adminPassword == "" {
-			return AuthConfig{}, fmt.Errorf("MOCK_ADMIN_PASSWORD is required when AUTH_PROVIDER=mock")
-		}
-		cfg.JWTTrust = JWTTrustConfig{Issuer: issuer, Audience: audience, Secret: []byte(secret)}
+		cfg.JWTTrust = JWTTrustConfig{Issuer: issuer, Audience: audience, Secret: secret}
 		cfg.Mock = MockAuthConfig{AdminPassword: adminPassword}
 	case AuthProviderRegistration:
 		serviceURL, err := parseRegistrationURL(os.Getenv("REGISTRATION_SERVICE_URL"), env)

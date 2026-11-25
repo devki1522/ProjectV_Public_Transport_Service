@@ -24,28 +24,17 @@ npm ci
 npm ci --prefix frontend
 ```
 
-For a new checkout, copy the environment examples in PowerShell without overwriting existing files:
+No environment files are needed for local development. `compose.yaml` sets
+`APP_ENV=development` and builds the backend's `DATABASE_URL` from the same
+Postgres values as the database container. The backend defaults everything else
+in development. To change a value, see [`.env.example`](.env.example) (Postgres
+and `APP_ENV`) or [`backend/.env.example`](backend/.env.example) (everything else).
+Never commit real secrets.
 
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-if (-not (Test-Path backend/.env)) { Copy-Item backend/.env.example backend/.env }
-```
+Development mock administrator:
+- Username `transit.admin`, password `Test!123` (`TransitAdministrator` role, can view `/admin` and manage routes)
 
-Use `cp -n` in bash (`cp -n .env.example .env && cp -n backend/.env.example backend/.env`). Keep existing `.env` files when updating a checkout, and never commit real secrets.
-
-Configure local mock authentication without overwriting existing database settings:
-
-```powershell
-npm run auth:setup
-```
-
-This creates missing environment files, fills missing development auth settings,
-and generates cryptographically random local passwords and a signing secret.
-Existing nonempty values are preserved. Read `MOCK_ADMIN_PASSWORD` in your local `backend/.env` to sign in. No credentials are
-printed or committed. The command refuses non-development/non-mock settings.
-
-Development mock administrator (password comes from `backend/.env`):
-- `transit.admin` (`TransitAdministrator` role — can view `/admin` and manage routes)
+Mock login is only accepted when `APP_ENV=development`. Deployed environments use the Registration Service.
 
 Start the app:
 

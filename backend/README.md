@@ -60,7 +60,7 @@ upstream response, `503` provider unavailable, and `504` upstream timeout.
 
 #### Providers and Registration Service integration
 
-- **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`): Authenticates `transit.admin` (`TransitAdministrator`) against `MOCK_ADMIN_PASSWORD` and signs real 15-minute `HS256` JWTs with `MOCK_JWT_SECRET` (>= 32 bytes). Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
+- **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`, both defaults for local development): Authenticates `transit.admin` (`TransitAdministrator`) against `MOCK_ADMIN_PASSWORD` (default `Test!123`) and signs real 15-minute `HS256` JWTs. The signing key comes from `MOCK_JWT_SECRET` (>= 32 bytes) when set, and is otherwise generated randomly at startup. Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
 - **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate`, validates the returned `HS256` JWT locally against `REGISTRATION_JWT_ISSUER`, `REGISTRATION_JWT_AUDIENCE`, and `REGISTRATION_JWT_SECRET`, and reads authorization exclusively from the signed `role` claim (string or array), ignoring top-level `role`. HTTPS is required outside explicit local development.
 - **External team dependency**: Inspected source (`CmRegistrationService`) seeds only `Administrator` and `User` roles. The Registration Service team must create and assign `TransitAdministrator` and provide production URL/issuer/audience/secret values before live integration verification.
 
@@ -268,16 +268,18 @@ from the repository root so port 8080 is available:
 docker compose stop backend
 ```
 
-In `backend/.env`, change the `DATABASE_URL` hostname from `database` to
-`localhost`, then run:
+Outside Docker, nothing sets `APP_ENV` or `DATABASE_URL` for you, so add them to
+`backend/.env` (both lines are in [`.env.example`](.env.example), pointing at
+`localhost`), then run:
 
 ```bash
 cd backend
 go run ./cmd/api
 ```
 
-Run from `backend/` so the API loads its `.env`. Restore the hostname to
-`database` before returning to Compose. Available settings and pool defaults
+Run from `backend/` so the API loads its `.env`. You don't need to undo this before
+returning to Compose: `compose.yaml` sets both values itself, and those take
+priority over `backend/.env`. Available settings and pool defaults
 are listed in [`.env.example`](.env.example).
 
 ## Code and tests
@@ -354,9 +356,8 @@ The frontend returns to sign-in at session expiration. If a logout request fails
 it keeps the session and CSRF token available and shows an error so sign-out can
 be retried; it does not report successful logout before backend invalidation.
 
-Run `npm run auth:setup` from the repository root for local mock setup. It preserves
-existing nonempty environment values and database configuration. Mock passwords
-are stored only in the ignored `backend/.env`.
+Local mock login needs no setup: in development, sign in as `transit.admin` /
+`Test!123`. Override the password with `MOCK_ADMIN_PASSWORD` in `backend/.env` if needed.
 
 ### Registration Service source verification
 

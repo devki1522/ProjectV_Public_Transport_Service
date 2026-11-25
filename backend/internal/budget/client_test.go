@@ -21,12 +21,13 @@ func TestClientBudgetEndpoints(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/budget/v1/allocations/transit":
+		case r.Method == http.MethodGet && r.URL.Path == "/api/budget/v1/allocations/TRANSIT":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"departmentCode": "TRANSIT",
-				"allocated":      250000.00,
-				"spent":          90000.50,
-				"remaining":      159999.50,
+				"departmentName": "Public Transport",
+				"allocated":      4000000,
+				"spent":          0,
+				"remaining":      4000000,
 				"currency":       "CAD",
 			})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/budget/v1/expenses":
@@ -37,14 +38,18 @@ func TestClientBudgetEndpoints(t *testing.T) {
 			if body["departmentCode"] != "TRANSIT" || body["description"] != "Diesel fuel" {
 				t.Fatalf("unexpected expense body: %+v", body)
 			}
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":             "exp-101",
-				"departmentCode": "TRANSIT",
-				"amount":         1250.75,
-				"description":    "Diesel fuel",
-				"status":         "approved",
-				"remaining":      158748.75,
+				"approved":        true,
+				"message":         "Expense approved",
+				"remainingBudget": 3998749.25,
+				"expense": map[string]any{
+					"id":             "11111111-1111-1111-1111-111111111111",
+					"departmentCode": "TRANSIT",
+					"amount":         1250.75,
+					"description":    "Diesel fuel",
+					"createdAtUtc":   "2026-11-25T06:30:00Z",
+				},
 			})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/budget/v1/revenue":
 			var body map[string]any
@@ -54,13 +59,18 @@ func TestClientBudgetEndpoints(t *testing.T) {
 			if body["source"] != "FARES" || body["departmentCode"] != "TRANSIT" {
 				t.Fatalf("unexpected revenue body: %+v", body)
 			}
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":             "rev-202",
-				"source":         "FARES",
-				"departmentCode": "TRANSIT",
-				"amount":         4320.00,
-				"description":    "Daily bus farebox collection",
+				"approved": true,
+				"message":  "Revenue recorded",
+				"revenue": map[string]any{
+					"id":             "22222222-2222-2222-2222-222222222222",
+					"source":         "FARES",
+					"departmentCode": "TRANSIT",
+					"amount":         4320.00,
+					"description":    "Daily bus farebox collection",
+					"createdAtUtc":   "2026-11-25T06:31:00Z",
+				},
 			})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/budget/v1/funding-requests":
 			var body map[string]any
@@ -70,14 +80,15 @@ func TestClientBudgetEndpoints(t *testing.T) {
 			if body["departmentCode"] != "TRANSIT" || body["urgent"] != true {
 				t.Fatalf("unexpected funding request body: %+v", body)
 			}
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":             "fund-303",
+				"id":             "33333333-3333-3333-3333-333333333333",
 				"departmentCode": "TRANSIT",
 				"amount":         50000,
 				"reason":         "Winter fleet maintenance",
 				"urgent":         true,
-				"status":         "pending",
+				"status":         0,
+				"createdAtUtc":   "2026-11-25T06:32:00Z",
 			})
 		default:
 			http.NotFound(w, r)
@@ -95,7 +106,7 @@ func TestClientBudgetEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllocation failed: %v", err)
 	}
-	if alloc.DepartmentCode != "TRANSIT" || alloc.Allocated != 250000 || alloc.Remaining != 159999.50 || alloc.Currency != "CAD" {
+	if alloc.DepartmentCode != "TRANSIT" || alloc.Allocated != 4000000 || alloc.Spent != 0 || alloc.Remaining != 4000000 || alloc.Currency != "CAD" {
 		t.Fatalf("unexpected allocation: %+v", alloc)
 	}
 
@@ -106,7 +117,7 @@ func TestClientBudgetEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitExpense failed: %v", err)
 	}
-	if exp.ID != "exp-101" || exp.DepartmentCode != "TRANSIT" || exp.Status != "approved" {
+	if exp.ID != "11111111-1111-1111-1111-111111111111" || exp.DepartmentCode != "TRANSIT" || exp.Status != "approved" || exp.Remaining == nil || *exp.Remaining != 3998749.25 || exp.CreatedAt != "2026-11-25T06:30:00Z" {
 		t.Fatalf("unexpected expense record: %+v", exp)
 	}
 
@@ -117,7 +128,7 @@ func TestClientBudgetEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitRevenue failed: %v", err)
 	}
-	if rev.ID != "rev-202" || rev.Source != "FARES" || rev.DepartmentCode != "TRANSIT" {
+	if rev.ID != "22222222-2222-2222-2222-222222222222" || rev.Source != "FARES" || rev.DepartmentCode != "TRANSIT" || rev.CreatedAt != "2026-11-25T06:31:00Z" {
 		t.Fatalf("unexpected revenue record: %+v", rev)
 	}
 
@@ -129,7 +140,7 @@ func TestClientBudgetEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitFundingRequest failed: %v", err)
 	}
-	if fr.ID != "fund-303" || !fr.Urgent || fr.Status != "pending" {
+	if fr.ID != "33333333-3333-3333-3333-333333333333" || !fr.Urgent || fr.Status != "pending" || fr.CreatedAt != "2026-11-25T06:32:00Z" {
 		t.Fatalf("unexpected funding request record: %+v", fr)
 	}
 }
@@ -182,6 +193,63 @@ func TestClientErrorMappingsAndValidation(t *testing.T) {
 		var unavail *UpstreamUnavailableError
 		if !errors.As(err, &unavail) {
 			t.Fatalf("expected UpstreamUnavailableError, got %v", err)
+		}
+	})
+
+	t.Run("maps 200 approved=false envelopes to RejectedError", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			switch r.URL.Path {
+			case "/api/budget/v1/expenses":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"approved": false,
+					"message":  "Over budget",
+				})
+			case "/api/budget/v1/revenue":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"approved": false,
+					"message":  "Invalid source",
+				})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		client := NewClient(config.BudgetConfig{ServiceURL: server.URL, DepartmentCode: "TRANSIT"}, server.Client())
+
+		_, err := client.SubmitExpense(context.Background(), ExpenseInput{Amount: 5000000, Description: "Fleet"})
+		var expRejected *RejectedError
+		if !errors.As(err, &expRejected) || !strings.Contains(expRejected.Error(), "Over budget") {
+			t.Fatalf("expected RejectedError with 'Over budget', got %v", err)
+		}
+
+		_, err = client.SubmitRevenue(context.Background(), RevenueInput{Amount: 100, Description: "Test"})
+		var revRejected *RejectedError
+		if !errors.As(err, &revRejected) || !strings.Contains(revRejected.Error(), "Invalid source") {
+			t.Fatalf("expected RejectedError with 'Invalid source', got %v", err)
+		}
+	})
+
+	t.Run("unmarshals fundingRequestStatus integer enums, strings, and null", func(t *testing.T) {
+		for _, tc := range []struct {
+			raw  string
+			want fundingRequestStatus
+		}{
+			{`0`, "pending"},
+			{`1`, "approved"},
+			{`2`, "rejected"},
+			{`"Approved"`, "approved"},
+			{`null`, ""},
+		} {
+			var got fundingRequestStatus
+			if err := json.Unmarshal([]byte(tc.raw), &got); err != nil {
+				t.Fatalf("unmarshal %s: %v", tc.raw, err)
+			}
+			if got != tc.want {
+				t.Fatalf("unmarshal %s = %q, want %q", tc.raw, got, tc.want)
+			}
 		}
 	})
 
