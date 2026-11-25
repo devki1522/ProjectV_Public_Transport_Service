@@ -55,28 +55,6 @@ jobs:
       - name: Build frontend
         run: npm run build --prefix frontend
 
-  backend-documentation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache: false
-      - run: npm ci
-      - name: Build and verify static pkgsite documentation
-        run: npm run docs:build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: backend-pkgsite-documentation
-          path: docs/backend/backend-documentation.zip
-          if-no-files-found: error
-
   swagger-documentation:
     runs-on: ubuntu-latest
     steps:
