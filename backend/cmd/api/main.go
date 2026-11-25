@@ -74,6 +74,8 @@ func main() {
 		log.Fatalf("migrate database :%v", err)
 	}
 
+	database.EnsureSeeded(db)
+
 	handler, cleanup, err := buildRouter(cfg, db)
 	if err != nil {
 		log.Fatal(err)
