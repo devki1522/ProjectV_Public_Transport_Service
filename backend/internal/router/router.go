@@ -29,6 +29,7 @@ type Dependencies struct {
 	AuthMiddleware    *auth.Middleware
 	CSRF              *auth.CSRFProtector
 	RequiredRole      string
+	IntegrationRoles  []string
 	AdminHandler      *handlers.AdminHandler
 	VehicleHandler    *handlers.VehicleHandler
 	DisruptionHandler *handlers.DisruptionHandler
@@ -92,7 +93,7 @@ func NewWithDependencies(db *gorm.DB, deps Dependencies) http.Handler {
 		if disruptionHandler == nil {
 			disruptionHandler = handlers.NewDisruptionHandler(disruptions.NewService(disruptions.NewPostgresRepository(db)))
 		}
-		RegisterDisruptionRoutes(api, disruptionHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole)
+		RegisterDisruptionRoutes(api, disruptionHandler, deps.AuthMiddleware, deps.CSRF, deps.RequiredRole, deps.IntegrationRoles)
 
 		if deps.AuthHandler != nil && deps.AuthMiddleware != nil {
 			RegisterAuthRoutes(api, deps.AuthHandler, deps.AuthMiddleware)
@@ -213,13 +214,15 @@ func RegisterVehicleRoutes(
 }
 
 // RegisterDisruptionRoutes registers public disruption and operational status read endpoints,
-// protected enterprise service-status reads, and CSRF-protected admin/integration disruption mutations.
+// browser-admin disruption writes, and integration endpoints accepting Registration Service Bearer JWTs (SH-S07)
+// or authenticated administrator sessions.
 func RegisterDisruptionRoutes(
 	r chi.Router,
 	handler *handlers.DisruptionHandler,
 	authMiddleware *auth.Middleware,
 	csrf *auth.CSRFProtector,
 	requiredRole string,
+	integrationRoles []string,
 ) {
 	r.Get("/disruptions", handler.List)
 	r.Get("/disruptions/active", handler.ListActive)
@@ -231,30 +234,37 @@ func RegisterDisruptionRoutes(
 	r.Get("/stops/{id}/status", handler.StopStatus)
 	r.Get("/trips/{id}/status", handler.TripStatus)
 
-	r.Group(func(protectedRead chi.Router) {
-		if authMiddleware == nil || requiredRole == "" {
-			protectedRead.Use(failClosedAuthMiddleware)
+	r.Group(func(protectedAdminMutation chi.Router) {
+		if authMiddleware == nil || csrf == nil || requiredRole == "" {
+			protectedAdminMutation.Use(failClosedAuthMiddleware)
 		} else {
-			protectedRead.Use(authMiddleware.RequireAuthenticated)
-			protectedRead.Use(authMiddleware.RequireRole(requiredRole))
+			protectedAdminMutation.Use(authMiddleware.RequireAuthenticated)
+			protectedAdminMutation.Use(authMiddleware.RequireRole(requiredRole))
+			protectedAdminMutation.Use(csrf.RequireMutationCSRF)
 		}
-		protectedRead.Get("/integrations/service-status", handler.EnterpriseServiceStatus)
+		protectedAdminMutation.Post("/disruptions", handler.Create)
+		protectedAdminMutation.Patch("/disruptions/{id}", handler.Update)
+		protectedAdminMutation.Post("/road-closures", handler.CreateRoadClosure)
 	})
 
-	r.Group(func(protectedMutation chi.Router) {
-		if authMiddleware == nil || csrf == nil || requiredRole == "" {
-			protectedMutation.Use(failClosedAuthMiddleware)
+	r.Group(func(integrationRead chi.Router) {
+		if authMiddleware == nil || (requiredRole == "" && len(integrationRoles) == 0) {
+			integrationRead.Use(failClosedAuthMiddleware)
 		} else {
-			protectedMutation.Use(authMiddleware.RequireAuthenticated)
-			protectedMutation.Use(authMiddleware.RequireRole(requiredRole))
-			protectedMutation.Use(csrf.RequireMutationCSRF)
+			integrationRead.Use(authMiddleware.RequireIntegrationAccess(requiredRole, integrationRoles, csrf, false))
 		}
-		protectedMutation.Post("/disruptions", handler.Create)
-		protectedMutation.Patch("/disruptions/{id}", handler.Update)
-		protectedMutation.Post("/road-closures", handler.CreateRoadClosure)
-		protectedMutation.Post("/integrations/utilities/notices", handler.IngestUtilitiesNotice)
-		protectedMutation.Post("/integrations/emergency/incidents", handler.IngestEmergencyIncident)
-		protectedMutation.Post("/integrations/security/traffic-alerts", handler.IngestSecurityTrafficAlert)
+		integrationRead.Get("/integrations/service-status", handler.EnterpriseServiceStatus)
+	})
+
+	r.Group(func(integrationMutation chi.Router) {
+		if authMiddleware == nil || ((requiredRole == "" || csrf == nil) && len(integrationRoles) == 0) {
+			integrationMutation.Use(failClosedAuthMiddleware)
+		} else {
+			integrationMutation.Use(authMiddleware.RequireIntegrationAccess(requiredRole, integrationRoles, csrf, true))
+		}
+		integrationMutation.Post("/integrations/utilities/notices", handler.IngestUtilitiesNotice)
+		integrationMutation.Post("/integrations/emergency/incidents", handler.IngestEmergencyIncident)
+		integrationMutation.Post("/integrations/security/traffic-alerts", handler.IngestSecurityTrafficAlert)
 	})
 }
 

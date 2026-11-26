@@ -109,11 +109,11 @@ type ListFilter struct {
 
 // CreateDisruptionInput is the request payload for POST /api/disruptions.
 type CreateDisruptionInput struct {
-	Type              string     `json:"type"`
+	Type              string     `json:"type" enums:"delay,detour,cancellation,stop_closure,road_closure,construction,emergency,traffic_restriction,accessibility"`
 	Title             string     `json:"title"`
 	Description       *string    `json:"description,omitempty"`
 	AffectedArea      *string    `json:"affected_area,omitempty"`
-	Status            string     `json:"status,omitempty"`
+	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
 	StartTime         *time.Time `json:"start_time,omitempty"`
 	EndTime           *time.Time `json:"end_time,omitempty"`
 	SourceService     string     `json:"source_service,omitempty"`
@@ -127,11 +127,11 @@ type CreateDisruptionInput struct {
 
 // UpdateDisruptionInput is the request payload for PATCH /api/disruptions/{id}.
 type UpdateDisruptionInput struct {
-	Type             *string    `json:"type,omitempty"`
+	Type             *string    `json:"type,omitempty" enums:"delay,detour,cancellation,stop_closure,road_closure,construction,emergency,traffic_restriction,accessibility"`
 	Title            *string    `json:"title,omitempty"`
 	Description      *string    `json:"description,omitempty"`
 	AffectedArea     *string    `json:"affected_area,omitempty"`
-	Status           *string    `json:"status,omitempty"`
+	Status           *string    `json:"status,omitempty" enums:"scheduled,active,resolved"`
 	StartTime        *time.Time `json:"start_time,omitempty"`
 	EndTime          *time.Time `json:"end_time,omitempty"`
 	RouteIDs         *[]int     `json:"route_ids,omitempty"`
@@ -152,14 +152,14 @@ type UpdateDisruptionInput struct {
 type UtilitiesNoticeInput struct {
 	ExternalID        *string    `json:"external_id,omitempty"`
 	ExternalReference *string    `json:"external_reference,omitempty"`
-	NoticeType        string     `json:"notice_type,omitempty"`
-	Type              string     `json:"type,omitempty"`
+	NoticeType        string     `json:"notice_type,omitempty" enums:"road_closure,construction" default:"road_closure"`
+	Type              string     `json:"type,omitempty" enums:"road_closure,construction"`
 	Title             string     `json:"title"`
 	Description       *string    `json:"description,omitempty"`
 	AffectedArea      *string    `json:"affected_area,omitempty"`
 	StartTime         *time.Time `json:"start_time,omitempty"`
 	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty"`
+	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
 	RouteIDs          []int      `json:"route_ids,omitempty"`
 	StopIDs           []int      `json:"stop_ids,omitempty"`
 	TripIDs           []int      `json:"trip_ids,omitempty"`
@@ -174,15 +174,15 @@ type UtilitiesNoticeInput struct {
 type EmergencyIncidentInput struct {
 	ExternalID        *string    `json:"external_id,omitempty"`
 	ExternalReference *string    `json:"external_reference,omitempty"`
-	IncidentType      string     `json:"incident_type,omitempty"`
-	Type              string     `json:"type,omitempty"`
-	Severity          string     `json:"severity,omitempty"`
+	IncidentType      string     `json:"incident_type,omitempty" enums:"emergency,road_closure" default:"emergency"`
+	Type              string     `json:"type,omitempty" enums:"emergency,road_closure"`
+	Severity          string     `json:"severity,omitempty" enums:"low,medium,moderate,high,critical"`
 	Title             string     `json:"title"`
 	Description       *string    `json:"description,omitempty"`
 	AffectedArea      *string    `json:"affected_area,omitempty"`
 	StartTime         *time.Time `json:"start_time,omitempty"`
 	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty"`
+	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
 	RouteIDs          []int      `json:"route_ids,omitempty"`
 	StopIDs           []int      `json:"stop_ids,omitempty"`
 	TripIDs           []int      `json:"trip_ids,omitempty"`
@@ -197,14 +197,14 @@ type EmergencyIncidentInput struct {
 type SecurityTrafficAlertInput struct {
 	ExternalID        *string    `json:"external_id,omitempty"`
 	ExternalReference *string    `json:"external_reference,omitempty"`
-	AlertType         string     `json:"alert_type,omitempty"`
-	Type              string     `json:"type,omitempty"`
+	AlertType         string     `json:"alert_type,omitempty" enums:"traffic_restriction,road_closure" default:"traffic_restriction"`
+	Type              string     `json:"type,omitempty" enums:"traffic_restriction,road_closure"`
 	Title             string     `json:"title"`
 	Description       *string    `json:"description,omitempty"`
 	AffectedArea      *string    `json:"affected_area,omitempty"`
 	StartTime         *time.Time `json:"start_time,omitempty"`
 	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty"`
+	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
 	RouteIDs          []int      `json:"route_ids,omitempty"`
 	StopIDs           []int      `json:"stop_ids,omitempty"`
 	TripIDs           []int      `json:"trip_ids,omitempty"`

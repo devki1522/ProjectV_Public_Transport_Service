@@ -30,8 +30,12 @@ import (
 
 // @title Public Transport Service API
 // @version 1.0
-// @description Public resident schedules and cookie-authenticated transit administration. Mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me.
+// @description Public resident schedules, cookie-authenticated transit administration, and Bearer JWT service-to-service integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; /integrations/* endpoints also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.
 // @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Registration Service service-account JWT formatted as "Bearer <token>" (SH-S07).
 //
 // main loads configuration, connects to the database, wires authentication, and starts the HTTP server.
 func main() {
@@ -132,7 +136,19 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		cfg.Auth.RequiredRole,
 		nil,
 	)
-	authMiddleware := auth.NewMiddleware(sessions, validator, cfg.Auth.SessionCookie, cfg.Auth.CookieSecure)
+	var bearerValidator auth.BearerTokenValidator
+	if bv, ok := provider.(auth.BearerTokenValidator); ok {
+		bearerValidator = bv
+	} else if validator != nil {
+		bearerValidator = validator
+	}
+	authMiddleware := auth.NewMiddlewareWithBearerValidator(
+		sessions,
+		validator,
+		bearerValidator,
+		cfg.Auth.SessionCookie,
+		cfg.Auth.CookieSecure,
+	)
 	adminHandler := handlers.NewAdminHandler(services.NewAdminDashboardService(services.NewPostgresDashboardRepository(db)))
 
 	var simulator *vehicles.Simulator
@@ -167,6 +183,7 @@ func buildRouter(cfg config.Config, db *gorm.DB) (http.Handler, func(), error) {
 		AuthMiddleware:    authMiddleware,
 		CSRF:              csrf,
 		RequiredRole:      cfg.Auth.RequiredRole,
+		IntegrationRoles:  cfg.Auth.IntegrationRoles,
 		AdminHandler:      adminHandler,
 		VehicleHandler:    vehicleHandler,
 		DisruptionHandler: disruptionHandler,

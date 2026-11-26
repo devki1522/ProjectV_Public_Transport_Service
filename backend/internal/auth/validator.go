@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -93,6 +94,11 @@ func (v *JWTValidator) Validate(tokenString string) (Principal, error) {
 		Roles:     roles,
 		ExpiresAt: exp.Time.UTC(),
 	}, nil
+}
+
+// ValidateBearer validates a Bearer JWT locally using this validator's HS256 trust policy.
+func (v *JWTValidator) ValidateBearer(_ context.Context, tokenString string) (Principal, error) {
+	return v.Validate(tokenString)
 }
 
 func parseOptionalStringClaim(claims jwt.MapClaims, key string) (string, error) {

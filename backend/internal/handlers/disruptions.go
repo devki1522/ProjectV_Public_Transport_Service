@@ -220,14 +220,18 @@ func (h *DisruptionHandler) ServiceStatus(w http.ResponseWriter, r *http.Request
 // EnterpriseServiceStatus returns the authenticated enterprise service status snapshot (US 196 / PT-FR-021).
 //
 // @Summary Retrieve enterprise transit disruption and service status snapshot
-// @Description Requires an authenticated administrator/enterprise session cookie. Returns overall network operational status, active disruptions, detours, and affected services.
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an authenticated administrator session cookie. Returns overall network operational status, active disruptions, detours, and affected services.
 // @Tags integrations
+// @Security BearerAuth
 // @Produce json
 // @Success 200 {object} disruptions.ServiceStatusResponse
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
 // @Router /api/transport/v1/integrations/service-status [get]
 func (h *DisruptionHandler) EnterpriseServiceStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -538,11 +542,12 @@ func (h *DisruptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 // IngestUtilitiesNotice ingests a road closure or construction notice from the Utilities Service (US 186 / PT-FR-018).
 //
 // @Summary Ingest a utilities road closure or construction notice
-// @Description Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a utilities disruption.
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a utilities disruption. Allowed notice_type/type: road_closure (default), construction. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
 // @Tags integrations
+// @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
 // @Param body body disruptions.UtilitiesNoticeInput true "Utilities notice payload"
 // @Success 200 {object} disruptions.ExternalNoticeResult
 // @Success 201 {object} disruptions.ExternalNoticeResult
@@ -551,6 +556,9 @@ func (h *DisruptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
 // @Router /api/transport/v1/integrations/utilities/notices [post]
 func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -584,11 +592,12 @@ func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http
 // IngestEmergencyIncident ingests an emergency incident or road restriction from Emergency Services (US 187 / PT-FR-019).
 //
 // @Summary Ingest an emergency incident or road restriction
-// @Description Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) an emergency disruption.
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) an emergency disruption. Allowed incident_type/type: emergency (default), road_closure. Allowed severity: low, medium, moderate, high, critical. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
 // @Tags integrations
+// @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
 // @Param body body disruptions.EmergencyIncidentInput true "Emergency incident payload"
 // @Success 200 {object} disruptions.ExternalNoticeResult
 // @Success 201 {object} disruptions.ExternalNoticeResult
@@ -597,6 +606,9 @@ func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
 // @Router /api/transport/v1/integrations/emergency/incidents [post]
 func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -630,11 +642,12 @@ func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *ht
 // IngestSecurityTrafficAlert ingests a traffic alert or road closure from Security / Police Services (US 188 / PT-FR-020).
 //
 // @Summary Ingest a security or police traffic alert
-// @Description Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a security traffic disruption.
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a security traffic disruption. Allowed alert_type/type: traffic_restriction (default), road_closure. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
 // @Tags integrations
+// @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param X-CSRF-Token header string true "Session-bound CSRF token"
+// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
 // @Param body body disruptions.SecurityTrafficAlertInput true "Security traffic alert payload"
 // @Success 200 {object} disruptions.ExternalNoticeResult
 // @Success 201 {object} disruptions.ExternalNoticeResult
@@ -643,6 +656,9 @@ func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *ht
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
 // @Router /api/transport/v1/integrations/security/traffic-alerts [post]
 func (h *DisruptionHandler) IngestSecurityTrafficAlert(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")

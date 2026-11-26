@@ -590,3 +590,430 @@ func TestSessionStoreBoundsExpiryToEarlierJWT(t *testing.T) {
 		t.Fatal("expected session to exist before expiry")
 	}
 }
+
+func TestPrincipalHasAnyRole(t *testing.T) {
+	p := Principal{Roles: []string{"Dispatcher"}}
+	if !p.HasAnyRole([]string{"Administrator", "Dispatcher"}) {
+		t.Fatal("expected HasAnyRole to match Dispatcher")
+	}
+	if p.HasAnyRole([]string{"dispatcher", "Administrator"}) {
+		t.Fatal("expected HasAnyRole to enforce case-sensitive exact matching")
+	}
+	if p.HasAnyRole(nil) {
+		t.Fatal("expected empty allowed slice to return false")
+	}
+}
+
+func TestRegistrationProviderValidateBearer(t *testing.T) {
+	now := time.Now().UTC()
+	trust := testTrust()
+	newTestProvider := func(url string, client *http.Client) *RegistrationProvider {
+		t.Helper()
+		p, err := NewRegistrationProvider(config.RegistrationAuthConfig{
+			ServiceURL:       url,
+			UpstreamIssuer:   testIssuer,
+			UpstreamAudience: testAudience,
+			LocalTrust:       trust,
+			AdminUsers:       []string{"jdoe"},
+			RequiredRole:     "TransitAdministrator",
+		}, client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	t.Run("accepts short JWT claim names", func(t *testing.T) {
+		var gotAuth string
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/api/Login/validate" {
+				t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			}
+			gotAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": "sub", "value": "svc-emg-01"},
+					{"type": "unique_name", "value": "emergency-service"},
+					{"type": "role", "value": "Dispatcher"},
+					{"type": "role", "value": "Dispatcher"},
+					{"type": "iss", "value": testIssuer},
+					{"type": "aud", "value": testAudience},
+					{"type": "exp", "value": "1900000000"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		p := newTestProvider(server.URL, server.Client())
+		principal, err := p.ValidateBearer(context.Background(), "valid.jwt.token")
+		if err != nil {
+			t.Fatalf("ValidateBearer failed: %v", err)
+		}
+		if gotAuth != "Bearer valid.jwt.token" {
+			t.Fatalf("Authorization = %q, want Bearer valid.jwt.token", gotAuth)
+		}
+		if principal.Subject != "svc-emg-01" || principal.Username != "emergency-service" {
+			t.Fatalf("unexpected principal identity: %+v", principal)
+		}
+		if len(principal.Roles) != 1 || principal.Roles[0] != "Dispatcher" {
+			t.Fatalf("unexpected roles: %+v", principal.Roles)
+		}
+		if principal.ExpiresAt.Unix() != 1900000000 {
+			t.Fatalf("ExpiresAt = %v, want unix 1900000000", principal.ExpiresAt)
+		}
+	})
+
+	t.Run("accepts ASP.NET ClaimTypes URI claim names", func(t *testing.T) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": claimTypeNameIdentifier, "value": "svc-sec-01"},
+					{"type": claimTypeName, "value": "security-service"},
+					{"type": claimTypeRole, "value": "Security Administrator"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		p := newTestProvider(server.URL, server.Client())
+		principal, err := p.ValidateBearer(context.Background(), "asp.net.jwt")
+		if err != nil {
+			t.Fatalf("ValidateBearer failed: %v", err)
+		}
+		if principal.Subject != "svc-sec-01" || principal.Username != "security-service" || !principal.HasRole("Security Administrator") {
+			t.Fatalf("unexpected principal: %+v", principal)
+		}
+	})
+
+	t.Run("rejects unauthenticated, 401/403, and wrong iss/aud with ErrInvalidToken", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			status int
+			body   string
+		}{
+			{"authenticated false", http.StatusOK, `{"authenticated":false,"claims":[]}`},
+			{"http 401", http.StatusUnauthorized, `{}`},
+			{"http 403", http.StatusForbidden, `{}`},
+			{"wrong iss", http.StatusOK, `{"authenticated":true,"claims":[{"type":"sub","value":"s1"},{"type":"iss","value":"evil-issuer"}]}`},
+			{"wrong aud", http.StatusOK, `{"authenticated":true,"claims":[{"type":"sub","value":"s1"},{"type":"aud","value":"other-aud"}]}`},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tc.status)
+					_, _ = w.Write([]byte(tc.body))
+				}))
+				defer server.Close()
+
+				p := newTestProvider(server.URL, server.Client())
+				if _, err := p.ValidateBearer(context.Background(), "some.token"); !errors.Is(err, ErrInvalidToken) {
+					t.Fatalf("%s: got err=%v, want ErrInvalidToken", tc.name, err)
+				}
+			})
+		}
+	})
+
+	t.Run("maps redirect, malformed JSON, missing identity, 400, 503, and timeout", func(t *testing.T) {
+		redirectHits := 0
+		target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			redirectHits++
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer target.Close()
+		redirector := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+		}))
+		defer redirector.Close()
+		if _, err := newTestProvider(redirector.URL, redirector.Client()).ValidateBearer(context.Background(), "tok"); !errors.Is(err, ErrInvalidUpstreamResponse) || redirectHits != 0 {
+			t.Fatalf("redirect got err=%v hits=%d, want ErrInvalidUpstreamResponse and 0 hits", err, redirectHits)
+		}
+
+		for _, tc := range []struct {
+			name    string
+			status  int
+			body    string
+			wantErr error
+		}{
+			{"malformed json", http.StatusOK, `{not-json`, ErrInvalidUpstreamResponse},
+			{"missing identity", http.StatusOK, `{"authenticated":true,"claims":[{"type":"role","value":"Administrator"}]}`, ErrInvalidUpstreamResponse},
+			{"http 400", http.StatusBadRequest, `{}`, ErrInvalidUpstreamResponse},
+			{"http 503", http.StatusServiceUnavailable, `{}`, ErrProviderUnavailable},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tc.status)
+					_, _ = w.Write([]byte(tc.body))
+				}))
+				defer s.Close()
+				if _, err := newTestProvider(s.URL, s.Client()).ValidateBearer(context.Background(), "tok"); !errors.Is(err, tc.wantErr) {
+					t.Fatalf("%s got err=%v, want %v", tc.name, err, tc.wantErr)
+				}
+			})
+		}
+
+		sSlow := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(120 * time.Millisecond)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer sSlow.Close()
+		slowClient := sSlow.Client()
+		slowClient.Timeout = 25 * time.Millisecond
+		if _, err := newTestProvider(sSlow.URL, slowClient).ValidateBearer(context.Background(), "tok"); !errors.Is(err, ErrProviderTimeout) {
+			t.Fatalf("timeout got err=%v, want ErrProviderTimeout", err)
+		}
+	})
+
+	t.Run("rejects token with whitespace or CRLF locally before HTTP call", func(t *testing.T) {
+		called := false
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		p := newTestProvider(server.URL, server.Client())
+		for _, bad := range []string{"", " ", "a b", "a\r\nX-Injected: 1", "a\tb", now.Format(time.RFC3339) + " extra"} {
+			if _, err := p.ValidateBearer(context.Background(), bad); !errors.Is(err, ErrInvalidToken) {
+				t.Fatalf("bad=%q got err=%v, want ErrInvalidToken", bad, err)
+			}
+		}
+		if called {
+			t.Fatal("expected dirty bearer tokens to be rejected locally without network call")
+		}
+	})
+}
+
+type stubBearerValidator struct {
+	principal Principal
+	err       error
+	calls     int
+}
+
+func (s *stubBearerValidator) ValidateBearer(_ context.Context, _ string) (Principal, error) {
+	s.calls++
+	return s.principal, s.err
+}
+
+func TestMiddlewareRequireIntegrationAccess(t *testing.T) {
+	clock := &fakeClock{current: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)}
+	validator, err := NewJWTValidator(testTrust(), clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := NewInMemorySessionStore(clock.Now, time.Hour, 10)
+	defer sessions.Close()
+	csrf := NewCSRFProtector([]string{testTrustedOrigin})
+	mw := NewMiddleware(sessions, validator, "transit_session", false)
+
+	signRole := func(sub string, roles any) string {
+		claims := jwt.MapClaims{
+			"sub": sub,
+			"iss": testIssuer,
+			"aud": testAudience,
+			"exp": clock.Now().Add(15 * time.Minute).Unix(),
+		}
+		if roles != nil {
+			claims["role"] = roles
+		}
+		return signTestJWT(t, jwt.SigningMethodHS256, []byte(testSecret), claims)
+	}
+
+	var gotPrincipal Principal
+	okHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := PrincipalFromContext(r.Context())
+		if !ok {
+			t.Fatal("expected principal in context")
+		}
+		gotPrincipal = p
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mutationHandler := mw.RequireIntegrationAccess(
+		"TransitAdministrator",
+		config.DefaultIntegrationRoles(),
+		csrf,
+		true,
+	)(okHandler)
+
+	readHandler := mw.RequireIntegrationAccess(
+		"TransitAdministrator",
+		config.DefaultIntegrationRoles(),
+		csrf,
+		false,
+	)(okHandler)
+
+	t.Run("accepts all default allowed integration roles without cookie, Origin, or CSRF", func(t *testing.T) {
+		for _, role := range config.DefaultIntegrationRoles() {
+			token := signRole("svc-"+role, role)
+			req := httptest.NewRequest(http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mutationHandler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("role %q returned %d (%s), want 200", role, rec.Code, rec.Body.String())
+			}
+			if gotPrincipal.Subject != "svc-"+role || !gotPrincipal.HasRole(role) {
+				t.Fatalf("unexpected principal for role %q: %+v", role, gotPrincipal)
+			}
+		}
+
+		// Lowercase bearer scheme also accepted.
+		req := httptest.NewRequest(http.MethodGet, "/api/transport/v1/integrations/service-status", nil)
+		req.Header.Set("Authorization", "bearer "+signRole("svc-lower", "Dispatcher"))
+		rec := httptest.NewRecorder()
+		readHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("lowercase bearer returned %d, want 200", rec.Code)
+		}
+	})
+
+	t.Run("rejects User, officer roles, and absent role claim with 403", func(t *testing.T) {
+		for _, role := range []any{"User", "Police Officer", "Sergeant", "Police Chief", nil} {
+			token := signRole("user-1", role)
+			req := httptest.NewRequest(http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mutationHandler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("disallowed role %v returned %d, want 403", role, rec.Code)
+			}
+		}
+	})
+
+	t.Run("rejects invalid, expired, wrong-secret, or malformed Authorization without cookie fallback", func(t *testing.T) {
+		adminJWT := signRole("admin-1", "TransitAdministrator")
+		adminPrincipal, err := validator.Validate(adminJWT)
+		if err != nil {
+			t.Fatal(err)
+		}
+		adminSID, adminSession, err := sessions.Create(adminPrincipal, adminJWT, clock.Now().Add(15*time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		adminCookie := &http.Cookie{Name: "transit_session", Value: adminSID}
+
+		expired := signTestJWT(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{
+			"sub": "svc", "role": "Administrator", "iss": testIssuer, "aud": testAudience,
+			"exp": clock.Now().Add(-time.Minute).Unix(),
+		})
+		wrongSecret := signTestJWT(t, jwt.SigningMethodHS256, []byte(testOtherSecret), jwt.MapClaims{
+			"sub": "svc", "role": "Administrator", "iss": testIssuer, "aud": testAudience,
+			"exp": clock.Now().Add(15 * time.Minute).Unix(),
+		})
+
+		for _, header := range []string{
+			"Bearer " + expired,
+			"Bearer " + wrongSecret,
+			"Basic dXNlcjpwYXNz",
+			"Bearer",
+			"Bearer two tokens",
+		} {
+			req := httptest.NewRequest(http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", nil)
+			req.Header.Set("Authorization", header)
+			// Even with a valid admin session cookie + CSRF, invalid Authorization must return 401.
+			req.Header.Set("Origin", testTrustedOrigin)
+			req.Header.Set(CSRFHeaderName, adminSession.CSRFToken)
+			req.AddCookie(adminCookie)
+			rec := httptest.NewRecorder()
+			mutationHandler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("Authorization=%q returned %d, want 401 (must not fall back to cookie)", header, rec.Code)
+			}
+		}
+	})
+
+	t.Run("maps upstream BearerTokenValidator failures and empty allowedRoles fail-closed", func(t *testing.T) {
+		for _, tc := range []struct {
+			err  error
+			want int
+		}{
+			{ErrProviderTimeout, http.StatusGatewayTimeout},
+			{ErrProviderUnavailable, http.StatusServiceUnavailable},
+			{ErrInvalidUpstreamResponse, http.StatusBadGateway},
+			{ErrInvalidToken, http.StatusUnauthorized},
+		} {
+			stub := &stubBearerValidator{err: tc.err}
+			stubMW := NewMiddlewareWithBearerValidator(sessions, validator, stub, "transit_session", false)
+			h := stubMW.RequireIntegrationAccess("TransitAdministrator", []string{"Dispatcher"}, csrf, true)(okHandler)
+			req := httptest.NewRequest(http.MethodPost, "/integrations", nil)
+			req.Header.Set("Authorization", "Bearer external.jwt")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("err=%v returned %d, want %d", tc.err, rec.Code, tc.want)
+			}
+		}
+
+		emptyAllowed := mw.RequireIntegrationAccess("TransitAdministrator", nil, csrf, true)(okHandler)
+		req := httptest.NewRequest(http.MethodPost, "/integrations", nil)
+		req.Header.Set("Authorization", "Bearer "+signRole("svc", "Administrator"))
+		rec := httptest.NewRecorder()
+		emptyAllowed.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("empty bearerAllowedRoles returned %d, want 403", rec.Code)
+		}
+	})
+
+	t.Run("preserves cookie, role, and CSRF enforcement when Authorization header is absent", func(t *testing.T) {
+		adminJWT := signRole("admin-2", "TransitAdministrator")
+		adminP, _ := validator.Validate(adminJWT)
+		adminSID, adminSess, _ := sessions.Create(adminP, adminJWT, clock.Now().Add(15*time.Minute))
+		adminCookie := &http.Cookie{Name: "transit_session", Value: adminSID}
+
+		userJWT := signRole("user-2", "User")
+		userP, _ := validator.Validate(userJWT)
+		userSID, userSess, _ := sessions.Create(userP, userJWT, clock.Now().Add(15*time.Minute))
+		userCookie := &http.Cookie{Name: "transit_session", Value: userSID}
+
+		// No auth -> 401
+		rec := httptest.NewRecorder()
+		mutationHandler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/integrations", nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated returned %d, want 401", rec.Code)
+		}
+
+		// User cookie -> 403
+		reqUser := httptest.NewRequest(http.MethodPost, "/integrations", nil)
+		reqUser.Header.Set("Origin", testTrustedOrigin)
+		reqUser.Header.Set(CSRFHeaderName, userSess.CSRFToken)
+		reqUser.AddCookie(userCookie)
+		recUser := httptest.NewRecorder()
+		mutationHandler.ServeHTTP(recUser, reqUser)
+		if recUser.Code != http.StatusForbidden {
+			t.Fatalf("non-admin cookie returned %d, want 403", recUser.Code)
+		}
+
+		// Admin cookie missing CSRF -> 403 on mutation
+		reqNoCSRF := httptest.NewRequest(http.MethodPost, "/integrations", nil)
+		reqNoCSRF.Header.Set("Origin", testTrustedOrigin)
+		reqNoCSRF.AddCookie(adminCookie)
+		recNoCSRF := httptest.NewRecorder()
+		mutationHandler.ServeHTTP(recNoCSRF, reqNoCSRF)
+		if recNoCSRF.Code != http.StatusForbidden {
+			t.Fatalf("missing CSRF returned %d, want 403", recNoCSRF.Code)
+		}
+
+		// Admin cookie with Origin + CSRF -> 200 on mutation
+		reqOK := httptest.NewRequest(http.MethodPost, "/integrations", nil)
+		reqOK.Header.Set("Origin", testTrustedOrigin)
+		reqOK.Header.Set(CSRFHeaderName, adminSess.CSRFToken)
+		reqOK.AddCookie(adminCookie)
+		recOK := httptest.NewRecorder()
+		mutationHandler.ServeHTTP(recOK, reqOK)
+		if recOK.Code != http.StatusOK {
+			t.Fatalf("valid admin cookie+CSRF returned %d, want 200", recOK.Code)
+		}
+
+		// Admin cookie without CSRF -> 200 on read
+		reqReadOK := httptest.NewRequest(http.MethodGet, "/integrations/service-status", nil)
+		reqReadOK.AddCookie(adminCookie)
+		recReadOK := httptest.NewRecorder()
+		readHandler.ServeHTTP(recReadOK, reqReadOK)
+		if recReadOK.Code != http.StatusOK {
+			t.Fatalf("valid admin cookie read returned %d, want 200", recReadOK.Code)
+		}
+	})
+}

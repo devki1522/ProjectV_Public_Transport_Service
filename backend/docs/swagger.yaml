@@ -261,6 +261,10 @@ definitions:
       start_time:
         type: string
       status:
+        enum:
+        - scheduled
+        - active
+        - resolved
         type: string
       stop_ids:
         items:
@@ -273,6 +277,16 @@ definitions:
           type: integer
         type: array
       type:
+        enum:
+        - delay
+        - detour
+        - cancellation
+        - stop_closure
+        - road_closure
+        - construction
+        - emergency
+        - traffic_restriction
+        - accessibility
         type: string
       vehicle_ids:
         items:
@@ -341,6 +355,10 @@ definitions:
       external_reference:
         type: string
       incident_type:
+        default: emergency
+        enum:
+        - emergency
+        - road_closure
         type: string
       latitude:
         type: number
@@ -353,10 +371,20 @@ definitions:
           type: integer
         type: array
       severity:
+        enum:
+        - low
+        - medium
+        - moderate
+        - high
+        - critical
         type: string
       start_time:
         type: string
       status:
+        enum:
+        - scheduled
+        - active
+        - resolved
         type: string
       stop_ids:
         items:
@@ -369,6 +397,9 @@ definitions:
           type: integer
         type: array
       type:
+        enum:
+        - emergency
+        - road_closure
         type: string
       vehicle_ids:
         items:
@@ -414,6 +445,10 @@ definitions:
           type: string
         type: array
       alert_type:
+        default: traffic_restriction
+        enum:
+        - traffic_restriction
+        - road_closure
         type: string
       description:
         type: string
@@ -436,6 +471,10 @@ definitions:
       start_time:
         type: string
       status:
+        enum:
+        - scheduled
+        - active
+        - resolved
         type: string
       stop_ids:
         items:
@@ -448,6 +487,9 @@ definitions:
           type: integer
         type: array
       type:
+        enum:
+        - traffic_restriction
+        - road_closure
         type: string
       vehicle_ids:
         items:
@@ -510,6 +552,10 @@ definitions:
       start_time:
         type: string
       status:
+        enum:
+        - scheduled
+        - active
+        - resolved
         type: string
       stop_ids:
         items:
@@ -522,6 +568,16 @@ definitions:
           type: integer
         type: array
       type:
+        enum:
+        - delay
+        - detour
+        - cancellation
+        - stop_closure
+        - road_closure
+        - construction
+        - emergency
+        - traffic_restriction
+        - accessibility
         type: string
       vehicle_ids:
         items:
@@ -549,6 +605,10 @@ definitions:
       longitude:
         type: number
       notice_type:
+        default: road_closure
+        enum:
+        - road_closure
+        - construction
         type: string
       radius_meters:
         type: number
@@ -559,6 +619,10 @@ definitions:
       start_time:
         type: string
       status:
+        enum:
+        - scheduled
+        - active
+        - resolved
         type: string
       stop_ids:
         items:
@@ -571,6 +635,9 @@ definitions:
           type: integer
         type: array
       type:
+        enum:
+        - road_closure
+        - construction
         type: string
       vehicle_ids:
         items:
@@ -1077,9 +1144,11 @@ definitions:
     type: object
 info:
   contact: {}
-  description: Public resident schedules and cookie-authenticated transit administration.
-    Mutations require an administrator session, a trusted Origin, and X-CSRF-Token
-    from login or /auth/me.
+  description: 'Public resident schedules, cookie-authenticated transit administration,
+    and Bearer JWT service-to-service integrations (SH-S07). Admin browser mutations
+    require an administrator session, a trusted Origin, and X-CSRF-Token from login
+    or /auth/me; /integrations/* endpoints also accept Authorization: Bearer <token>
+    from Registration Service without cookies or CSRF.'
   title: Public Transport Service API
   version: "1.0"
 paths:
@@ -2160,15 +2229,19 @@ paths:
     post:
       consumes:
       - application/json
-      description: Requires an administrator/enterprise session cookie, trusted Origin,
-        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
-        radius matching) and creates (201) or idempotently updates (200) an emergency
-        disruption.
+      description: 'Accepts a Registration Service service-account Bearer JWT (SH-S07;
+        no cookie, Origin, or CSRF required) or an administrator session cookie with
+        trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops
+        (including spatial radius matching) and creates (201) or idempotently updates
+        (200) an emergency disruption. Allowed incident_type/type: emergency (default),
+        road_closure. Allowed severity: low, medium, moderate, high, critical. Allowed
+        status: scheduled, active, resolved (defaults to scheduled if start_time is
+        in the future, else active).'
       parameters:
-      - description: Session-bound CSRF token
+      - description: Session-bound CSRF token (required for browser cookie sessions;
+          omitted for Bearer JWTs)
         in: header
         name: X-CSRF-Token
-        required: true
         type: string
       - description: Emergency incident payload
         in: body
@@ -2217,6 +2290,26 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
       summary: Ingest an emergency incident or road restriction
       tags:
       - integrations
@@ -2224,15 +2317,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Requires an administrator/enterprise session cookie, trusted Origin,
-        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
-        radius matching) and creates (201) or idempotently updates (200) a security
-        traffic disruption.
+      description: 'Accepts a Registration Service service-account Bearer JWT (SH-S07;
+        no cookie, Origin, or CSRF required) or an administrator session cookie with
+        trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops
+        (including spatial radius matching) and creates (201) or idempotently updates
+        (200) a security traffic disruption. Allowed alert_type/type: traffic_restriction
+        (default), road_closure. Allowed status: scheduled, active, resolved (defaults
+        to scheduled if start_time is in the future, else active).'
       parameters:
-      - description: Session-bound CSRF token
+      - description: Session-bound CSRF token (required for browser cookie sessions;
+          omitted for Bearer JWTs)
         in: header
         name: X-CSRF-Token
-        required: true
         type: string
       - description: Security traffic alert payload
         in: body
@@ -2281,14 +2377,35 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
       summary: Ingest a security or police traffic alert
       tags:
       - integrations
   /api/transport/v1/integrations/service-status:
     get:
-      description: Requires an authenticated administrator/enterprise session cookie.
-        Returns overall network operational status, active disruptions, detours, and
-        affected services.
+      description: Accepts a Registration Service service-account Bearer JWT (SH-S07;
+        no cookie, Origin, or CSRF required) or an authenticated administrator session
+        cookie. Returns overall network operational status, active disruptions, detours,
+        and affected services.
       produces:
       - application/json
       responses:
@@ -2320,6 +2437,26 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
       summary: Retrieve enterprise transit disruption and service status snapshot
       tags:
       - integrations
@@ -2327,15 +2464,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Requires an administrator/enterprise session cookie, trusted Origin,
-        and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial
-        radius matching) and creates (201) or idempotently updates (200) a utilities
-        disruption.
+      description: 'Accepts a Registration Service service-account Bearer JWT (SH-S07;
+        no cookie, Origin, or CSRF required) or an administrator session cookie with
+        trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops
+        (including spatial radius matching) and creates (201) or idempotently updates
+        (200) a utilities disruption. Allowed notice_type/type: road_closure (default),
+        construction. Allowed status: scheduled, active, resolved (defaults to scheduled
+        if start_time is in the future, else active).'
       parameters:
-      - description: Session-bound CSRF token
+      - description: Session-bound CSRF token (required for browser cookie sessions;
+          omitted for Bearer JWTs)
         in: header
         name: X-CSRF-Token
-        required: true
         type: string
       - description: Utilities notice payload
         in: body
@@ -2384,6 +2524,26 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
       summary: Ingest a utilities road closure or construction notice
       tags:
       - integrations
@@ -3518,4 +3678,11 @@ paths:
       summary: Get live bus simulator status
       tags:
       - vehicles
+securityDefinitions:
+  BearerAuth:
+    description: Registration Service service-account JWT formatted as "Bearer <token>"
+      (SH-S07).
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

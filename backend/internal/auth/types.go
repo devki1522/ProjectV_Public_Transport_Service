@@ -64,7 +64,22 @@ func (p Principal) HasRole(role string) bool {
 	return false
 }
 
+// HasAnyRole reports whether the principal has at least one exact case-sensitive role in roles.
+func (p Principal) HasAnyRole(roles []string) bool {
+	for _, role := range roles {
+		if p.HasRole(role) {
+			return true
+		}
+	}
+	return false
+}
+
 // Provider authenticates user credentials and returns a signed JWT result.
 type Provider interface {
 	Authenticate(context.Context, LoginRequest) (AuthResult, error)
+}
+
+// BearerTokenValidator validates an external Bearer token and returns its authenticated Principal.
+type BearerTokenValidator interface {
+	ValidateBearer(ctx context.Context, token string) (Principal, error)
 }

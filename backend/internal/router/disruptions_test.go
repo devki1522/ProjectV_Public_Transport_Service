@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -159,7 +160,7 @@ func newTestDisruptionEnv(t *testing.T, svc handlers.DisruptionService) (*testAu
 	mux := chi.NewRouter()
 	mux.Route(router.APIBasePath(""), func(api chi.Router) {
 		router.RegisterAuthRoutes(api, authHandler, authMW)
-		router.RegisterDisruptionRoutes(api, handler, authMW, csrf, "TransitAdministrator")
+		router.RegisterDisruptionRoutes(api, handler, authMW, csrf, "TransitAdministrator", config.DefaultIntegrationRoles())
 	})
 
 	fakeSvc, _ := svc.(*fakeDisruptionService)
@@ -552,5 +553,230 @@ func TestRoadClosuresGetAndPost(t *testing.T) {
 	badTypePost := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"type":"delay","title":"Not a closure"}`, adminCookie, adminCSRF)
 	if badTypePost.Code != http.StatusBadRequest {
 		t.Fatalf("POST /road-closures with non-road_closure type = %d, want 400", badTypePost.Code)
+	}
+}
+
+func bearerRequest(mux http.Handler, method, path, body, authHeader string, cookie *http.Cookie, csrfToken string) *httptest.ResponseRecorder {
+	var bodyReader *strings.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	} else {
+		bodyReader = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, path, bodyReader)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+		req.Header.Set("Origin", routerTestOrigin)
+	}
+	if csrfToken != "" {
+		req.Header.Set(auth.CSRFHeaderName, csrfToken)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestIntegrationEndpointsBearerJWTAuth(t *testing.T) {
+	now := time.Date(2026, 11, 25, 20, 0, 0, 0, time.UTC)
+	svc := &fakeDisruptionService{
+		externalResult: disruptions.ExternalNoticeResult{
+			Created: true,
+			Disruption: disruptions.DisruptionResponse{
+				ID:            99,
+				Type:          disruptions.TypeEmergency,
+				Title:         "King St Incident",
+				Status:        disruptions.StatusActive,
+				SourceService: disruptions.SourceEmergency,
+				StartTime:     now,
+				ReceivedAt:    now,
+			},
+			MatchedRouteIDs: []int{7},
+			MatchedStopIDs:  []int{3},
+			TransitImpact:   "high: 1 route(s), 1 stop(s) affected",
+		},
+		serviceStatusResult: disruptions.ServiceStatusResponse{
+			GeneratedAt:       now,
+			OverallStatus:     disruptions.OverallStatusNormal,
+			ActiveDisruptions: []disruptions.DisruptionResponse{},
+			Detours:           []disruptions.DisruptionResponse{},
+			AffectedRoutes:    []disruptions.AffectedRouteSummary{},
+			AffectedStops:     []disruptions.AffectedStopSummary{},
+			AffectedTrips:     []disruptions.AffectedTripSummary{},
+			AffectedVehicles:  []disruptions.AffectedVehicleSummary{},
+			AffectedSegments:  []disruptions.AffectedSegmentSummary{},
+		},
+	}
+	env, _ := newTestDisruptionEnv(t, svc)
+
+	signJWT := func(secret, sub string, role any, exp time.Time) string {
+		claims := jwt.MapClaims{
+			"sub": sub,
+			"iss": routerTestIssuer,
+			"aud": routerTestAudience,
+			"exp": exp.Unix(),
+		}
+		if role != nil {
+			claims["role"] = role
+		}
+		tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+
+	endpoints := []struct {
+		method     string
+		path       string
+		body       string
+		wantStatus int
+	}{
+		{http.MethodGet, "/api/transport/v1/integrations/service-status", "", http.StatusOK},
+		{http.MethodPost, "/api/transport/v1/integrations/utilities/notices", `{"external_id":"UTIL-1","title":"Main St Closure"}`, http.StatusCreated},
+		{http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", `{"external_id":"EMG-1","incident_type":"emergency","severity":"high","title":"Collision"}`, http.StatusCreated},
+		{http.MethodPost, "/api/transport/v1/integrations/security/traffic-alerts", `{"external_id":"SEC-1","title":"Escort"}`, http.StatusCreated},
+	}
+
+	// 1. Every allowed integration role succeeds on all 4 /integrations/* endpoints without cookie, Origin, or CSRF.
+	for _, role := range config.DefaultIntegrationRoles() {
+		sub := "svc-" + strings.ReplaceAll(strings.ToLower(role), " ", "-")
+		token := signJWT(routerTestSecret, sub, role, time.Now().Add(15*time.Minute))
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, "Bearer "+token, nil, "")
+			if rec.Code != ep.wantStatus {
+				t.Fatalf("role=%q %s %s = %d, want %d (body=%s)", role, ep.method, ep.path, rec.Code, ep.wantStatus, rec.Body.String())
+			}
+		}
+		if !strings.Contains(env.auditBuf.String(), `"subject":"`+sub+`"`) {
+			t.Fatalf("expected audit log subject %q, got %s", sub, env.auditBuf.String())
+		}
+	}
+
+	// 2. Disallowed roles (User, Police Officer) receive 403 on all /integrations/* endpoints.
+	for _, disallowed := range []string{"User", "Police Officer"} {
+		token := signJWT(routerTestSecret, "blocked-sub", disallowed, time.Now().Add(15*time.Minute))
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, "Bearer "+token, nil, "")
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("disallowed role=%q %s %s = %d, want 403", disallowed, ep.method, ep.path, rec.Code)
+			}
+		}
+	}
+
+	// 3. Expired, wrong-secret, or malformed Bearer headers return 401 even if paired with valid admin cookie + CSRF.
+	adminCookie, adminCSRF := loginAs(t, env.mux, "transit.admin", routerAdminPass)
+	expired := signJWT(routerTestSecret, "svc", "Administrator", time.Now().Add(-time.Minute))
+	wrongSecret := signJWT("wrong-secret-0123456789abcdef0123", "svc", "Administrator", time.Now().Add(15*time.Minute))
+	for _, badHeader := range []string{
+		"Bearer " + expired,
+		"Bearer " + wrongSecret,
+		"Basic dXNlcjpwYXNz",
+		"Bearer",
+	} {
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, badHeader, adminCookie, adminCSRF)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("badHeader=%q %s %s = %d, want 401", badHeader, ep.method, ep.path, rec.Code)
+			}
+		}
+	}
+
+	// 4. Non-integration admin disruption mutations remain strictly cookie-authenticated (reject Bearer JWT with 401).
+	adminBearer := signJWT(routerTestSecret, "svc-admin", "TransitAdministrator", time.Now().Add(15*time.Minute))
+	for _, adminOnly := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"Test"}`},
+		{http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved"}`},
+		{http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Closure"}`},
+	} {
+		rec := bearerRequest(env.mux, adminOnly.method, adminOnly.path, adminOnly.body, "Bearer "+adminBearer, nil, "")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("non-integration %s %s with Bearer JWT = %d, want 401", adminOnly.method, adminOnly.path, rec.Code)
+		}
+	}
+
+	// 5. End-to-end RegistrationProvider (/api/Login/validate) via NewMiddlewareWithBearerValidator.
+	const claimTypeRole = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+	const claimTypeName = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+	const claimTypeSub = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+
+	regServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/Login/validate" {
+			t.Fatalf("unexpected upstream request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Header.Get("Authorization") {
+		case "Bearer emg-dispatcher-token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": claimTypeSub, "value": "emg-svc-id"},
+					{"type": claimTypeName, "value": "emergency.service"},
+					{"type": claimTypeRole, "value": "Dispatcher"},
+				},
+			})
+		case "Bearer regular-user-token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": claimTypeSub, "value": "resident-1"},
+					{"type": claimTypeName, "value": "resident"},
+					{"type": claimTypeRole, "value": "User"},
+				},
+			})
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": false,
+				"claims":        []map[string]string{},
+			})
+		}
+	}))
+	defer regServer.Close()
+
+	regTrust := config.JWTTrustConfig{
+		Issuer:   "public-transport-local",
+		Audience: "public-transport-api",
+		Secret:   []byte(routerTestSecret),
+	}
+	regProvider, err := auth.NewRegistrationProvider(config.RegistrationAuthConfig{
+		ServiceURL:       regServer.URL,
+		UpstreamIssuer:   "CmRegistrationService",
+		UpstreamAudience: "CmRegistrationClients",
+		LocalTrust:       regTrust,
+		AdminUsers:       []string{"transit.admin"},
+		RequiredRole:     "TransitAdministrator",
+	}, regServer.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	localValidator, err := auth.NewJWTValidator(regTrust, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	regMW := auth.NewMiddlewareWithBearerValidator(env.sessions, localValidator, regProvider, "transit_session", false)
+	regMux := chi.NewRouter()
+	regMux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterDisruptionRoutes(api, handlers.NewDisruptionHandler(svc), regMW, env.csrf, "TransitAdministrator", config.DefaultIntegrationRoles())
+	})
+
+	emgPath := "/api/transport/v1/integrations/emergency/incidents"
+	emgBody := `{"external_id":"EMG-LIVE","incident_type":"road_closure","severity":"high","title":"Bridge Closed"}`
+	if rec := bearerRequest(regMux, http.MethodPost, emgPath, emgBody, "Bearer emg-dispatcher-token", nil, ""); rec.Code != http.StatusCreated {
+		t.Fatalf("RegistrationProvider Dispatcher token = %d, want 201 (%s)", rec.Code, rec.Body.String())
+	}
+	if rec := bearerRequest(regMux, http.MethodPost, emgPath, emgBody, "Bearer regular-user-token", nil, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("RegistrationProvider User token = %d, want 403", rec.Code)
+	}
+	if rec := bearerRequest(regMux, http.MethodPost, emgPath, emgBody, "Bearer invalid-token", nil, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("RegistrationProvider unauthenticated token = %d, want 401", rec.Code)
 	}
 }

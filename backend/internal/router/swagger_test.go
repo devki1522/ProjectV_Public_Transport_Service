@@ -3,6 +3,7 @@ package router_test
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/router"
@@ -20,10 +21,33 @@ func TestSwaggerDocumentation(t *testing.T) {
 			continue
 		}
 		var spec struct {
-			Paths map[string]map[string]json.RawMessage `json:"paths"`
+			Paths               map[string]map[string]json.RawMessage `json:"paths"`
+			SecurityDefinitions map[string]json.RawMessage            `json:"securityDefinitions"`
+			Definitions         map[string]struct {
+				Properties map[string]struct {
+					Enum []string `json:"enum"`
+				} `json:"properties"`
+			} `json:"definitions"`
 		}
 		if err := json.Unmarshal(recorder.Body.Bytes(), &spec); err != nil {
 			t.Fatal(err)
+		}
+		if len(spec.SecurityDefinitions["BearerAuth"]) == 0 {
+			t.Fatal("missing securityDefinitions.BearerAuth in /swagger/doc.json")
+		}
+		emgDef, ok := spec.Definitions["disruptions.EmergencyIncidentInput"]
+		if !ok {
+			t.Fatal("missing definitions[\"disruptions.EmergencyIncidentInput\"]")
+		}
+		for field, wantEnum := range map[string][]string{
+			"incident_type": {"emergency", "road_closure"},
+			"type":          {"emergency", "road_closure"},
+			"severity":      {"low", "medium", "moderate", "high", "critical"},
+			"status":        {"scheduled", "active", "resolved"},
+		} {
+			if got := emgDef.Properties[field].Enum; !reflect.DeepEqual(got, wantEnum) {
+				t.Errorf("EmergencyIncidentInput.%s enum = %v, want %v", field, got, wantEnum)
+			}
 		}
 		for route, methods := range map[string][]string{
 			"/api/transport/v1/auth/login":                           {"post"},
