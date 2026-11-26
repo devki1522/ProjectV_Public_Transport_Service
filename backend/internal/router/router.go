@@ -244,7 +244,6 @@ func RegisterDisruptionRoutes(
 		}
 		protectedAdminMutation.Post("/disruptions", handler.Create)
 		protectedAdminMutation.Patch("/disruptions/{id}", handler.Update)
-		protectedAdminMutation.Post("/road-closures", handler.CreateRoadClosure)
 	})
 
 	r.Group(func(integrationRead chi.Router) {
@@ -262,9 +261,7 @@ func RegisterDisruptionRoutes(
 		} else {
 			integrationMutation.Use(authMiddleware.RequireIntegrationAccess(requiredRole, integrationRoles, csrf, true))
 		}
-		integrationMutation.Post("/integrations/utilities/notices", handler.IngestUtilitiesNotice)
-		integrationMutation.Post("/integrations/emergency/incidents", handler.IngestEmergencyIncident)
-		integrationMutation.Post("/integrations/security/traffic-alerts", handler.IngestSecurityTrafficAlert)
+		integrationMutation.Post("/road-closures", handler.CreateRoadClosure)
 	})
 }
 

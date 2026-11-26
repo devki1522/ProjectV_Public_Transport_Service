@@ -507,7 +507,7 @@ it('supports /admin/vehicles US 177 location updates with presets, validation, C
   }
 }, 15_000)
 
-it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187/188 external incident feeds with CSRF, and US 196 enterprise service status', async () => {
+it('supports /admin/disruptions for US 190 create/resolve disruption, unified POST /road-closures intake with CSRF, and US 196 enterprise service status', async () => {
   let disruptionsCatalog = [...fixtureAllDisruptions]
   const mutationCalls = []
 
@@ -562,29 +562,23 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
       )
       return jsonResponse(disruptionsCatalog.find((item) => item.id === id), 200)
     }
-    if (
-      (url.pathname === '/api/transport/v1/integrations/utilities/notices' ||
-        url.pathname === '/api/transport/v1/integrations/emergency/incidents' ||
-        url.pathname === '/api/transport/v1/integrations/security/traffic-alerts') &&
-      method === 'POST'
-    ) {
+    if (url.pathname === '/api/transport/v1/road-closures' && method === 'POST') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, headers: options.headers, body })
-      const sourceService = url.pathname.includes('utilities')
-        ? 'utilities'
-        : url.pathname.includes('emergency')
-          ? 'emergency_services'
-          : 'security_police'
+      const addr = body.address
+      const formattedAddr = addr
+        ? `${addr.streetNumber ? `${addr.streetNumber} ` : ''}${addr.streetName}, ${addr.city}${addr.postalCode ? `, ${addr.postalCode}` : ''}`
+        : ''
       const disruption = {
         id: 500 + mutationCalls.length,
-        type: body.notice_type || body.incident_type || body.alert_type || 'road_closure',
-        title: body.title,
+        type: 'road_closure',
+        title: body.title || `Road closure: ${formattedAddr}`,
         description: body.description || '',
-        affected_area: body.affected_area || '',
+        affected_area: body.affected_area || formattedAddr,
         start_time: '2026-11-10T14:05:00Z',
-        end_time: null,
+        end_time: '2026-11-10T18:05:00Z',
         status: body.status || 'active',
-        source_service: sourceService,
+        source_service: body.source_service || 'transit_admin',
         external_reference: body.external_id || null,
         received_at: '2026-11-10T14:05:00Z',
         affected_routes: [
@@ -593,21 +587,12 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
         affected_stops: [
           { stop_id: 23, stop_name: 'University Terminal', route_id: 7 },
         ],
-        affected_trips: body.trip_ids ?? [],
+        affected_trips: [],
         affected_vehicles: [],
         affected_segments: body.affected_segments ?? [],
       }
       disruptionsCatalog = [disruption, ...disruptionsCatalog]
-      return jsonResponse(
-        {
-          created: true,
-          disruption,
-          matched_route_ids: body.route_ids ?? [7],
-          matched_stop_ids: body.stop_ids ?? [23],
-          transit_impact: `Impacts Route 7 and University Terminal via ${sourceService}`,
-        },
-        201,
-      )
+      return jsonResponse(disruption, 201)
     }
     throw new Error(`Unexpected request: ${method} ${path}`)
   })
@@ -657,45 +642,37 @@ it('supports /admin/disruptions for US 190 create/resolve disruption, US 186/187
   await user.click(within(createdRow).getByRole('button', { name: 'Resolve' }))
   await screen.findByText(/Marked disruption #410 .* as Resolved/i)
 
-  // US 186 Utilities notice submission with 1-click Waterloo Region template
-  await user.click(screen.getByRole('button', { name: 'Weber St Hydro Closure' }))
-  expect(screen.getByLabelText('External reference ID')).toHaveValue('UTIL-WR-2026-102')
-  await user.click(screen.getByRole('button', { name: 'Submit utilities notice' }))
-  const integrationResult = await screen.findByRole('status', {
-    name: 'External integration result',
+  // Unified road-closure intake with 1-click Waterloo Region template + SH-I06 address + valid-until
+  await user.click(screen.getByRole('button', { name: 'Weber St E Hydro Closure' }))
+  expect(screen.getByLabelText('External reference ID (optional)')).toHaveValue('UTIL-WR-2026-102')
+  expect(screen.getByLabelText('Street name')).toHaveValue('Weber St E')
+  expect(screen.getByLabelText('Valid until (seconds)')).toHaveValue(14400)
+  await user.click(screen.getByRole('button', { name: 'Submit road closure' }))
+  const closureResult = await screen.findByRole('status', {
+    name: 'Road closure result',
   })
-  expect(integrationResult).toHaveTextContent('Impacts Route 7 and University Terminal via utilities')
+  expect(closureResult).toHaveTextContent('Weber St E hydro vault closure')
+  expect(closureResult).toHaveTextContent('123 Weber St E, Kitchener, N2H 1C4')
 
-  // US 187 Emergency Services incident submission
-  await user.click(screen.getByRole('tab', { name: 'Emergency Services (US 187)' }))
-  await user.click(screen.getByRole('button', { name: 'Central Station Fire Response' }))
-  await user.click(screen.getByRole('button', { name: 'Submit emergency incident' }))
-  await within(integrationResult).findByText(
-    'Impacts Route 7 and University Terminal via emergency_services',
-  )
-
-  // US 188 Security / Police traffic alert submission
-  await user.click(screen.getByRole('tab', { name: 'Security / Police (US 188)' }))
-  await user.click(screen.getByRole('button', { name: 'Uptown Waterloo Traffic Restriction' }))
-  await user.click(screen.getByRole('button', { name: 'Submit security traffic alert' }))
-  await within(integrationResult).findByText(
-    'Impacts Route 7 and University Terminal via security_police',
-  )
-
-  expect(mutationCalls).toHaveLength(5)
+  expect(mutationCalls).toHaveLength(3)
   expect(mutationCalls.map((c) => `${c.method} ${c.path}`)).toEqual([
     'POST /api/transport/v1/disruptions',
     'PATCH /api/transport/v1/disruptions/410',
-    'POST /api/transport/v1/integrations/utilities/notices',
-    'POST /api/transport/v1/integrations/emergency/incidents',
-    'POST /api/transport/v1/integrations/security/traffic-alerts',
+    'POST /api/transport/v1/road-closures',
   ])
+  expect(mutationCalls[2].body.address).toEqual({
+    streetNumber: '123',
+    streetName: 'Weber St E',
+    city: 'Kitchener',
+    postalCode: 'N2H 1C4',
+  })
+  expect(mutationCalls[2].body['valid-until']).toBe(14400)
   for (const call of mutationCalls) {
     expect(call.headers['X-CSRF-Token']).toBe(adminSession.csrfToken)
   }
 }, 15_000)
 
-it('preserves multi-line segments and clears end_time when editing a disruption, and ignores hidden Trip IDs on utilities feed', async () => {
+it('preserves multi-line segments and clears end_time when editing a disruption, and submits unified road closures', async () => {
   const mutationCalls = []
   let catalog = [
     {
@@ -722,16 +699,18 @@ it('preserves multi-line segments and clears end_time when editing a disruption,
       catalog = catalog.map((item) => (item.id === 701 ? { ...item, ...body } : item))
       return jsonResponse(catalog[0], 200)
     }
-    if (url.pathname === '/api/transport/v1/integrations/utilities/notices' && method === 'POST') {
+    if (url.pathname === '/api/transport/v1/road-closures' && method === 'POST') {
       const body = JSON.parse(options.body)
       mutationCalls.push({ path: url.pathname, method, body })
       return jsonResponse(
         {
-          created: true,
-          disruption: { ...catalog[0], id: 702, title: body.title, source_service: 'utilities' },
-          matched_route_ids: [],
-          matched_stop_ids: [],
-          transit_impact: 'OK',
+          ...catalog[0],
+          id: 702,
+          type: 'road_closure',
+          title: body.title,
+          source_service: body.source_service || 'transit_admin',
+          affected_routes: [],
+          affected_stops: [],
         },
         201,
       )
@@ -756,15 +735,11 @@ it('preserves multi-line segments and clears end_time when editing a disruption,
   expect(mutationCalls[0].body.affected_segments).toEqual(['King St N', 'University Ave W'])
   expect(mutationCalls[0].body.end_time).toBeNull()
 
-  // Invalid Trip IDs entered on Emergency tab must not block Utilities submission where Trip IDs is hidden
-  await user.click(screen.getByRole('tab', { name: 'Emergency Services (US 187)' }))
-  await user.type(screen.getByLabelText('Trip IDs (optional)'), 'invalid-id')
-  await user.click(screen.getByRole('tab', { name: 'Utilities (US 186)' }))
-  await user.click(screen.getByRole('button', { name: 'Weber St Hydro Closure' }))
-  await user.click(screen.getByRole('button', { name: 'Submit utilities notice' }))
+  await user.click(screen.getByRole('button', { name: 'Fairway Rd Collision Closure' }))
+  await user.click(screen.getByRole('button', { name: 'Submit road closure' }))
 
-  await screen.findByRole('status', { name: 'External integration result' })
-  expect(mutationCalls[1].path).toBe('/api/transport/v1/integrations/utilities/notices')
+  await screen.findByRole('status', { name: 'Road closure result' })
+  expect(mutationCalls[1].path).toBe('/api/transport/v1/road-closures')
 })
 
 it('loads Staff & HR employee counts, adds an employee with CSRF token, and handles conflicts/unavailability', async () => {

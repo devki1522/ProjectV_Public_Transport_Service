@@ -76,7 +76,7 @@ real environment, and tell the Public Transport team if any differ:
 | `BUDGET_SERVICE_URL` | `https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net` |
 
 > [!NOTE]
-> **Service-to-service integrations (`SH-S07`):** No new secrets are needed in Azure. Calls to `/api/transport/v1/integrations/*` with `Authorization: Bearer <token>` are verified over HTTPS against `{REGISTRATION_SERVICE_URL}/api/Login/validate` without cookies or CSRF. Optionally set `AUTH_INTEGRATION_ROLES` in App settings to override the default allowed roles (`TransitAdministrator,Administrator,Security Administrator,Dispatcher,Manager,ServiceAccount,Service`).
+> **Service-to-service integrations (`SH-S07`):** No new secrets are needed in Azure. Calls to `POST /api/transport/v1/road-closures` and `GET /api/transport/v1/integrations/service-status` with `Authorization: Bearer <token>` are verified over HTTPS against `{REGISTRATION_SERVICE_URL}/api/Login/validate` without cookies or CSRF. Optionally set `AUTH_INTEGRATION_ROLES` in App settings to override the default allowed roles (`TransitAdministrator,Administrator,Security Administrator,Dispatcher,Manager,ServiceAccount,Service`).
 
 ## 3. Deploy the new compose file
 

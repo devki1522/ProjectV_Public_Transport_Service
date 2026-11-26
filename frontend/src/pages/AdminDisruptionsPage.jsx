@@ -4,23 +4,18 @@ import {
   AlertCircle,
   CheckCircle2,
   Edit3,
-  Flame,
   MapPin,
   Play,
   Plus,
   RefreshCw,
   Send,
-  ShieldAlert,
-  Wrench,
 } from 'lucide-react'
 import {
   createDisruption,
   getAllDisruptions,
   getAllRoutes,
   getEnterpriseServiceStatus,
-  submitEmergencyIncident,
-  submitSecurityTrafficAlert,
-  submitUtilitiesNotice,
+  submitRoadClosure,
   updateDisruption,
 } from '../api/admin.js'
 import { useAuth } from '../auth/authState.js'
@@ -42,152 +37,65 @@ import { API_BASE } from '../api/base.js'
 import { useResource } from '../hooks/useResource.js'
 import { directionLabel, formatTime } from '../lib/transit.js'
 
-const FEED_TABS = [
+const ROAD_CLOSURE_TEMPLATES = [
   {
-    id: 'utilities',
-    label: 'Utilities (US 186)',
-    endpoint: `POST ${API_BASE}/integrations/utilities/notices`,
-    submitLabel: 'Submit utilities notice',
-    subtypeLabel: 'Notice type',
-    subtypes: [
-      { value: 'construction', label: 'Construction' },
-      { value: 'road_closure', label: 'Road closure' },
-    ],
+    label: 'King St N Watermain Closure',
+    externalId: 'UTIL-WR-2026-101',
+    sourceService: 'utilities',
+    status: 'active',
+    streetNumber: '200',
+    streetName: 'University Ave W',
+    city: 'Waterloo',
+    postalCode: 'N2L 3G1',
+    validUntilSeconds: '7200',
+    title: 'King St N watermain road closure',
+    description: 'Full northbound road closure near University Ave due to watermain replacement.',
+    latitude: '43.4723',
+    longitude: '-80.5449',
+    radiusMeters: '450',
+    routeIds: '7',
+    stopIds: '23',
+    segments: 'King St N between University Ave and Columbia St',
   },
   {
-    id: 'emergency',
-    label: 'Emergency Services (US 187)',
-    endpoint: `POST ${API_BASE}/integrations/emergency/incidents`,
-    submitLabel: 'Submit emergency incident',
-    subtypeLabel: 'Incident type',
-    subtypes: [
-      { value: 'emergency', label: 'Emergency' },
-      { value: 'road_closure', label: 'Road closure' },
-    ],
+    label: 'Weber St E Hydro Closure',
+    externalId: 'UTIL-WR-2026-102',
+    sourceService: 'utilities',
+    status: 'active',
+    streetNumber: '123',
+    streetName: 'Weber St E',
+    city: 'Kitchener',
+    postalCode: 'N2H 1C4',
+    validUntilSeconds: '14400',
+    title: 'Weber St E hydro vault closure',
+    description: 'Full northbound road closure for emergency underground transformer work.',
+    latitude: '43.4516',
+    longitude: '-80.4981',
+    radiusMeters: '400',
+    routeIds: '1',
+    stopIds: '21',
+    segments: 'Weber St E between Victoria St and Frederick St',
   },
   {
-    id: 'security',
-    label: 'Security / Police (US 188)',
-    endpoint: `POST ${API_BASE}/integrations/security/traffic-alerts`,
-    submitLabel: 'Submit security traffic alert',
-    subtypeLabel: 'Alert type',
-    subtypes: [
-      { value: 'traffic_restriction', label: 'Traffic restriction' },
-      { value: 'road_closure', label: 'Road closure' },
-    ],
+    label: 'Fairway Rd Collision Closure',
+    externalId: 'EMS-WR-2026-202',
+    sourceService: 'emergency_services',
+    status: 'active',
+    streetNumber: '595',
+    streetName: 'Fairway Rd S',
+    city: 'Kitchener',
+    postalCode: 'N2C 1X4',
+    validUntilSeconds: '3600',
+    title: 'Multi-vehicle collision blocking Fairway Rd',
+    description: 'Emergency road closure affecting approaches to Fairway Station.',
+    latitude: '43.4209',
+    longitude: '-80.4388',
+    radiusMeters: '500',
+    routeIds: '1',
+    stopIds: '22',
+    segments: 'Fairway Rd S approaching Wilson Ave',
   },
 ]
-
-const FEED_TEMPLATES = {
-  utilities: [
-    {
-      label: 'King St Watermain Repair',
-      externalId: 'UTIL-WR-2026-101',
-      subtype: 'construction',
-      severity: 'medium',
-      status: 'active',
-      title: 'King St N watermain construction',
-      description: 'Lane reductions and transit detour near University Ave due to watermain replacement.',
-      affectedArea: 'King St N & University Ave, Waterloo',
-      latitude: '43.4723',
-      longitude: '-80.5449',
-      radiusMeters: '450',
-      routeIds: '7',
-      stopIds: '23',
-      tripIds: '',
-      segments: 'King St N between University Ave and Columbia St',
-    },
-    {
-      label: 'Weber St Hydro Closure',
-      externalId: 'UTIL-WR-2026-102',
-      subtype: 'road_closure',
-      severity: 'high',
-      status: 'active',
-      title: 'Weber St E hydro vault closure',
-      description: 'Full northbound road closure for emergency underground transformer work.',
-      affectedArea: 'Weber St E & Victoria St, Kitchener',
-      latitude: '43.4516',
-      longitude: '-80.4981',
-      radiusMeters: '400',
-      routeIds: '1',
-      stopIds: '21',
-      tripIds: '',
-      segments: 'Weber St E between Victoria St and Frederick St',
-    },
-  ],
-  emergency: [
-    {
-      label: 'Central Station Fire Response',
-      externalId: 'EMS-WR-2026-201',
-      subtype: 'emergency',
-      severity: 'high',
-      status: 'active',
-      title: 'Emergency response near Central Station',
-      description: 'Fire and paramedic units staging on King St W; buses detouring around Central Station.',
-      affectedArea: 'King St W & Victoria St, Kitchener',
-      latitude: '43.4516',
-      longitude: '-80.4981',
-      radiusMeters: '400',
-      routeIds: '1, 7',
-      stopIds: '21',
-      tripIds: '100',
-      segments: 'King St W at Victoria St',
-    },
-    {
-      label: 'Fairway Rd Collision Closure',
-      externalId: 'EMS-WR-2026-202',
-      subtype: 'road_closure',
-      severity: 'critical',
-      status: 'active',
-      title: 'Multi-vehicle collision blocking Fairway Rd',
-      description: 'Emergency road restriction affecting approaches to Fairway Station.',
-      affectedArea: 'Fairway Rd S & Wilson Ave, Kitchener',
-      latitude: '43.4209',
-      longitude: '-80.4388',
-      radiusMeters: '500',
-      routeIds: '1',
-      stopIds: '22',
-      tripIds: '',
-      segments: 'Fairway Rd S approaching Wilson Ave',
-    },
-  ],
-  security: [
-    {
-      label: 'Uptown Waterloo Traffic Restriction',
-      externalId: 'WRPS-2026-301',
-      subtype: 'traffic_restriction',
-      severity: 'medium',
-      status: 'active',
-      title: 'Police traffic control in Uptown Waterloo',
-      description: 'Rolling traffic restrictions along King St S for public safety perimeter.',
-      affectedArea: 'King St S & Erb St, Waterloo',
-      latitude: '43.4643',
-      longitude: '-80.5204',
-      radiusMeters: '400',
-      routeIds: '7',
-      stopIds: '23',
-      tripIds: '',
-      segments: 'King St S between Erb St and William St',
-    },
-    {
-      label: 'Queen St Security Perimeter',
-      externalId: 'WRPS-2026-302',
-      subtype: 'road_closure',
-      severity: 'high',
-      status: 'active',
-      title: 'Police road closure on Queen St S',
-      description: 'Security perimeter closing Queen St S transit corridor until further notice.',
-      affectedArea: 'Queen St S & King St W, Kitchener',
-      latitude: '43.4501',
-      longitude: '-80.4890',
-      radiusMeters: '350',
-      routeIds: '1',
-      stopIds: '21',
-      tripIds: '',
-      segments: 'Queen St S between King St and Charles St',
-    },
-  ],
-}
 
 const INITIAL_DISRUPTION_FORM = {
   type: 'detour',
@@ -204,20 +112,22 @@ const INITIAL_DISRUPTION_FORM = {
   segmentsText: '',
 }
 
-const INITIAL_FEED_FORM = {
+const INITIAL_ROAD_CLOSURE_FORM = {
   externalId: '',
-  subtype: 'construction',
-  severity: 'high',
+  sourceService: '',
   status: 'active',
+  streetNumber: '',
+  streetName: '',
+  city: 'Waterloo',
+  postalCode: '',
+  validUntilSeconds: '7200',
   title: '',
   description: '',
-  affectedArea: '',
   latitude: '',
   longitude: '',
   radiusMeters: '400',
   routeIds: '',
   stopIds: '',
-  tripIds: '',
   segments: '',
 }
 
@@ -332,10 +242,31 @@ function validateDisruptionForm(form, isEditing = false) {
   return { payload }
 }
 
-function validateFeedForm(activeFeed, form) {
+function validateRoadClosureForm(form) {
+  const streetNumber = form.streetNumber.trim()
+  const streetName = form.streetName.trim()
+  const city = form.city.trim()
+  const postalCode = form.postalCode.trim()
   const title = form.title.trim()
-  if (!title || [...title].length > 100 || title.includes('\0')) {
-    return { error: 'Notice title is required and must be 100 characters or fewer.' }
+
+  const hasAnyAddressField = Boolean(streetNumber || streetName || postalCode)
+  if (hasAnyAddressField && (!streetName || !city)) {
+    return { error: 'Street name and city are required when providing an address.' }
+  }
+  if ((!streetName || !city) && !title) {
+    return { error: 'Provide either a street address (street name and city) or a road closure title.' }
+  }
+  if ([...title].length > 100 || title.includes('\0')) {
+    return { error: 'Title must be 100 characters or fewer.' }
+  }
+
+  let validUntil = null
+  if (form.validUntilSeconds.trim() !== '') {
+    const parsed = Number(form.validUntilSeconds)
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return { error: 'Valid-until must be a positive whole number of seconds.' }
+    }
+    validUntil = parsed
   }
 
   const routeParsed = parsePositiveIdList(form.routeIds, 'Route IDs')
@@ -343,11 +274,6 @@ function validateFeedForm(activeFeed, form) {
 
   const stopParsed = parsePositiveIdList(form.stopIds, 'Stop IDs')
   if (stopParsed.error) return { error: stopParsed.error }
-
-  const tripParsed = activeFeed === 'utilities'
-    ? { ids: [] }
-    : parsePositiveIdList(form.tripIds, 'Trip IDs')
-  if (tripParsed.error) return { error: tripParsed.error }
 
   const hasLat = form.latitude.trim() !== ''
   const hasLng = form.longitude.trim() !== ''
@@ -376,15 +302,25 @@ function validateFeedForm(activeFeed, form) {
   }
 
   const payload = {
-    title,
     status: form.status || 'active',
   }
+  if (streetName && city) {
+    payload.address = {
+      streetNumber,
+      streetName,
+      city,
+      postalCode,
+    }
+  }
+  if (validUntil !== null) {
+    payload['valid-until'] = validUntil
+  }
+  if (title) payload.title = title
   if (form.externalId.trim()) payload.external_id = form.externalId.trim()
+  if (form.sourceService.trim()) payload.source_service = form.sourceService.trim()
   if (form.description.trim()) payload.description = form.description.trim()
-  if (form.affectedArea.trim()) payload.affected_area = form.affectedArea.trim()
   if (routeParsed.ids.length > 0) payload.route_ids = routeParsed.ids
   if (stopParsed.ids.length > 0) payload.stop_ids = stopParsed.ids
-  if (tripParsed.ids.length > 0 && activeFeed !== 'utilities') payload.trip_ids = tripParsed.ids
 
   const segments = parseSegmentsList(form.segments)
   if (segments.length > 0) payload.affected_segments = segments
@@ -393,15 +329,6 @@ function validateFeedForm(activeFeed, form) {
     payload.latitude = latitude
     payload.longitude = longitude
     if (radiusMeters !== null) payload.radius_meters = radiusMeters
-  }
-
-  if (activeFeed === 'utilities') {
-    payload.notice_type = form.subtype || 'construction'
-  } else if (activeFeed === 'emergency') {
-    payload.incident_type = form.subtype || 'emergency'
-    payload.severity = form.severity || 'high'
-  } else {
-    payload.alert_type = form.subtype || 'traffic_restriction'
   }
 
   return { payload }
@@ -419,11 +346,10 @@ export function AdminDisruptionsPage() {
   const [formPending, setFormPending] = useState(false)
   const [formError, setFormError] = useState(null)
 
-  const [activeFeed, setActiveFeed] = useState('utilities')
-  const [feedForm, setFeedForm] = useState(INITIAL_FEED_FORM)
-  const [feedPending, setFeedPending] = useState(false)
-  const [feedError, setFeedError] = useState(null)
-  const [feedResult, setFeedResult] = useState(null)
+  const [roadClosureForm, setRoadClosureForm] = useState(INITIAL_ROAD_CLOSURE_FORM)
+  const [roadClosurePending, setRoadClosurePending] = useState(false)
+  const [roadClosureError, setRoadClosureError] = useState(null)
+  const [roadClosureResult, setRoadClosureResult] = useState(null)
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -461,9 +387,7 @@ export function AdminDisruptionsPage() {
     })
   }, [disruptions, statusFilter, typeFilter])
 
-  const currentFeedConfig = FEED_TABS.find((tab) => tab.id === activeFeed) ?? FEED_TABS[0]
-  const currentTemplates = FEED_TEMPLATES[activeFeed] ?? []
-  const mutationPending = formPending || feedPending || rowPendingId !== null
+  const mutationPending = formPending || roadClosurePending || rowPendingId !== null
 
   function refreshAll() {
     routesRes.retry()
@@ -551,63 +475,48 @@ export function AdminDisruptionsPage() {
     }
   }
 
-  function handleSelectFeedTab(feedId) {
-    const tabConfig = FEED_TABS.find((item) => item.id === feedId) ?? FEED_TABS[0]
-    setActiveFeed(feedId)
-    setFeedForm((current) => ({
-      ...current,
-      subtype: tabConfig.subtypes[0].value,
-    }))
-    setFeedError(null)
-  }
-
-  function applyFeedTemplate(template) {
-    setFeedForm({
+  function applyRoadClosureTemplate(template) {
+    setRoadClosureForm({
       externalId: template.externalId,
-      subtype: template.subtype,
-      severity: template.severity,
+      sourceService: template.sourceService,
       status: template.status,
+      streetNumber: template.streetNumber,
+      streetName: template.streetName,
+      city: template.city,
+      postalCode: template.postalCode,
+      validUntilSeconds: template.validUntilSeconds,
       title: template.title,
       description: template.description,
-      affectedArea: template.affectedArea,
       latitude: template.latitude,
       longitude: template.longitude,
       radiusMeters: template.radiusMeters,
       routeIds: template.routeIds,
       stopIds: template.stopIds,
-      tripIds: template.tripIds,
       segments: template.segments,
     })
-    setFeedError(null)
+    setRoadClosureError(null)
   }
 
-  async function handleFeedSubmit(event) {
+  async function handleRoadClosureSubmit(event) {
     event.preventDefault()
     if (mutationPending) return
 
-    const { payload, error: validationError } = validateFeedForm(activeFeed, feedForm)
+    const { payload, error: validationError } = validateRoadClosureForm(roadClosureForm)
     if (validationError) {
-      setFeedError(validationError)
+      setRoadClosureError(validationError)
       return
     }
 
-    setFeedPending(true)
-    setFeedError(null)
+    setRoadClosurePending(true)
+    setRoadClosureError(null)
     setActionNotice(null)
     setActionError(null)
 
     try {
-      let result
-      if (activeFeed === 'utilities') {
-        result = await submitUtilitiesNotice(payload, csrfToken)
-      } else if (activeFeed === 'emergency') {
-        result = await submitEmergencyIncident(payload, csrfToken)
-      } else {
-        result = await submitSecurityTrafficAlert(payload, csrfToken)
-      }
-      setFeedResult(result)
+      const result = await submitRoadClosure(payload, csrfToken)
+      setRoadClosureResult(result)
       setActionNotice(
-        `${result.created ? 'Ingested new' : 'Updated'} external notice "${result.disruption?.title ?? payload.title}" (${result.transit_impact || 'impact evaluated'}).`,
+        `Recorded road closure #${result.id} "${result.title}" (${disruptionStatusLabel(result.status)}).`,
       )
       disruptionsRes.retry()
       enterpriseStatusRes.retry()
@@ -616,9 +525,9 @@ export function AdminDisruptionsPage() {
         handleApiError(error)
         return
       }
-      setFeedError(error.message)
+      setRoadClosureError(error.message)
     } finally {
-      setFeedPending(false)
+      setRoadClosurePending(false)
     }
   }
 
@@ -1026,46 +935,23 @@ export function AdminDisruptionsPage() {
           </form>
         </section>
 
-        <section className="admin-panel" aria-labelledby="external-feed-heading">
+        <section className="admin-panel" aria-labelledby="road-closure-intake-heading">
           <div className="admin-panel-header">
-            <h2 id="external-feed-heading">External incident &amp; notice feeds (US 186, 187, 188)</h2>
+            <h2 id="road-closure-intake-heading">Road closure intake</h2>
             <p>
-              Ingest road closures, emergency restrictions, and police traffic alerts with spatial stop/route impact matching.
+              Submit municipal road closures via <code>{`POST ${API_BASE}/road-closures`}</code> with SH-I06 addresses and <code>valid-until</code> duration.
             </p>
-          </div>
-
-          <div className="feed-tabs" role="tablist" aria-label="External incident feeds">
-            {FEED_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeFeed === tab.id}
-                className={`feed-tab-button ${activeFeed === tab.id ? 'is-active' : ''}`}
-                onClick={() => handleSelectFeedTab(tab.id)}
-                disabled={mutationPending}
-              >
-                {tab.id === 'utilities' ? (
-                  <Wrench size={14} aria-hidden="true" />
-                ) : tab.id === 'emergency' ? (
-                  <Flame size={14} aria-hidden="true" />
-                ) : (
-                  <ShieldAlert size={14} aria-hidden="true" />
-                )}
-                <span>{tab.label}</span>
-              </button>
-            ))}
           </div>
 
           <div className="field feed-template-bar">
             <span className="preset-label">Waterloo Region 1-click sample templates</span>
             <div className="preset-buttons" role="group" aria-label="Waterloo Region sample templates">
-              {currentTemplates.map((template) => (
+              {ROAD_CLOSURE_TEMPLATES.map((template) => (
                 <button
                   key={template.label}
                   type="button"
                   className="button button-secondary button-compact preset-button"
-                  onClick={() => applyFeedTemplate(template)}
+                  onClick={() => applyRoadClosureTemplate(template)}
                   disabled={mutationPending}
                 >
                   <MapPin size={13} aria-hidden="true" />
@@ -1075,72 +961,94 @@ export function AdminDisruptionsPage() {
             </div>
           </div>
 
-          {feedError && (
+          {roadClosureError && (
             <div className="error-notice auth-error" role="alert">
               <AlertCircle size={20} aria-hidden="true" />
               <div>
-                <strong>Could not submit external notice</strong>
-                <p>{feedError}</p>
+                <strong>Could not submit road closure</strong>
+                <p>{roadClosureError}</p>
               </div>
             </div>
           )}
 
-          <form className="admin-form" onSubmit={handleFeedSubmit} noValidate>
+          <form className="admin-form" onSubmit={handleRoadClosureSubmit} noValidate>
             <div className="admin-vehicle-form-row">
               <div className="field">
-                <label htmlFor="feed-external-id">External reference ID</label>
+                <label htmlFor="rc-street-number">Street number</label>
                 <input
-                  id="feed-external-id"
+                  id="rc-street-number"
                   type="text"
-                  maxLength={120}
-                  placeholder="e.g. UTIL-WR-2026-101"
-                  value={feedForm.externalId}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, externalId: event.target.value }))}
+                  maxLength={20}
+                  placeholder="e.g. 123"
+                  value={roadClosureForm.streetNumber}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, streetNumber: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="feed-subtype">{currentFeedConfig.subtypeLabel}</label>
-                <select
-                  id="feed-subtype"
-                  value={feedForm.subtype}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, subtype: event.target.value }))}
+                <label htmlFor="rc-street-name">Street name</label>
+                <input
+                  id="rc-street-name"
+                  type="text"
+                  maxLength={120}
+                  placeholder="e.g. King St N"
+                  value={roadClosureForm.streetName}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, streetName: event.target.value }))}
                   disabled={mutationPending}
-                >
-                  {currentFeedConfig.subtypes.map((subtype) => (
-                    <option key={subtype.value} value={subtype.value}>
-                      {subtype.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
 
             <div className="admin-vehicle-form-row">
-              {activeFeed === 'emergency' && (
-                <div className="field">
-                  <label htmlFor="feed-severity">Severity</label>
-                  <select
-                    id="feed-severity"
-                    value={feedForm.severity}
-                    onChange={(event) => setFeedForm((f) => ({ ...f, severity: event.target.value }))}
-                    disabled={mutationPending}
-                  >
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </div>
-              )}
+              <div className="field">
+                <label htmlFor="rc-city">City</label>
+                <input
+                  id="rc-city"
+                  type="text"
+                  maxLength={80}
+                  placeholder="e.g. Waterloo"
+                  value={roadClosureForm.city}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, city: event.target.value }))}
+                  disabled={mutationPending}
+                />
+              </div>
 
               <div className="field">
-                <label htmlFor="feed-status">Feed status</label>
+                <label htmlFor="rc-postal-code">Postal code</label>
+                <input
+                  id="rc-postal-code"
+                  type="text"
+                  maxLength={16}
+                  placeholder="e.g. N2J 2X7"
+                  value={roadClosureForm.postalCode}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, postalCode: event.target.value }))}
+                  disabled={mutationPending}
+                />
+              </div>
+            </div>
+
+            <div className="admin-vehicle-form-row">
+              <div className="field">
+                <label htmlFor="rc-valid-until">Valid until (seconds)</label>
+                <input
+                  id="rc-valid-until"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="7200"
+                  value={roadClosureForm.validUntilSeconds}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, validUntilSeconds: event.target.value }))}
+                  disabled={mutationPending}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="rc-status">Closure status</label>
                 <select
-                  id="feed-status"
-                  value={feedForm.status}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, status: event.target.value }))}
+                  id="rc-status"
+                  value={roadClosureForm.status}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, status: event.target.value }))}
                   disabled={mutationPending}
                 >
                   {DISRUPTION_STATUS_OPTIONS.map((option) => (
@@ -1152,83 +1060,97 @@ export function AdminDisruptionsPage() {
               </div>
             </div>
 
+            <div className="admin-vehicle-form-row">
+              <div className="field">
+                <label htmlFor="rc-external-id">External reference ID (optional)</label>
+                <input
+                  id="rc-external-id"
+                  type="text"
+                  maxLength={120}
+                  placeholder="e.g. UTIL-WR-2026-101"
+                  value={roadClosureForm.externalId}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, externalId: event.target.value }))}
+                  disabled={mutationPending}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="rc-source-service">Source service (optional)</label>
+                <input
+                  id="rc-source-service"
+                  type="text"
+                  maxLength={50}
+                  placeholder="e.g. utilities, emergency_services"
+                  value={roadClosureForm.sourceService}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, sourceService: event.target.value }))}
+                  disabled={mutationPending}
+                />
+              </div>
+            </div>
+
             <div className="field">
-              <label htmlFor="feed-title">Notice title</label>
+              <label htmlFor="rc-title">Title (optional if address is provided)</label>
               <input
-                id="feed-title"
+                id="rc-title"
                 type="text"
                 maxLength={100}
-                placeholder="e.g. King St N watermain construction"
-                value={feedForm.title}
-                onChange={(event) => setFeedForm((f) => ({ ...f, title: event.target.value }))}
+                placeholder="e.g. King St N watermain road closure"
+                value={roadClosureForm.title}
+                onChange={(event) => setRoadClosureForm((f) => ({ ...f, title: event.target.value }))}
                 disabled={mutationPending}
-                required
               />
             </div>
 
             <div className="field">
-              <label htmlFor="feed-description">Notice description</label>
+              <label htmlFor="rc-description">Description (optional)</label>
               <textarea
-                id="feed-description"
+                id="rc-description"
                 rows={2}
-                placeholder="Operational details from the external service…"
-                value={feedForm.description}
-                onChange={(event) => setFeedForm((f) => ({ ...f, description: event.target.value }))}
-                disabled={mutationPending}
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="feed-affected-area">Affected area / corridor</label>
-              <input
-                id="feed-affected-area"
-                type="text"
-                maxLength={200}
-                placeholder="e.g. King St N & University Ave, Waterloo"
-                value={feedForm.affectedArea}
-                onChange={(event) => setFeedForm((f) => ({ ...f, affectedArea: event.target.value }))}
+                placeholder="Operational details about the road closure…"
+                value={roadClosureForm.description}
+                onChange={(event) => setRoadClosureForm((f) => ({ ...f, description: event.target.value }))}
                 disabled={mutationPending}
               />
             </div>
 
             <div className="admin-feed-coords-row">
               <div className="field">
-                <label htmlFor="feed-latitude">Latitude (optional)</label>
+                <label htmlFor="rc-latitude">Latitude (optional)</label>
                 <input
-                  id="feed-latitude"
+                  id="rc-latitude"
                   type="number"
                   step="any"
                   placeholder="43.4723"
-                  value={feedForm.latitude}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, latitude: event.target.value }))}
+                  value={roadClosureForm.latitude}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, latitude: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="feed-longitude">Longitude (optional)</label>
+                <label htmlFor="rc-longitude">Longitude (optional)</label>
                 <input
-                  id="feed-longitude"
+                  id="rc-longitude"
                   type="number"
                   step="any"
                   placeholder="-80.5449"
-                  value={feedForm.longitude}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, longitude: event.target.value }))}
+                  value={roadClosureForm.longitude}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, longitude: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="feed-radius">Impact radius (m)</label>
+                <label htmlFor="rc-radius">Impact radius (m)</label>
                 <input
-                  id="feed-radius"
+                  id="rc-radius"
                   type="number"
                   min="50"
                   max="5000"
                   step="50"
                   placeholder="400"
-                  value={feedForm.radiusMeters}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, radiusMeters: event.target.value }))}
+                  value={roadClosureForm.radiusMeters}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, radiusMeters: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
@@ -1236,98 +1158,84 @@ export function AdminDisruptionsPage() {
 
             <div className="admin-vehicle-form-row">
               <div className="field">
-                <label htmlFor="feed-route-ids">Route IDs (optional)</label>
+                <label htmlFor="rc-route-ids">Route IDs (optional)</label>
                 <input
-                  id="feed-route-ids"
+                  id="rc-route-ids"
                   type="text"
                   placeholder="e.g. 1, 7"
-                  value={feedForm.routeIds}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, routeIds: event.target.value }))}
+                  value={roadClosureForm.routeIds}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, routeIds: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="feed-stop-ids">Stop IDs (optional)</label>
+                <label htmlFor="rc-stop-ids">Stop IDs (optional)</label>
                 <input
-                  id="feed-stop-ids"
+                  id="rc-stop-ids"
                   type="text"
                   placeholder="e.g. 21, 23"
-                  value={feedForm.stopIds}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, stopIds: event.target.value }))}
+                  value={roadClosureForm.stopIds}
+                  onChange={(event) => setRoadClosureForm((f) => ({ ...f, stopIds: event.target.value }))}
                   disabled={mutationPending}
                 />
               </div>
             </div>
 
-            <div className="admin-vehicle-form-row">
-              {activeFeed !== 'utilities' && (
-                <div className="field">
-                  <label htmlFor="feed-trip-ids">Trip IDs (optional)</label>
-                  <input
-                    id="feed-trip-ids"
-                    type="text"
-                    placeholder="e.g. 100"
-                    value={feedForm.tripIds}
-                    onChange={(event) => setFeedForm((f) => ({ ...f, tripIds: event.target.value }))}
-                    disabled={mutationPending}
-                  />
-                </div>
-              )}
-
-              <div className="field">
-                <label htmlFor="feed-segments">Affected segments (optional)</label>
-                <input
-                  id="feed-segments"
-                  type="text"
-                  placeholder="e.g. King St N between University & Columbia"
-                  value={feedForm.segments}
-                  onChange={(event) => setFeedForm((f) => ({ ...f, segments: event.target.value }))}
-                  disabled={mutationPending}
-                />
-              </div>
+            <div className="field">
+              <label htmlFor="rc-segments">Affected segments (optional)</label>
+              <input
+                id="rc-segments"
+                type="text"
+                placeholder="e.g. King St N between University & Columbia"
+                value={roadClosureForm.segments}
+                onChange={(event) => setRoadClosureForm((f) => ({ ...f, segments: event.target.value }))}
+                disabled={mutationPending}
+              />
             </div>
 
             <button className="button button-primary" type="submit" disabled={mutationPending}>
               <Send size={15} aria-hidden="true" />
-              <span>{feedPending ? 'Submitting notice…' : currentFeedConfig.submitLabel}</span>
+              <span>{roadClosurePending ? 'Submitting road closure…' : 'Submit road closure'}</span>
             </button>
           </form>
 
-          {feedResult && (
+          {roadClosureResult && (
             <div
               className="feed-result-card"
               role="status"
-              aria-label="External integration result"
+              aria-label="Road closure result"
             >
               <div className="feed-result-header">
                 <strong>
-                  {feedResult.created ? 'Created new disruption' : 'Updated existing disruption'}
-                  {feedResult.disruption?.id ? ` #${feedResult.disruption.id}` : ''}
+                  Recorded road closure{roadClosureResult.id ? ` #${roadClosureResult.id}` : ''}
                 </strong>
                 <span className="status-pill is-active">
-                  {sourceServiceLabel(feedResult.disruption?.source_service)}
+                  {sourceServiceLabel(roadClosureResult.source_service)}
                 </span>
               </div>
-              {feedResult.transit_impact && (
-                <p className="feed-result-impact">{feedResult.transit_impact}</p>
-              )}
+              <p className="feed-result-impact">
+                {roadClosureResult.title}
+                {roadClosureResult.affected_area ? ` · ${roadClosureResult.affected_area}` : ''}
+                {' · '}
+                {formatDisruptionWindow(roadClosureResult.start_time, roadClosureResult.end_time)}
+              </p>
               <div className="alert-chips">
                 <span className="alert-chip alert-chip-route">
-                  Matched routes:{' '}
-                  {(feedResult.matched_route_ids ?? []).length > 0
-                    ? feedResult.matched_route_ids.join(', ')
+                  Affected routes:{' '}
+                  {(roadClosureResult.affected_routes ?? []).length > 0
+                    ? roadClosureResult.affected_routes.map((r) => r.route_number || r.route_id).join(', ')
                     : 'None'}
                 </span>
                 <span className="alert-chip alert-chip-stop">
-                  Matched stops:{' '}
-                  {(feedResult.matched_stop_ids ?? []).length > 0
-                    ? feedResult.matched_stop_ids.join(', ')
+                  Affected stops:{' '}
+                  {(roadClosureResult.affected_stops ?? []).length > 0
+                    ? roadClosureResult.affected_stops.map((s) => s.stop_name || s.stop_id).join(', ')
                     : 'None'}
                 </span>
-                {feedResult.disruption?.received_at && (
+                {roadClosureResult.received_at && (
                   <span className="alert-chip">
-                    Received {formatAlertTimestamp(feedResult.disruption.received_at)}
+                    Received {formatAlertTimestamp(roadClosureResult.received_at)}
                   </span>
                 )}
               </div>

@@ -14,21 +14,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/auth"
 	"github.com/devki1522/ProjectV_Public_Transport_Service/backend/internal/disruptions"
 )
 
-// DisruptionService describes the disruption, operational status, and external feed operations needed by HTTP handlers.
+// DisruptionService describes the disruption, operational status, and road-closure ingestion operations needed by HTTP handlers.
 type DisruptionService interface {
 	List(ctx context.Context, filter disruptions.ListFilter) ([]disruptions.DisruptionResponse, error)
 	ListActive(ctx context.Context, filter disruptions.ListFilter) ([]disruptions.DisruptionResponse, error)
 	Get(ctx context.Context, id int) (disruptions.DisruptionResponse, error)
 	Create(ctx context.Context, input disruptions.CreateDisruptionInput, defaultSource string) (disruptions.DisruptionResponse, error)
+	CreateRoadClosure(ctx context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.RoadClosureResult, error)
 	Update(ctx context.Context, id int, input disruptions.UpdateDisruptionInput) (disruptions.DisruptionResponse, error)
-	IngestUtilitiesNotice(ctx context.Context, input disruptions.UtilitiesNoticeInput) (disruptions.ExternalNoticeResult, error)
-	IngestEmergencyIncident(ctx context.Context, input disruptions.EmergencyIncidentInput) (disruptions.ExternalNoticeResult, error)
-	IngestSecurityTrafficAlert(ctx context.Context, input disruptions.SecurityTrafficAlertInput) (disruptions.ExternalNoticeResult, error)
 	AffectedServices(ctx context.Context) (disruptions.AffectedServicesSummary, error)
 	ServiceStatus(ctx context.Context) (disruptions.ServiceStatusResponse, error)
 	RouteStatus(ctx context.Context, routeID int) (disruptions.EntityOperationalStatus, error)
@@ -433,21 +432,26 @@ func (h *DisruptionHandler) ListRoadClosures(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, list)
 }
 
-// CreateRoadClosure validates and creates a new road closure disruption (`type='road_closure'`).
+// CreateRoadClosure validates and creates (or idempotently upserts) a road closure disruption (`type='road_closure'`).
 //
-// @Summary Create a road closure
-// @Description Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.
+// @Summary Create or update a road closure
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp >= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, route/stop links, and external_id for idempotent upsert (201 created, 200 updated).
 // @Tags road-closures
+// @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param X-CSRF-Token header string true "Session-bound CSRF token"
-// @Param body body disruptions.CreateDisruptionInput true "Road closure creation payload"
+// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
+// @Param body body disruptions.RoadClosureInput true "Road closure payload"
+// @Success 200 {object} disruptions.DisruptionResponse
 // @Success 201 {object} disruptions.DisruptionResponse
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
 // @Router /api/transport/v1/road-closures [post]
 func (h *DisruptionHandler) CreateRoadClosure(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -456,30 +460,48 @@ func (h *DisruptionHandler) CreateRoadClosure(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var input disruptions.CreateDisruptionInput
+	defaultSource := roadClosureDefaultSource(r.Context())
+
+	var input disruptions.RoadClosureInput
 	if !decodeStrictJSONObject(w, r, &input) {
-		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, "invalid_request")
+		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, defaultSource, "invalid_request")
 		return
 	}
 
-	if strings.TrimSpace(input.Type) == "" {
-		input.Type = disruptions.TypeRoadClosure
-	} else if input.Type != disruptions.TypeRoadClosure {
-		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, "validation_error")
-		writeDisruptionError(w, &disruptions.InvalidInput{Message: "type must be road_closure for road-closures endpoint"})
-		return
-	}
-
-	created, err := h.service.Create(r.Context(), input, disruptions.SourceTransitAdmin)
+	result, err := h.service.CreateRoadClosure(r.Context(), input, defaultSource)
 	if err != nil {
-		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, disruptions.SourceTransitAdmin, disruptionAuditOutcome(err))
+		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, defaultSource, disruptionAuditOutcome(err))
 		writeDisruptionError(w, err)
 		return
 	}
 
-	h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", created.ID, created.SourceService, "success")
-	w.Header().Set("Location", apiBaseFromRequest(r)+"/road-closures/"+strconv.Itoa(created.ID))
-	writeJSON(w, http.StatusCreated, created)
+	status := http.StatusOK
+	if result.Created {
+		status = http.StatusCreated
+		w.Header().Set("Location", apiBaseFromRequest(r)+"/road-closures/"+strconv.Itoa(result.Disruption.ID))
+	}
+	h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", result.Disruption.ID, result.Disruption.SourceService, "success")
+	writeJSON(w, status, result.Disruption)
+}
+
+func roadClosureDefaultSource(ctx context.Context) string {
+	if _, hasSession := auth.SessionFromContext(ctx); hasSession {
+		return disruptions.SourceTransitAdmin
+	}
+	if p, ok := auth.PrincipalFromContext(ctx); ok {
+		candidate := strings.TrimSpace(p.Username)
+		if candidate == "" {
+			candidate = strings.TrimSpace(p.Subject)
+		}
+		if candidate != "" {
+			if utf8.RuneCountInString(candidate) > disruptions.MaxSourceServiceRunes {
+				runes := []rune(candidate)
+				return strings.TrimSpace(string(runes[:disruptions.MaxSourceServiceRunes]))
+			}
+			return candidate
+		}
+	}
+	return "external_service"
 }
 
 // Update applies partial updates to an existing transit disruption and its affected service links.
@@ -537,156 +559,6 @@ func (h *DisruptionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	h.auditDisruptionEvent(r.Context(), "update", "disruption", updated.ID, updated.SourceService, "success")
 	writeJSON(w, http.StatusOK, updated)
-}
-
-// IngestUtilitiesNotice ingests a road closure or construction notice from the Utilities Service (US 186 / PT-FR-018).
-//
-// @Summary Ingest a utilities road closure or construction notice
-// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a utilities disruption. Allowed notice_type/type: road_closure (default), construction. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
-// @Tags integrations
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
-// @Param body body disruptions.UtilitiesNoticeInput true "Utilities notice payload"
-// @Success 200 {object} disruptions.ExternalNoticeResult
-// @Success 201 {object} disruptions.ExternalNoticeResult
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Failure 502 {object} map[string]string
-// @Failure 503 {object} map[string]string
-// @Failure 504 {object} map[string]string
-// @Router /api/transport/v1/integrations/utilities/notices [post]
-func (h *DisruptionHandler) IngestUtilitiesNotice(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	if h.service == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
-		return
-	}
-
-	var input disruptions.UtilitiesNoticeInput
-	if !decodeStrictJSONObject(w, r, &input) {
-		h.auditDisruptionEvent(r.Context(), "ingest_utilities_notice", "disruption", 0, disruptions.SourceUtilities, "invalid_request")
-		return
-	}
-
-	result, err := h.service.IngestUtilitiesNotice(r.Context(), input)
-	if err != nil {
-		h.auditDisruptionEvent(r.Context(), "ingest_utilities_notice", "disruption", 0, disruptions.SourceUtilities, disruptionAuditOutcome(err))
-		writeDisruptionError(w, err)
-		return
-	}
-
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
-	}
-	h.auditDisruptionEvent(r.Context(), "ingest_utilities_notice", "disruption", result.Disruption.ID, disruptions.SourceUtilities, "success")
-	writeJSON(w, status, result)
-}
-
-// IngestEmergencyIncident ingests an emergency incident or road restriction from Emergency Services (US 187 / PT-FR-019).
-//
-// @Summary Ingest an emergency incident or road restriction
-// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) an emergency disruption. Allowed incident_type/type: emergency (default), road_closure. Allowed severity: low, medium, moderate, high, critical. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
-// @Tags integrations
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
-// @Param body body disruptions.EmergencyIncidentInput true "Emergency incident payload"
-// @Success 200 {object} disruptions.ExternalNoticeResult
-// @Success 201 {object} disruptions.ExternalNoticeResult
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Failure 502 {object} map[string]string
-// @Failure 503 {object} map[string]string
-// @Failure 504 {object} map[string]string
-// @Router /api/transport/v1/integrations/emergency/incidents [post]
-func (h *DisruptionHandler) IngestEmergencyIncident(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	if h.service == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
-		return
-	}
-
-	var input disruptions.EmergencyIncidentInput
-	if !decodeStrictJSONObject(w, r, &input) {
-		h.auditDisruptionEvent(r.Context(), "ingest_emergency_incident", "disruption", 0, disruptions.SourceEmergency, "invalid_request")
-		return
-	}
-
-	result, err := h.service.IngestEmergencyIncident(r.Context(), input)
-	if err != nil {
-		h.auditDisruptionEvent(r.Context(), "ingest_emergency_incident", "disruption", 0, disruptions.SourceEmergency, disruptionAuditOutcome(err))
-		writeDisruptionError(w, err)
-		return
-	}
-
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
-	}
-	h.auditDisruptionEvent(r.Context(), "ingest_emergency_incident", "disruption", result.Disruption.ID, disruptions.SourceEmergency, "success")
-	writeJSON(w, status, result)
-}
-
-// IngestSecurityTrafficAlert ingests a traffic alert or road closure from Security / Police Services (US 188 / PT-FR-020).
-//
-// @Summary Ingest a security or police traffic alert
-// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a security traffic disruption. Allowed alert_type/type: traffic_restriction (default), road_closure. Allowed status: scheduled, active, resolved (defaults to scheduled if start_time is in the future, else active).
-// @Tags integrations
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
-// @Param body body disruptions.SecurityTrafficAlertInput true "Security traffic alert payload"
-// @Success 200 {object} disruptions.ExternalNoticeResult
-// @Success 201 {object} disruptions.ExternalNoticeResult
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Failure 502 {object} map[string]string
-// @Failure 503 {object} map[string]string
-// @Failure 504 {object} map[string]string
-// @Router /api/transport/v1/integrations/security/traffic-alerts [post]
-func (h *DisruptionHandler) IngestSecurityTrafficAlert(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	if h.service == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
-		return
-	}
-
-	var input disruptions.SecurityTrafficAlertInput
-	if !decodeStrictJSONObject(w, r, &input) {
-		h.auditDisruptionEvent(r.Context(), "ingest_security_traffic_alert", "disruption", 0, disruptions.SourceSecurity, "invalid_request")
-		return
-	}
-
-	result, err := h.service.IngestSecurityTrafficAlert(r.Context(), input)
-	if err != nil {
-		h.auditDisruptionEvent(r.Context(), "ingest_security_traffic_alert", "disruption", 0, disruptions.SourceSecurity, disruptionAuditOutcome(err))
-		writeDisruptionError(w, err)
-		return
-	}
-
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-		w.Header().Set("Location", apiBaseFromRequest(r)+"/disruptions/"+strconv.Itoa(result.Disruption.ID))
-	}
-	h.auditDisruptionEvent(r.Context(), "ingest_security_traffic_alert", "disruption", result.Disruption.ID, disruptions.SourceSecurity, "success")
-	writeJSON(w, status, result)
 }
 
 func (h *DisruptionHandler) auditDisruptionEvent(

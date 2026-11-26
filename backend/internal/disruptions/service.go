@@ -11,18 +11,13 @@ import (
 )
 
 const (
-	earthRadiusMeters = 6371000.0
-	metersPerLatDeg   = 111320.0
-	maxInt32          = 2147483647
+	earthRadiusMeters   = 6371000.0
+	metersPerLatDeg     = 111320.0
+	maxInt32            = 2147483647
+	minUnixEpochSeconds = uint64(1_000_000_000)
+	maxUnixEpochSeconds = uint64(253402300799)
+	maxDurationSeconds  = uint64(315_360_000)
 )
-
-var allowedSeverities = map[string]bool{
-	"low":      true,
-	"medium":   true,
-	"moderate": true,
-	"high":     true,
-	"critical": true,
-}
 
 // Service validates disruption operations, evaluates affected transit services, and computes operational statuses.
 type Service struct {
@@ -353,176 +348,81 @@ func (s *Service) Update(ctx context.Context, id int, input UpdateDisruptionInpu
 	return normalizeDisruptionResponse(updated), nil
 }
 
-// IngestUtilitiesNotice processes a road closure or construction notice from the Utilities Service (US 186 / PT-FR-018).
-func (s *Service) IngestUtilitiesNotice(ctx context.Context, input UtilitiesNoticeInput) (ExternalNoticeResult, error) {
-	disruptionType, err := resolveExternalType("notice_type", input.NoticeType, input.Type, TypeRoadClosure, map[string]bool{
-		TypeRoadClosure:  true,
-		TypeConstruction: true,
-	})
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	extRef, err := resolveExternalReference(input.ExternalID, input.ExternalReference)
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	return s.ingestExternalNotice(ctx, externalIngestionRequest{
-		SourceService:     SourceUtilities,
-		Type:              disruptionType,
-		ExternalReference: extRef,
-		Title:             input.Title,
-		Description:       input.Description,
-		AffectedArea:      input.AffectedArea,
-		StartTime:         input.StartTime,
-		EndTime:           input.EndTime,
-		Status:            input.Status,
-		RouteIDs:          input.RouteIDs,
-		StopIDs:           input.StopIDs,
-		TripIDs:           input.TripIDs,
-		VehicleIDs:        input.VehicleIDs,
-		AffectedSegments:  input.AffectedSegments,
-		Latitude:          input.Latitude,
-		Longitude:         input.Longitude,
-		RadiusMeters:      input.RadiusMeters,
-	})
-}
-
-// IngestEmergencyIncident processes an emergency incident or road restriction from Emergency Services (US 187 / PT-FR-019).
-func (s *Service) IngestEmergencyIncident(ctx context.Context, input EmergencyIncidentInput) (ExternalNoticeResult, error) {
-	disruptionType, err := resolveExternalType("incident_type", input.IncidentType, input.Type, TypeEmergency, map[string]bool{
-		TypeEmergency:   true,
-		TypeRoadClosure: true,
-	})
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	extRef, err := resolveExternalReference(input.ExternalID, input.ExternalReference)
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	severity := strings.ToLower(strings.TrimSpace(input.Severity))
-	if severity != "" {
-		if strings.ContainsRune(severity, '\x00') || utf8.RuneCountInString(severity) > MaxSeverityRunes || !allowedSeverities[severity] {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "severity must be one of low, medium, moderate, high, or critical"}
-		}
-	}
-	return s.ingestExternalNotice(ctx, externalIngestionRequest{
-		SourceService:     SourceEmergency,
-		Type:              disruptionType,
-		Severity:          severity,
-		ExternalReference: extRef,
-		Title:             input.Title,
-		Description:       input.Description,
-		AffectedArea:      input.AffectedArea,
-		StartTime:         input.StartTime,
-		EndTime:           input.EndTime,
-		Status:            input.Status,
-		RouteIDs:          input.RouteIDs,
-		StopIDs:           input.StopIDs,
-		TripIDs:           input.TripIDs,
-		VehicleIDs:        input.VehicleIDs,
-		AffectedSegments:  input.AffectedSegments,
-		Latitude:          input.Latitude,
-		Longitude:         input.Longitude,
-		RadiusMeters:      input.RadiusMeters,
-	})
-}
-
-// IngestSecurityTrafficAlert processes a traffic restriction or road closure alert from Security / Police Services (US 188 / PT-FR-020).
-func (s *Service) IngestSecurityTrafficAlert(ctx context.Context, input SecurityTrafficAlertInput) (ExternalNoticeResult, error) {
-	disruptionType, err := resolveExternalType("alert_type", input.AlertType, input.Type, TypeTrafficRestriction, map[string]bool{
-		TypeTrafficRestriction: true,
-		TypeRoadClosure:        true,
-	})
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	extRef, err := resolveExternalReference(input.ExternalID, input.ExternalReference)
-	if err != nil {
-		return ExternalNoticeResult{}, err
-	}
-	return s.ingestExternalNotice(ctx, externalIngestionRequest{
-		SourceService:     SourceSecurity,
-		Type:              disruptionType,
-		ExternalReference: extRef,
-		Title:             input.Title,
-		Description:       input.Description,
-		AffectedArea:      input.AffectedArea,
-		StartTime:         input.StartTime,
-		EndTime:           input.EndTime,
-		Status:            input.Status,
-		RouteIDs:          input.RouteIDs,
-		StopIDs:           input.StopIDs,
-		TripIDs:           input.TripIDs,
-		VehicleIDs:        input.VehicleIDs,
-		AffectedSegments:  input.AffectedSegments,
-		Latitude:          input.Latitude,
-		Longitude:         input.Longitude,
-		RadiusMeters:      input.RadiusMeters,
-	})
-}
-
-type externalIngestionRequest struct {
-	SourceService     string
-	Type              string
-	Severity          string
-	ExternalReference *string
-	Title             string
-	Description       *string
-	AffectedArea      *string
-	StartTime         *time.Time
-	EndTime           *time.Time
-	Status            string
-	RouteIDs          []int
-	StopIDs           []int
-	TripIDs           []int
-	VehicleIDs        []int
-	AffectedSegments  []string
-	Latitude          *float64
-	Longitude         *float64
-	RadiusMeters      *float64
-}
-
-func (s *Service) ingestExternalNotice(ctx context.Context, req externalIngestionRequest) (ExternalNoticeResult, error) {
+// CreateRoadClosure validates and creates (or idempotently upserts by external reference)
+// a road closure disruption from either an external service or transit administrator.
+func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput, defaultSource string) (RoadClosureResult, error) {
 	if err := s.ensureRepo(); err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
 	now := s.now().UTC()
 
-	title, err := validateRequiredString("title", req.Title, MaxTitleRunes)
-	if err != nil {
-		return ExternalNoticeResult{}, err
+	disruptionType := strings.ToLower(strings.TrimSpace(input.Type))
+	if disruptionType != "" && disruptionType != TypeRoadClosure {
+		return RoadClosureResult{}, &InvalidInput{Message: "type must be road_closure for road-closures endpoint"}
 	}
-	description, err := validateOptionalString("description", req.Description, MaxDescriptionRunes)
-	if err != nil {
-		return ExternalNoticeResult{}, err
+
+	var formattedAddr string
+	if input.Address != nil {
+		var err error
+		formattedAddr, err = validateAndFormatAddress(*input.Address)
+		if err != nil {
+			return RoadClosureResult{}, err
+		}
 	}
-	affectedArea, err := validateOptionalString("affected_area", req.AffectedArea, MaxAffectedAreaRunes)
+
+	affectedArea, err := validateOptionalString("affected_area", input.AffectedArea, MaxAffectedAreaRunes)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
+	}
+	if affectedArea == nil && formattedAddr != "" {
+		areaCopy := formattedAddr
+		affectedArea = &areaCopy
+	}
+
+	rawTitle := input.Title
+	if strings.TrimSpace(rawTitle) == "" && formattedAddr != "" {
+		rawTitle = deriveRoadClosureTitle(formattedAddr)
+	}
+	title, err := validateRequiredString("title", rawTitle, MaxTitleRunes)
+	if err != nil {
+		return RoadClosureResult{}, err
+	}
+
+	description, err := validateOptionalString("description", input.Description, MaxDescriptionRunes)
+	if err != nil {
+		return RoadClosureResult{}, err
+	}
+	extRef, err := resolveExternalReference(input.ExternalID, input.ExternalReference)
+	if err != nil {
+		return RoadClosureResult{}, err
+	}
+
+	source := strings.TrimSpace(input.SourceService)
+	if source == "" {
+		source = strings.TrimSpace(defaultSource)
+	}
+	if source == "" {
+		source = SourceTransitAdmin
+	}
+	source, err = validateRequiredString("source_service", source, MaxSourceServiceRunes)
+	if err != nil {
+		return RoadClosureResult{}, err
 	}
 
 	startTime := now
-	if req.StartTime != nil {
-		if req.StartTime.IsZero() {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "start_time is invalid"}
+	if input.StartTime != nil {
+		if input.StartTime.IsZero() {
+			return RoadClosureResult{}, &InvalidInput{Message: "start_time is invalid"}
 		}
-		startTime = req.StartTime.UTC()
+		startTime = input.StartTime.UTC()
 	}
 
-	var endTime *time.Time
-	if req.EndTime != nil {
-		if req.EndTime.IsZero() {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "end_time is invalid"}
-		}
-		utcEnd := req.EndTime.UTC()
-		if utcEnd.Before(startTime) {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "end_time must be greater than or equal to start_time"}
-		}
-		endTime = &utcEnd
+	endTime, err := resolveRoadClosureEndTime(startTime, input.ValidUntil, input.EndTime)
+	if err != nil {
+		return RoadClosureResult{}, err
 	}
 
-	status := strings.ToLower(strings.TrimSpace(req.Status))
+	status := strings.ToLower(strings.TrimSpace(input.Status))
 	if status == "" {
 		if startTime.After(now) {
 			status = StatusScheduled
@@ -530,54 +430,54 @@ func (s *Service) ingestExternalNotice(ctx context.Context, req externalIngestio
 			status = StatusActive
 		}
 	} else if !IsValidStatus(status) {
-		return ExternalNoticeResult{}, &InvalidInput{Message: "status must be one of scheduled, active, or resolved"}
+		return RoadClosureResult{}, &InvalidInput{Message: "status must be one of scheduled, active, or resolved"}
 	}
 
-	routeIDs, err := validateIDSlice("route_ids", req.RouteIDs)
+	routeIDs, err := validateIDSlice("route_ids", input.RouteIDs)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
-	stopIDs, err := validateIDSlice("stop_ids", req.StopIDs)
+	stopIDs, err := validateIDSlice("stop_ids", input.StopIDs)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
-	tripIDs, err := validateIDSlice("trip_ids", req.TripIDs)
+	tripIDs, err := validateIDSlice("trip_ids", input.TripIDs)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
-	vehicleIDs, err := validateIDSlice("vehicle_ids", req.VehicleIDs)
+	vehicleIDs, err := validateIDSlice("vehicle_ids", input.VehicleIDs)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
-	segments, err := validateSegments(req.AffectedSegments)
+	segments, err := validateSegments(input.AffectedSegments)
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
 
 	radius := DefaultRadiusMeters
-	if req.RadiusMeters != nil {
-		if !isFiniteInRange(*req.RadiusMeters, MinRadiusMeters, MaxRadiusMeters) {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "radius_meters must be a finite number between 50 and 5000"}
+	if input.RadiusMeters != nil {
+		if !isFiniteInRange(*input.RadiusMeters, MinRadiusMeters, MaxRadiusMeters) {
+			return RoadClosureResult{}, &InvalidInput{Message: "radius_meters must be a finite number between 50 and 5000"}
 		}
-		radius = *req.RadiusMeters
+		radius = *input.RadiusMeters
 	}
 
-	if (req.Latitude != nil) != (req.Longitude != nil) {
-		return ExternalNoticeResult{}, &InvalidInput{Message: "latitude and longitude must be provided together"}
+	if (input.Latitude != nil) != (input.Longitude != nil) {
+		return RoadClosureResult{}, &InvalidInput{Message: "latitude and longitude must be provided together"}
 	}
-	if req.Latitude != nil && req.Longitude != nil {
-		lat := *req.Latitude
-		lng := *req.Longitude
+	if input.Latitude != nil && input.Longitude != nil {
+		lat := *input.Latitude
+		lng := *input.Longitude
 		if !isFiniteInRange(lat, -90, 90) {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "latitude must be between -90 and 90"}
+			return RoadClosureResult{}, &InvalidInput{Message: "latitude must be between -90 and 90"}
 		}
 		if !isFiniteInRange(lng, -180, 180) {
-			return ExternalNoticeResult{}, &InvalidInput{Message: "longitude must be between -180 and 180"}
+			return RoadClosureResult{}, &InvalidInput{Message: "longitude must be between -180 and 180"}
 		}
 		minLat, maxLat, minLng, maxLng := boundingBox(lat, lng, radius)
 		candidates, err := s.repo.FindStopsInBounds(ctx, minLat, maxLat, minLng, maxLng)
 		if err != nil {
-			return ExternalNoticeResult{}, err
+			return RoadClosureResult{}, err
 		}
 		for _, candidate := range candidates {
 			if haversineMeters(lat, lng, candidate.Latitude, candidate.Longitude) <= radius {
@@ -588,15 +488,15 @@ func (s *Service) ingestExternalNotice(ctx context.Context, req externalIngestio
 	}
 
 	saveParams := SaveDisruptionParams{
-		Type:              req.Type,
+		Type:              TypeRoadClosure,
 		Title:             title,
 		Description:       description,
 		AffectedArea:      affectedArea,
 		StartTime:         startTime,
 		EndTime:           endTime,
 		Status:            status,
-		SourceService:     req.SourceService,
-		ExternalReference: req.ExternalReference,
+		SourceService:     source,
+		ExternalReference: extRef,
 		ReceivedAt:        now,
 		RouteIDs:          routeIDs,
 		StopIDs:           stopIDs,
@@ -609,46 +509,89 @@ func (s *Service) ingestExternalNotice(ctx context.Context, req externalIngestio
 		disruption DisruptionResponse
 		created    bool
 	)
-	if req.ExternalReference != nil {
+	if extRef != nil {
 		disruption, created, err = s.repo.UpsertByExternalRef(ctx, saveParams)
 	} else {
 		disruption, err = s.repo.Create(ctx, saveParams)
 		created = true
 	}
 	if err != nil {
-		return ExternalNoticeResult{}, err
+		return RoadClosureResult{}, err
 	}
-	disruption = normalizeDisruptionResponse(disruption)
-
-	matchedRouteIDs := make([]int, 0, len(disruption.AffectedRoutes))
-	for _, r := range disruption.AffectedRoutes {
-		matchedRouteIDs = append(matchedRouteIDs, r.RouteID)
-	}
-	matchedRouteIDs = uniqueSortedPositive(matchedRouteIDs)
-
-	matchedStopIDs := make([]int, 0, len(disruption.AffectedStops))
-	for _, st := range disruption.AffectedStops {
-		matchedStopIDs = append(matchedStopIDs, st.StopID)
-	}
-	matchedStopIDs = uniqueSortedPositive(matchedStopIDs)
-
-	impact := evaluateTransitImpact(
-		disruption.Type,
-		disruption.Status,
-		req.Severity,
-		len(matchedRouteIDs),
-		len(matchedStopIDs),
-		len(disruption.AffectedTrips),
-		len(disruption.AffectedSegments),
-	)
-
-	return ExternalNoticeResult{
-		Created:         created,
-		Disruption:      disruption,
-		MatchedRouteIDs: matchedRouteIDs,
-		MatchedStopIDs:  matchedStopIDs,
-		TransitImpact:   impact,
+	return RoadClosureResult{
+		Created:    created,
+		Disruption: normalizeDisruptionResponse(disruption),
 	}, nil
+}
+
+func validateAndFormatAddress(addr RoadClosureAddress) (string, error) {
+	for _, field := range []struct {
+		name, value string
+	}{
+		{"address.streetNumber", addr.StreetNumber},
+		{"address.streetName", addr.StreetName},
+		{"address.city", addr.City},
+		{"address.postalCode", addr.PostalCode},
+	} {
+		if strings.ContainsRune(field.value, '\x00') {
+			return "", &InvalidInput{Message: field.name + " cannot contain NUL characters"}
+		}
+	}
+	if strings.TrimSpace(addr.StreetName) == "" || strings.TrimSpace(addr.City) == "" {
+		return "", &InvalidInput{Message: "address.streetName and address.city are required"}
+	}
+	formatted := addr.Format()
+	if utf8.RuneCountInString(formatted) > MaxAffectedAreaRunes {
+		return "", &InvalidInput{Message: fmt.Sprintf("formatted address must be at most %d characters", MaxAffectedAreaRunes)}
+	}
+	return formatted, nil
+}
+
+func deriveRoadClosureTitle(formattedAddr string) string {
+	derived := "Road closure: " + formattedAddr
+	runes := []rune(derived)
+	if len(runes) > MaxTitleRunes {
+		return string(runes[:MaxTitleRunes])
+	}
+	return derived
+}
+
+func resolveRoadClosureEndTime(startTime time.Time, validUntil *uint64, endTime *time.Time) (*time.Time, error) {
+	if validUntil != nil && endTime != nil {
+		return nil, &InvalidInput{Message: "provide either valid-until or end_time, not both"}
+	}
+	if validUntil != nil {
+		v := *validUntil
+		if v == 0 {
+			return nil, &InvalidInput{Message: "valid-until must be greater than 0"}
+		}
+		if v >= minUnixEpochSeconds {
+			if v > maxUnixEpochSeconds {
+				return nil, &InvalidInput{Message: "valid-until timestamp is out of range"}
+			}
+			utcEnd := time.Unix(int64(v), 0).UTC()
+			if utcEnd.Before(startTime) {
+				return nil, &InvalidInput{Message: "valid-until must be greater than or equal to start_time"}
+			}
+			return &utcEnd, nil
+		}
+		if v > maxDurationSeconds {
+			return nil, &InvalidInput{Message: "valid-until duration cannot exceed 10 years"}
+		}
+		utcEnd := startTime.Add(time.Duration(v) * time.Second)
+		return &utcEnd, nil
+	}
+	if endTime != nil {
+		if endTime.IsZero() {
+			return nil, &InvalidInput{Message: "end_time is invalid"}
+		}
+		utcEnd := endTime.UTC()
+		if utcEnd.Before(startTime) {
+			return nil, &InvalidInput{Message: "end_time must be greater than or equal to start_time"}
+		}
+		return &utcEnd, nil
+	}
+	return nil, nil
 }
 
 // AffectedServices computes a consolidated summary of all routes, stops, trips, vehicles, and segments affected by active disruptions (US 191, 195).
@@ -1014,68 +957,6 @@ func deriveOperationalStatus(entityType string, disruptionTypes []string) string
 		}
 	}
 	return bestStatus
-}
-
-func evaluateTransitImpact(disruptionType, status, severity string, routeCount, stopCount, tripCount, segmentCount int) string {
-	if status == StatusResolved {
-		return "resolved: disruption cleared; affected transit services returning to normal operation"
-	}
-	if routeCount == 0 && stopCount == 0 && tripCount == 0 && segmentCount == 0 {
-		return "none: no active transit routes, stops, or trips matched within affected area"
-	}
-	tier := "moderate"
-	switch {
-	case severity == "critical":
-		tier = "critical"
-	case severity == "high" ||
-		disruptionType == TypeEmergency ||
-		disruptionType == TypeRoadClosure ||
-		disruptionType == TypeCancellation ||
-		routeCount >= 3 ||
-		stopCount >= 5:
-		tier = "high"
-	case severity == "low" && routeCount <= 1 && stopCount <= 1:
-		tier = "low"
-	}
-
-	parts := make([]string, 0, 4)
-	if routeCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d route(s)", routeCount))
-	}
-	if stopCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d stop(s)", stopCount))
-	}
-	if tripCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d trip(s)", tripCount))
-	}
-	if segmentCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d corridor segment(s)", segmentCount))
-	}
-	return fmt.Sprintf("%s: %s affected", tier, strings.Join(parts, ", "))
-}
-
-func resolveExternalType(fieldName, primary, fallback, defaultType string, allowed map[string]bool) (string, error) {
-	p := strings.ToLower(strings.TrimSpace(primary))
-	f := strings.ToLower(strings.TrimSpace(fallback))
-	if p != "" && f != "" && p != f {
-		return "", &InvalidInput{Message: fieldName + " conflicts with type"}
-	}
-	chosen := p
-	if chosen == "" {
-		chosen = f
-	}
-	if chosen == "" {
-		chosen = defaultType
-	}
-	if !allowed[chosen] {
-		keys := make([]string, 0, len(allowed))
-		for k := range allowed {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		return "", &InvalidInput{Message: fmt.Sprintf("%s must be one of %s", fieldName, strings.Join(keys, " or "))}
-	}
-	return chosen, nil
 }
 
 func resolveExternalReference(externalID, externalRef *string) (*string, error) {

@@ -3,8 +3,13 @@
 package disruptions
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -61,7 +66,6 @@ const (
 	MaxSourceServiceRunes = 50
 	MaxExternalRefRunes   = 120
 	MaxSegmentRunes       = 255
-	MaxSeverityRunes      = 30
 	MaxListItems          = 500
 	MinRadiusMeters       = 50.0
 	MaxRadiusMeters       = 5000.0
@@ -148,71 +152,213 @@ type UpdateDisruptionInput struct {
 	AffectedAreaSet bool `json:"-"`
 }
 
-// UtilitiesNoticeInput is the request payload for POST /api/integrations/utilities/notices (US 186 / PT-FR-018).
-type UtilitiesNoticeInput struct {
-	ExternalID        *string    `json:"external_id,omitempty"`
-	ExternalReference *string    `json:"external_reference,omitempty"`
-	NoticeType        string     `json:"notice_type,omitempty" enums:"road_closure,construction" default:"road_closure"`
-	Type              string     `json:"type,omitempty" enums:"road_closure,construction"`
-	Title             string     `json:"title"`
-	Description       *string    `json:"description,omitempty"`
-	AffectedArea      *string    `json:"affected_area,omitempty"`
-	StartTime         *time.Time `json:"start_time,omitempty"`
-	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
-	RouteIDs          []int      `json:"route_ids,omitempty"`
-	StopIDs           []int      `json:"stop_ids,omitempty"`
-	TripIDs           []int      `json:"trip_ids,omitempty"`
-	VehicleIDs        []int      `json:"vehicle_ids,omitempty"`
-	AffectedSegments  []string   `json:"affected_segments,omitempty"`
-	Latitude          *float64   `json:"latitude,omitempty"`
-	Longitude         *float64   `json:"longitude,omitempty"`
-	RadiusMeters      *float64   `json:"radius_meters,omitempty"`
+// RoadClosureAddress represents the shared SH-I06 municipal address object.
+type RoadClosureAddress struct {
+	StreetNumber string `json:"streetNumber"`
+	StreetName   string `json:"streetName"`
+	City         string `json:"city"`
+	PostalCode   string `json:"postalCode"`
 }
 
-// EmergencyIncidentInput is the request payload for POST /api/integrations/emergency/incidents (US 187 / PT-FR-019).
-type EmergencyIncidentInput struct {
-	ExternalID        *string    `json:"external_id,omitempty"`
-	ExternalReference *string    `json:"external_reference,omitempty"`
-	IncidentType      string     `json:"incident_type,omitempty" enums:"emergency,road_closure" default:"emergency"`
-	Type              string     `json:"type,omitempty" enums:"emergency,road_closure"`
-	Severity          string     `json:"severity,omitempty" enums:"low,medium,moderate,high,critical"`
-	Title             string     `json:"title"`
-	Description       *string    `json:"description,omitempty"`
-	AffectedArea      *string    `json:"affected_area,omitempty"`
-	StartTime         *time.Time `json:"start_time,omitempty"`
-	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
-	RouteIDs          []int      `json:"route_ids,omitempty"`
-	StopIDs           []int      `json:"stop_ids,omitempty"`
-	TripIDs           []int      `json:"trip_ids,omitempty"`
-	VehicleIDs        []int      `json:"vehicle_ids,omitempty"`
-	AffectedSegments  []string   `json:"affected_segments,omitempty"`
-	Latitude          *float64   `json:"latitude,omitempty"`
-	Longitude         *float64   `json:"longitude,omitempty"`
-	RadiusMeters      *float64   `json:"radius_meters,omitempty"`
+// UnmarshalJSON decodes an SH-I06 municipal address object, accepting string or non-negative
+// integer street numbers and rejecting unknown fields or conflicting camelCase/snake_case aliases.
+func (a *RoadClosureAddress) UnmarshalJSON(data []byte) error {
+	trimmedData := bytes.TrimSpace(data)
+	if bytes.Equal(trimmedData, []byte("null")) {
+		return errors.New("address cannot be null")
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(trimmedData, &raw); err != nil || raw == nil {
+		return errors.New("address must be a JSON object")
+	}
+
+	var (
+		hasStreetNumCamel, hasStreetNumSnake   bool
+		streetNumCamel, streetNumSnake         string
+		hasStreetNameCamel, hasStreetNameSnake bool
+		streetNameCamel, streetNameSnake       string
+		hasPostalCamel, hasPostalSnake         bool
+		postalCamel, postalSnake               string
+		cityVal                                string
+	)
+
+	for key, val := range raw {
+		switch key {
+		case "streetNumber":
+			s, err := decodeStreetNumberJSON(val)
+			if err != nil {
+				return err
+			}
+			hasStreetNumCamel = true
+			streetNumCamel = s
+		case "street_number":
+			s, err := decodeStreetNumberJSON(val)
+			if err != nil {
+				return err
+			}
+			hasStreetNumSnake = true
+			streetNumSnake = s
+		case "streetName":
+			s, err := decodeAddressStringJSON("streetName", val)
+			if err != nil {
+				return err
+			}
+			hasStreetNameCamel = true
+			streetNameCamel = s
+		case "street_name":
+			s, err := decodeAddressStringJSON("street_name", val)
+			if err != nil {
+				return err
+			}
+			hasStreetNameSnake = true
+			streetNameSnake = s
+		case "city":
+			s, err := decodeAddressStringJSON("city", val)
+			if err != nil {
+				return err
+			}
+			cityVal = s
+		case "postalCode":
+			s, err := decodeAddressStringJSON("postalCode", val)
+			if err != nil {
+				return err
+			}
+			hasPostalCamel = true
+			postalCamel = s
+		case "postal_code":
+			s, err := decodeAddressStringJSON("postal_code", val)
+			if err != nil {
+				return err
+			}
+			hasPostalSnake = true
+			postalSnake = s
+		default:
+			return fmt.Errorf("unknown address field %q", key)
+		}
+	}
+
+	if hasStreetNumCamel && hasStreetNumSnake && strings.TrimSpace(streetNumCamel) != strings.TrimSpace(streetNumSnake) {
+		return errors.New("address streetNumber conflicts with street_number")
+	}
+	if hasStreetNameCamel && hasStreetNameSnake && strings.TrimSpace(streetNameCamel) != strings.TrimSpace(streetNameSnake) {
+		return errors.New("address streetName conflicts with street_name")
+	}
+	if hasPostalCamel && hasPostalSnake && strings.TrimSpace(postalCamel) != strings.TrimSpace(postalSnake) {
+		return errors.New("address postalCode conflicts with postal_code")
+	}
+
+	streetNumber := streetNumCamel
+	if !hasStreetNumCamel {
+		streetNumber = streetNumSnake
+	}
+	streetName := streetNameCamel
+	if !hasStreetNameCamel {
+		streetName = streetNameSnake
+	}
+	postalCode := postalCamel
+	if !hasPostalCamel {
+		postalCode = postalSnake
+	}
+
+	*a = RoadClosureAddress{
+		StreetNumber: streetNumber,
+		StreetName:   streetName,
+		City:         cityVal,
+		PostalCode:   postalCode,
+	}
+	return nil
 }
 
-// SecurityTrafficAlertInput is the request payload for POST /api/integrations/security/traffic-alerts (US 188 / PT-FR-020).
-type SecurityTrafficAlertInput struct {
-	ExternalID        *string    `json:"external_id,omitempty"`
-	ExternalReference *string    `json:"external_reference,omitempty"`
-	AlertType         string     `json:"alert_type,omitempty" enums:"traffic_restriction,road_closure" default:"traffic_restriction"`
-	Type              string     `json:"type,omitempty" enums:"traffic_restriction,road_closure"`
-	Title             string     `json:"title"`
-	Description       *string    `json:"description,omitempty"`
-	AffectedArea      *string    `json:"affected_area,omitempty"`
-	StartTime         *time.Time `json:"start_time,omitempty"`
-	EndTime           *time.Time `json:"end_time,omitempty"`
-	Status            string     `json:"status,omitempty" enums:"scheduled,active,resolved"`
-	RouteIDs          []int      `json:"route_ids,omitempty"`
-	StopIDs           []int      `json:"stop_ids,omitempty"`
-	TripIDs           []int      `json:"trip_ids,omitempty"`
-	VehicleIDs        []int      `json:"vehicle_ids,omitempty"`
-	AffectedSegments  []string   `json:"affected_segments,omitempty"`
-	Latitude          *float64   `json:"latitude,omitempty"`
-	Longitude         *float64   `json:"longitude,omitempty"`
-	RadiusMeters      *float64   `json:"radius_meters,omitempty"`
+// Format renders a compact display string for affected_area and derived titles.
+func (a RoadClosureAddress) Format() string {
+	streetNum := strings.TrimSpace(a.StreetNumber)
+	streetName := strings.TrimSpace(a.StreetName)
+	city := strings.TrimSpace(a.City)
+	postalCode := strings.ToUpper(strings.TrimSpace(a.PostalCode))
+
+	streetLine := streetName
+	if streetNum != "" && streetName != "" {
+		streetLine = streetNum + " " + streetName
+	} else if streetNum != "" {
+		streetLine = streetNum
+	}
+
+	parts := make([]string, 0, 3)
+	if streetLine != "" {
+		parts = append(parts, streetLine)
+	}
+	if city != "" {
+		parts = append(parts, city)
+	}
+	if postalCode != "" {
+		parts = append(parts, postalCode)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func decodeStreetNumberJSON(raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return "", errors.New("address.streetNumber must be a string or non-negative integer")
+		}
+		return s, nil
+	}
+	num, err := strconv.ParseUint(string(trimmed), 10, 64)
+	if err != nil {
+		return "", errors.New("address.streetNumber must be a string or non-negative integer")
+	}
+	return strconv.FormatUint(num, 10), nil
+}
+
+func decodeAddressStringJSON(field string, raw json.RawMessage) (string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return "", nil
+	}
+	if len(trimmed) == 0 || trimmed[0] != '"' {
+		return "", fmt.Errorf("address.%s must be a string", field)
+	}
+	var s string
+	if err := json.Unmarshal(trimmed, &s); err != nil {
+		return "", fmt.Errorf("address.%s must be a string", field)
+	}
+	return s, nil
+}
+
+// RoadClosureInput is the request payload for POST /api/transport/v1/road-closures.
+type RoadClosureInput struct {
+	Address           *RoadClosureAddress `json:"address,omitempty"`
+	ValidUntil        *uint64             `json:"valid-until,omitempty"`
+	ExternalID        *string             `json:"external_id,omitempty"`
+	ExternalReference *string             `json:"external_reference,omitempty"`
+	Type              string              `json:"type,omitempty" enums:"road_closure" default:"road_closure"`
+	Title             string              `json:"title,omitempty"`
+	Description       *string             `json:"description,omitempty"`
+	AffectedArea      *string             `json:"affected_area,omitempty"`
+	Status            string              `json:"status,omitempty" enums:"scheduled,active,resolved"`
+	StartTime         *time.Time          `json:"start_time,omitempty"`
+	EndTime           *time.Time          `json:"end_time,omitempty"`
+	SourceService     string              `json:"source_service,omitempty"`
+	RouteIDs          []int               `json:"route_ids,omitempty"`
+	StopIDs           []int               `json:"stop_ids,omitempty"`
+	TripIDs           []int               `json:"trip_ids,omitempty"`
+	VehicleIDs        []int               `json:"vehicle_ids,omitempty"`
+	AffectedSegments  []string            `json:"affected_segments,omitempty"`
+	Latitude          *float64            `json:"latitude,omitempty"`
+	Longitude         *float64            `json:"longitude,omitempty"`
+	RadiusMeters      *float64            `json:"radius_meters,omitempty"`
+}
+
+// RoadClosureResult describes the outcome of creating or upserting a road closure.
+type RoadClosureResult struct {
+	Created    bool
+	Disruption DisruptionResponse
 }
 
 // AffectedRoute describes a transit route linked to a disruption.
@@ -323,15 +469,6 @@ type EntityOperationalStatus struct {
 	EntityID          int                  `json:"entity_id"`
 	OperationalStatus string               `json:"operational_status"`
 	ActiveDisruptions []DisruptionResponse `json:"active_disruptions"`
-}
-
-// ExternalNoticeResult describes the outcome of ingesting a notice or alert from an external enterprise service (US 186, 187, 188).
-type ExternalNoticeResult struct {
-	Created         bool               `json:"created"`
-	Disruption      DisruptionResponse `json:"disruption"`
-	MatchedRouteIDs []int              `json:"matched_route_ids"`
-	MatchedStopIDs  []int              `json:"matched_stop_ids"`
-	TransitImpact   string             `json:"transit_impact"`
 }
 
 // SaveDisruptionParams carries validated disruption fields and entity links into the repository layer.

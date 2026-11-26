@@ -35,64 +35,82 @@ func TestSwaggerDocumentation(t *testing.T) {
 		if len(spec.SecurityDefinitions["BearerAuth"]) == 0 {
 			t.Fatal("missing securityDefinitions.BearerAuth in /swagger/doc.json")
 		}
-		emgDef, ok := spec.Definitions["disruptions.EmergencyIncidentInput"]
+		rcDef, ok := spec.Definitions["disruptions.RoadClosureInput"]
 		if !ok {
-			t.Fatal("missing definitions[\"disruptions.EmergencyIncidentInput\"]")
+			t.Fatal("missing definitions[\"disruptions.RoadClosureInput\"]")
+		}
+		for _, field := range []string{"address", "valid-until", "type", "status"} {
+			if _, exists := rcDef.Properties[field]; !exists {
+				t.Errorf("missing property RoadClosureInput.%s", field)
+			}
 		}
 		for field, wantEnum := range map[string][]string{
-			"incident_type": {"emergency", "road_closure"},
-			"type":          {"emergency", "road_closure"},
-			"severity":      {"low", "medium", "moderate", "high", "critical"},
-			"status":        {"scheduled", "active", "resolved"},
+			"type":   {"road_closure"},
+			"status": {"scheduled", "active", "resolved"},
 		} {
-			if got := emgDef.Properties[field].Enum; !reflect.DeepEqual(got, wantEnum) {
-				t.Errorf("EmergencyIncidentInput.%s enum = %v, want %v", field, got, wantEnum)
+			if got := rcDef.Properties[field].Enum; !reflect.DeepEqual(got, wantEnum) {
+				t.Errorf("RoadClosureInput.%s enum = %v, want %v", field, got, wantEnum)
+			}
+		}
+		addrDef, ok := spec.Definitions["disruptions.RoadClosureAddress"]
+		if !ok {
+			t.Fatal("missing definitions[\"disruptions.RoadClosureAddress\"]")
+		}
+		for _, field := range []string{"streetNumber", "streetName", "city", "postalCode"} {
+			if _, exists := addrDef.Properties[field]; !exists {
+				t.Errorf("missing property RoadClosureAddress.%s", field)
+			}
+		}
+		for _, removed := range []string{
+			"/api/transport/v1/integrations/utilities/notices",
+			"/api/transport/v1/integrations/emergency/incidents",
+			"/api/transport/v1/integrations/security/traffic-alerts",
+		} {
+			if _, exists := spec.Paths[removed]; exists {
+				t.Errorf("removed path %s still present in Swagger spec", removed)
 			}
 		}
 		for route, methods := range map[string][]string{
-			"/api/transport/v1/auth/login":                           {"post"},
-			"/api/transport/v1/auth/me":                              {"get"},
-			"/api/transport/v1/auth/logout":                          {"post"},
-			"/api/transport/v1/admin/health":                         {"get"},
-			"/api/transport/v1/admin/dashboard":                      {"get"},
-			"/api/transport/v1/health":                               {"get"},
-			"/api/transport/v1/routes":                               {"get", "post"},
-			"/api/transport/v1/routes/{id}":                          {"get", "patch", "delete"},
-			"/api/transport/v1/routes/{id}/schedule":                 {"get"},
-			"/api/transport/v1/departures":                           {"get"},
-			"/api/transport/v1/stops/{stopID}/departures":            {"get"},
-			"/api/transport/v1/routes/{routeID}/departures":          {"get"},
-			"/api/transport/v1/trips/{tripID}/departures":            {"get"},
-			"/api/transport/v1/stops":                                {"get"},
-			"/api/transport/v1/stops/{id}":                           {"get"},
-			"/api/transport/v1/journeys":                             {"get"},
-			"/api/transport/v1/vehicles":                             {"get"},
-			"/api/transport/v1/vehicles/locations":                   {"post"},
-			"/api/transport/v1/vehicles/simulator":                   {"get"},
-			"/api/transport/v1/routes/{id}/vehicles":                 {"get"},
-			"/api/transport/v1/trips/{id}/vehicles":                  {"get"},
-			"/api/transport/v1/trips/{id}/arrivals":                  {"get"},
-			"/api/transport/v1/stops/{id}/arrivals":                  {"get"},
-			"/api/transport/v1/routes/{id}/shape":                    {"get"},
-			"/api/transport/v1/admin/vehicles/simulator/start":       {"post"},
-			"/api/transport/v1/admin/vehicles/simulator/stop":        {"post"},
-			"/api/transport/v1/admin/vehicles/simulator/step":        {"post"},
-			"/api/transport/v1/admin/vehicles/simulator/reset":       {"post"},
-			"/api/transport/v1/disruptions":                          {"get", "post"},
-			"/api/transport/v1/disruptions/active":                   {"get"},
-			"/api/transport/v1/disruptions/affected":                 {"get"},
-			"/api/transport/v1/disruptions/{id}":                     {"get", "patch"},
-			"/api/transport/v1/road-closures":                        {"get", "post"},
-			"/api/transport/v1/service-status":                       {"get"},
-			"/api/transport/v1/routes/{id}/status":                   {"get"},
-			"/api/transport/v1/stops/{id}/status":                    {"get"},
-			"/api/transport/v1/trips/{id}/status":                    {"get"},
-			"/api/transport/v1/integrations/utilities/notices":       {"post"},
-			"/api/transport/v1/integrations/emergency/incidents":     {"post"},
-			"/api/transport/v1/integrations/security/traffic-alerts": {"post"},
-			"/api/transport/v1/integrations/service-status":          {"get"},
-			"/api/transport/v1/admin/staff":                          {"get"},
-			"/api/transport/v1/admin/staff/employees":                {"post", "put"},
+			"/api/transport/v1/auth/login":                     {"post"},
+			"/api/transport/v1/auth/me":                        {"get"},
+			"/api/transport/v1/auth/logout":                    {"post"},
+			"/api/transport/v1/admin/health":                   {"get"},
+			"/api/transport/v1/admin/dashboard":                {"get"},
+			"/api/transport/v1/health":                         {"get"},
+			"/api/transport/v1/routes":                         {"get", "post"},
+			"/api/transport/v1/routes/{id}":                    {"get", "patch", "delete"},
+			"/api/transport/v1/routes/{id}/schedule":           {"get"},
+			"/api/transport/v1/departures":                     {"get"},
+			"/api/transport/v1/stops/{stopID}/departures":      {"get"},
+			"/api/transport/v1/routes/{routeID}/departures":    {"get"},
+			"/api/transport/v1/trips/{tripID}/departures":      {"get"},
+			"/api/transport/v1/stops":                          {"get"},
+			"/api/transport/v1/stops/{id}":                     {"get"},
+			"/api/transport/v1/journeys":                       {"get"},
+			"/api/transport/v1/vehicles":                       {"get"},
+			"/api/transport/v1/vehicles/locations":             {"post"},
+			"/api/transport/v1/vehicles/simulator":             {"get"},
+			"/api/transport/v1/routes/{id}/vehicles":           {"get"},
+			"/api/transport/v1/trips/{id}/vehicles":            {"get"},
+			"/api/transport/v1/trips/{id}/arrivals":            {"get"},
+			"/api/transport/v1/stops/{id}/arrivals":            {"get"},
+			"/api/transport/v1/routes/{id}/shape":              {"get"},
+			"/api/transport/v1/admin/vehicles/simulator/start": {"post"},
+			"/api/transport/v1/admin/vehicles/simulator/stop":  {"post"},
+			"/api/transport/v1/admin/vehicles/simulator/step":  {"post"},
+			"/api/transport/v1/admin/vehicles/simulator/reset": {"post"},
+			"/api/transport/v1/disruptions":                    {"get", "post"},
+			"/api/transport/v1/disruptions/active":             {"get"},
+			"/api/transport/v1/disruptions/affected":           {"get"},
+			"/api/transport/v1/disruptions/{id}":               {"get", "patch"},
+			"/api/transport/v1/road-closures":                  {"get", "post"},
+			"/api/transport/v1/service-status":                 {"get"},
+			"/api/transport/v1/routes/{id}/status":             {"get"},
+			"/api/transport/v1/stops/{id}/status":              {"get"},
+			"/api/transport/v1/trips/{id}/status":              {"get"},
+			"/api/transport/v1/integrations/service-status":    {"get"},
+			"/api/transport/v1/admin/staff":                    {"get"},
+			"/api/transport/v1/admin/staff/employees":          {"post", "put"},
 		} {
 			for _, method := range methods {
 				if len(spec.Paths[route][method]) == 0 {
