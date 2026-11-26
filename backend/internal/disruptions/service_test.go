@@ -25,10 +25,6 @@ type fakeDisruptionRepo struct {
 	updateParams        PatchDisruptionParams
 	updateResult        DisruptionResponse
 	updateErr           error
-	upsertParams        SaveDisruptionParams
-	upsertResult        DisruptionResponse
-	upsertCreated       bool
-	upsertErr           error
 	nearbyStops         []NearbyStop
 	nearbyErr           error
 	impactedTrips       []AffectedTripDetail
@@ -81,14 +77,6 @@ func (f *fakeDisruptionRepo) Update(_ context.Context, id int, params PatchDisru
 	f.updateID = id
 	f.updateParams = params
 	return f.updateResult, f.updateErr
-}
-
-func (f *fakeDisruptionRepo) UpsertByExternalRef(_ context.Context, params SaveDisruptionParams) (DisruptionResponse, bool, error) {
-	f.upsertParams = params
-	if f.upsertErr != nil {
-		return DisruptionResponse{}, false, f.upsertErr
-	}
-	return f.upsertResult, f.upsertCreated, nil
 }
 
 func (f *fakeDisruptionRepo) FindStopsInBounds(_ context.Context, _, _, _, _ float64) ([]NearbyStop, error) {
@@ -255,7 +243,7 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 	}
 	svc := NewServiceWithClock(repo, func() time.Time { return fixedNow })
 
-	// 1. Address with numeric streetNumber + duration valid-until (7200s) + spatial match + idempotent upsert.
+	// 1. Address with numeric streetNumber + duration valid-until (7200s) + spatial match.
 	var addrNum RoadClosureAddress
 	if err := json.Unmarshal([]byte(`{"streetNumber":123,"streetName":"King St N","city":"Waterloo","postalCode":"n2j 2x7"}`), &addrNum); err != nil {
 		t.Fatalf("unmarshal numeric streetNumber address: %v", err)
@@ -269,8 +257,7 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 	lng := -80.4900
 	radius := 350.0
 	validDuration := uint64(7200)
-	repo.upsertCreated = true
-	repo.upsertResult = DisruptionResponse{
+	repo.createResult = DisruptionResponse{
 		ID:                55,
 		Type:              TypeRoadClosure,
 		Title:             "Road closure: 123 King St N, Waterloo, N2J 2X7",
@@ -299,31 +286,37 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRoadClosure failed: %v", err)
 	}
-	if !res.Created || repo.upsertParams.SourceService != SourceUtilities || repo.upsertParams.Type != TypeRoadClosure {
-		t.Fatalf("unexpected result/params: %+v params=%+v", res, repo.upsertParams)
+	if res.ID != 55 || repo.createParams.SourceService != SourceUtilities || repo.createParams.Type != TypeRoadClosure {
+		t.Fatalf("unexpected result/params: %+v params=%+v", res, repo.createParams)
 	}
-	if repo.upsertParams.Title != "Road closure: 123 King St N, Waterloo, N2J 2X7" {
-		t.Fatalf("derived title = %q", repo.upsertParams.Title)
+	if repo.createParams.Title != "Road closure: 123 King St N, Waterloo, N2J 2X7" {
+		t.Fatalf("derived title = %q", repo.createParams.Title)
 	}
-	if repo.upsertParams.AffectedArea == nil || *repo.upsertParams.AffectedArea != "123 King St N, Waterloo, N2J 2X7" {
-		t.Fatalf("derived affected_area = %v", repo.upsertParams.AffectedArea)
+	if repo.createParams.AffectedArea == nil || *repo.createParams.AffectedArea != "123 King St N, Waterloo, N2J 2X7" {
+		t.Fatalf("derived affected_area = %v", repo.createParams.AffectedArea)
 	}
 	wantEnd := fixedNow.Add(7200 * time.Second)
-	if repo.upsertParams.EndTime == nil || !repo.upsertParams.EndTime.Equal(wantEnd) {
-		t.Fatalf("EndTime = %v, want %v", repo.upsertParams.EndTime, wantEnd)
+	if repo.createParams.EndTime == nil || !repo.createParams.EndTime.Equal(wantEnd) {
+		t.Fatalf("EndTime = %v, want %v", repo.createParams.EndTime, wantEnd)
 	}
-	if len(repo.upsertParams.StopIDs) != 1 || repo.upsertParams.StopIDs[0] != 3 {
-		t.Fatalf("expected spatial match on stop 3 only, got %+v", repo.upsertParams.StopIDs)
+	if len(repo.createParams.StopIDs) != 1 || repo.createParams.StopIDs[0] != 3 {
+		t.Fatalf("expected spatial match on stop 3 only, got %+v", repo.createParams.StopIDs)
 	}
 
-	// 2. String streetNumber + Unix epoch timestamp valid-until + idempotent update (created=false).
+	// 2. String streetNumber + Unix epoch timestamp valid-until creates a new closure cleanly.
 	var addrStr RoadClosureAddress
 	if err := json.Unmarshal([]byte(`{"streetNumber":"45B","streetName":"Weber St E","city":"Kitchener","postalCode":"N2H 1C4"}`), &addrStr); err != nil {
 		t.Fatalf("unmarshal string streetNumber address: %v", err)
 	}
 	epochEnd := uint64(fixedNow.Add(4 * time.Hour).Unix())
-	repo.upsertCreated = false
-	repo.upsertResult.SourceService = SourceEmergency
+	repo.createResult = DisruptionResponse{
+		ID:            56,
+		Type:          TypeRoadClosure,
+		Title:         "Collision closure",
+		Status:        StatusActive,
+		SourceService: SourceEmergency,
+		ReceivedAt:    fixedNow,
+	}
 	res2, err := svc.CreateRoadClosure(context.Background(), RoadClosureInput{
 		Address:    &addrStr,
 		ValidUntil: &epochEnd,
@@ -331,14 +324,15 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 		Title:      "Collision closure",
 	}, SourceEmergency)
 	if err != nil {
-		t.Fatalf("CreateRoadClosure epoch update failed: %v", err)
+		t.Fatalf("CreateRoadClosure epoch create failed: %v", err)
 	}
-	if res2.Created || repo.upsertParams.EndTime == nil || repo.upsertParams.EndTime.Unix() != int64(epochEnd) {
-		t.Fatalf("unexpected epoch upsert: created=%v end=%v", res2.Created, repo.upsertParams.EndTime)
+	if res2.ID != 56 || repo.createParams.EndTime == nil || repo.createParams.EndTime.Unix() != int64(epochEnd) {
+		t.Fatalf("unexpected epoch create: res=%+v end=%v", res2, repo.createParams.EndTime)
 	}
 
 	// 3. Long formatted address safely truncates derived title to MaxTitleRunes (100).
 	longStreet := strings.Repeat("LongStreetName", 7) // 98 chars
+	repo.createResult = DisruptionResponse{}
 	longRes, err := svc.CreateRoadClosure(context.Background(), RoadClosureInput{
 		Address: &RoadClosureAddress{
 			StreetNumber: "100",
@@ -350,7 +344,7 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRoadClosure long address failed: %v", err)
 	}
-	if longRes.Disruption.ID == 0 || utf8.RuneCountInString(repo.createParams.Title) != MaxTitleRunes {
+	if longRes.ID == 0 || utf8.RuneCountInString(repo.createParams.Title) != MaxTitleRunes {
 		t.Fatalf("expected derived title truncated to %d runes, got %d (%q)", MaxTitleRunes, utf8.RuneCountInString(repo.createParams.Title), repo.createParams.Title)
 	}
 
@@ -394,6 +388,93 @@ func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 		if _, err := svc.CreateRoadClosure(context.Background(), tc.input, SourceTransitAdmin); err == nil {
 			t.Fatalf("%s: expected validation error, got nil", tc.name)
 		}
+	}
+}
+
+func TestGetAndUpdateRoadClosure(t *testing.T) {
+	fixedNow := time.Date(2026, 11, 18, 20, 0, 0, 0, time.UTC)
+	repo := &fakeDisruptionRepo{
+		getResult: DisruptionResponse{
+			ID:        2,
+			Type:      TypeRoadClosure,
+			Title:     "Fire emergency",
+			Status:    StatusActive,
+			StartTime: fixedNow.Add(-time.Hour),
+		},
+		updateResult: DisruptionResponse{
+			ID:     2,
+			Type:   TypeRoadClosure,
+			Title:  "Fire emergency",
+			Status: StatusResolved,
+		},
+	}
+	svc := NewServiceWithClock(repo, func() time.Time { return fixedNow })
+
+	got, err := svc.GetRoadClosure(context.Background(), 2)
+	if err != nil || got.ID != 2 || got.AffectedRoutes == nil {
+		t.Fatalf("GetRoadClosure failed: got=%+v err=%v", got, err)
+	}
+
+	resolved := StatusResolved
+	updated, err := svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{
+		Status: &resolved,
+	})
+	if err != nil || updated.Status != StatusResolved {
+		t.Fatalf("UpdateRoadClosure resolve failed: updated=%+v err=%v", updated, err)
+	}
+	if repo.updateParams.Status == nil || *repo.updateParams.Status != StatusResolved || repo.updateParams.Title != nil {
+		t.Fatalf("expected status-only update preserving other fields, got %+v", repo.updateParams)
+	}
+
+	// Address and valid-until updates translate into affected_area and end_time.
+	extendSec := uint64(3600)
+	_, err = svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{
+		Address: &RoadClosureAddress{
+			StreetNumber: "10",
+			StreetName:   "King St W",
+			City:         "Cambridge",
+			PostalCode:   "N1R 1P1",
+		},
+		ValidUntil: &extendSec,
+	})
+	if err != nil {
+		t.Fatalf("UpdateRoadClosure address+valid-until failed: %v", err)
+	}
+	if !repo.updateParams.AffectedAreaSet || repo.updateParams.AffectedArea == nil || *repo.updateParams.AffectedArea != "10 King St W, Cambridge, N1R 1P1" {
+		t.Fatalf("unexpected AffectedArea params: %+v", repo.updateParams)
+	}
+	if !repo.updateParams.EndTimeSet || repo.updateParams.EndTime == nil || !repo.updateParams.EndTime.Equal(fixedNow.Add(time.Hour)) {
+		t.Fatalf("unexpected EndTime params: %+v", repo.updateParams)
+	}
+
+	// valid-until duration on a future-scheduled closure anchors to max(now, existing.StartTime).
+	futureStart := fixedNow.Add(24 * time.Hour)
+	repo.getResult.StartTime = futureStart
+	if _, err := svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{
+		ValidUntil: &extendSec,
+	}); err != nil {
+		t.Fatalf("UpdateRoadClosure future valid-until failed: %v", err)
+	}
+	if repo.updateParams.EndTime == nil || !repo.updateParams.EndTime.Equal(futureStart.Add(time.Hour)) {
+		t.Fatalf("expected future EndTime = %v, got %v", futureStart.Add(time.Hour), repo.updateParams.EndTime)
+	}
+	repo.getResult.StartTime = fixedNow.Add(-time.Hour)
+
+	// Empty update and conflicting valid-until + end_time are rejected.
+	if _, err := svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{}); err == nil {
+		t.Fatal("expected error on empty UpdateRoadClosureInput")
+	}
+	if _, err := svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{ValidUntil: &extendSec, EndTimeSet: true}); err == nil {
+		t.Fatal("expected error when both valid-until and end_time are provided")
+	}
+
+	// Non-road_closure disruptions return ErrNotFound for both GetRoadClosure and UpdateRoadClosure.
+	repo.getResult.Type = TypeDetour
+	if _, err := svc.GetRoadClosure(context.Background(), 2); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetRoadClosure non-road_closure = %v, want ErrNotFound", err)
+	}
+	if _, err := svc.UpdateRoadClosure(context.Background(), 2, UpdateRoadClosureInput{Status: &resolved}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("UpdateRoadClosure non-road_closure = %v, want ErrNotFound", err)
 	}
 }
 

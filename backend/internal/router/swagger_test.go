@@ -104,6 +104,7 @@ func TestSwaggerDocumentation(t *testing.T) {
 			"/api/transport/v1/disruptions/affected":           {"get"},
 			"/api/transport/v1/disruptions/{id}":               {"get", "patch"},
 			"/api/transport/v1/road-closures":                  {"get", "post"},
+			"/api/transport/v1/road-closures/{id}":             {"get", "patch"},
 			"/api/transport/v1/service-status":                 {"get"},
 			"/api/transport/v1/routes/{id}/status":             {"get"},
 			"/api/transport/v1/stops/{id}/status":              {"get"},

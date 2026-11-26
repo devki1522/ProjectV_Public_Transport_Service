@@ -22,32 +22,39 @@ import (
 )
 
 type fakeDisruptionService struct {
-	listFilter          disruptions.ListFilter
-	listResult          []disruptions.DisruptionResponse
-	listErr             error
-	getID               int
-	getResult           disruptions.DisruptionResponse
-	getErr              error
-	createInput         disruptions.CreateDisruptionInput
-	createSource        string
-	createResult        disruptions.DisruptionResponse
-	createErr           error
-	updateID            int
-	updateInput         disruptions.UpdateDisruptionInput
-	updateResult        disruptions.DisruptionResponse
-	updateErr           error
-	roadClosureInput    disruptions.RoadClosureInput
-	roadClosureSource   string
-	roadClosureResult   disruptions.RoadClosureResult
-	roadClosureErr      error
-	affectedResult      disruptions.AffectedServicesSummary
-	affectedErr         error
-	serviceStatusResult disruptions.ServiceStatusResponse
-	serviceStatusErr    error
-	entityID            int
-	entityStatusResult  disruptions.EntityOperationalStatus
-	entityStatusErr     error
-	called              string
+	listFilter              disruptions.ListFilter
+	listResult              []disruptions.DisruptionResponse
+	listErr                 error
+	getID                   int
+	getResult               disruptions.DisruptionResponse
+	getErr                  error
+	createInput             disruptions.CreateDisruptionInput
+	createSource            string
+	createResult            disruptions.DisruptionResponse
+	createErr               error
+	updateID                int
+	updateInput             disruptions.UpdateDisruptionInput
+	updateResult            disruptions.DisruptionResponse
+	updateErr               error
+	roadClosureInput        disruptions.RoadClosureInput
+	roadClosureSource       string
+	roadClosureResult       disruptions.DisruptionResponse
+	roadClosureErr          error
+	getRoadClosureID        int
+	getRoadClosureResult    disruptions.DisruptionResponse
+	getRoadClosureErr       error
+	updateRoadClosureID     int
+	updateRoadClosureInput  disruptions.UpdateRoadClosureInput
+	updateRoadClosureResult disruptions.DisruptionResponse
+	updateRoadClosureErr    error
+	affectedResult          disruptions.AffectedServicesSummary
+	affectedErr             error
+	serviceStatusResult     disruptions.ServiceStatusResponse
+	serviceStatusErr        error
+	entityID                int
+	entityStatusResult      disruptions.EntityOperationalStatus
+	entityStatusErr         error
+	called                  string
 }
 
 func (f *fakeDisruptionService) List(_ context.Context, filter disruptions.ListFilter) ([]disruptions.DisruptionResponse, error) {
@@ -82,11 +89,24 @@ func (f *fakeDisruptionService) Update(_ context.Context, id int, input disrupti
 	return f.updateResult, f.updateErr
 }
 
-func (f *fakeDisruptionService) CreateRoadClosure(_ context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.RoadClosureResult, error) {
+func (f *fakeDisruptionService) CreateRoadClosure(_ context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.DisruptionResponse, error) {
 	f.called = "create_road_closure"
 	f.roadClosureInput = input
 	f.roadClosureSource = defaultSource
 	return f.roadClosureResult, f.roadClosureErr
+}
+
+func (f *fakeDisruptionService) GetRoadClosure(_ context.Context, id int) (disruptions.DisruptionResponse, error) {
+	f.called = "get_road_closure"
+	f.getRoadClosureID = id
+	return f.getRoadClosureResult, f.getRoadClosureErr
+}
+
+func (f *fakeDisruptionService) UpdateRoadClosure(_ context.Context, id int, input disruptions.UpdateRoadClosureInput) (disruptions.DisruptionResponse, error) {
+	f.called = "update_road_closure"
+	f.updateRoadClosureID = id
+	f.updateRoadClosureInput = input
+	return f.updateRoadClosureResult, f.updateRoadClosureErr
 }
 
 func (f *fakeDisruptionService) AffectedServices(_ context.Context) (disruptions.AffectedServicesSummary, error) {
@@ -335,6 +355,7 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		{http.MethodPost, "/api/transport/v1/disruptions"},
 		{http.MethodPatch, "/api/transport/v1/disruptions/1"},
 		{http.MethodPost, "/api/transport/v1/road-closures"},
+		{http.MethodPatch, "/api/transport/v1/road-closures/1"},
 		{http.MethodGet, "/api/transport/v1/integrations/service-status"},
 	} {
 		rec := authedRequest(unconfiguredMux, tc.method, tc.path, `{}`, nil, "")
@@ -363,18 +384,24 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 			StartTime:     now,
 			ReceivedAt:    now,
 		},
-		roadClosureResult: disruptions.RoadClosureResult{
-			Created: true,
-			Disruption: disruptions.DisruptionResponse{
-				ID:                88,
-				Type:              disruptions.TypeRoadClosure,
-				Title:             "Watermain Break",
-				Status:            disruptions.StatusActive,
-				SourceService:     disruptions.SourceTransitAdmin,
-				ExternalReference: &extID,
-				StartTime:         now,
-				ReceivedAt:        now,
-			},
+		roadClosureResult: disruptions.DisruptionResponse{
+			ID:                88,
+			Type:              disruptions.TypeRoadClosure,
+			Title:             "Watermain Break",
+			Status:            disruptions.StatusActive,
+			SourceService:     disruptions.SourceTransitAdmin,
+			ExternalReference: &extID,
+			StartTime:         now,
+			ReceivedAt:        now,
+		},
+		updateRoadClosureResult: disruptions.DisruptionResponse{
+			ID:            88,
+			Type:          disruptions.TypeRoadClosure,
+			Title:         "Watermain Break",
+			Status:        disruptions.StatusResolved,
+			SourceService: disruptions.SourceTransitAdmin,
+			StartTime:     now,
+			ReceivedAt:    now,
 		},
 		serviceStatusResult: disruptions.ServiceStatusResponse{
 			GeneratedAt:           now,
@@ -406,6 +433,7 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		{http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"Detour"}`},
 		{http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved"}`},
 		{http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Watermain Break"}`},
+		{http.MethodPatch, "/api/transport/v1/road-closures/88", `{"status":"resolved"}`},
 		{http.MethodGet, "/api/transport/v1/integrations/service-status", ""},
 	} {
 		unauthRec := authedRequest(env.mux, tc.method, tc.path, tc.body, nil, "")
@@ -442,17 +470,15 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		t.Fatalf("PATCH /api/disruptions/42 failed: code=%d input=%+v body=%s", patchRec.Code, svc.updateInput, patchRec.Body.String())
 	}
 
-	// Road closure POST via admin session: 201 on Created=true, 200 on Created=false (idempotent upsert).
-	svc.roadClosureResult.Created = true
+	// Road closure POST via admin session always returns 201 Created, and PATCH resolves by ID (200 OK).
 	rcBody := `{"external_id":"UTIL-101","title":"Watermain Break","latitude":43.45,"longitude":-80.49,"radius_meters":400}`
 	rec201 := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", rcBody, adminCookie, adminCSRF)
 	if rec201.Code != http.StatusCreated {
-		t.Fatalf("POST /road-closures (new) = %d, want 201: %s", rec201.Code, rec201.Body.String())
+		t.Fatalf("POST /road-closures = %d, want 201: %s", rec201.Code, rec201.Body.String())
 	}
-	svc.roadClosureResult.Created = false
-	rec200 := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", rcBody, adminCookie, adminCSRF)
-	if rec200.Code != http.StatusOK {
-		t.Fatalf("POST /road-closures (upsert) = %d, want 200: %s", rec200.Code, rec200.Body.String())
+	patchRCRec := authedRequest(env.mux, http.MethodPatch, "/api/transport/v1/road-closures/88", `{"status":"resolved"}`, adminCookie, adminCSRF)
+	if patchRCRec.Code != http.StatusOK || svc.updateRoadClosureID != 88 {
+		t.Fatalf("PATCH /road-closures/88 = %d (id=%d), want 200: %s", patchRCRec.Code, svc.updateRoadClosureID, patchRCRec.Body.String())
 	}
 
 	if !strings.Contains(env.auditBuf.String(), `"admin_disruption_operation"`) {
@@ -481,18 +507,28 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 	}
 }
 
-func TestRoadClosuresGetAndPost(t *testing.T) {
+func TestRoadClosuresGetPostAndPatch(t *testing.T) {
 	svc := &fakeDisruptionService{
 		listResult: []disruptions.DisruptionResponse{{ID: 10, Type: disruptions.TypeRoadClosure, Title: "King St Closure", Status: "active"}},
-		roadClosureResult: disruptions.RoadClosureResult{
-			Created: true,
-			Disruption: disruptions.DisruptionResponse{
-				ID:            11,
-				Type:          disruptions.TypeRoadClosure,
-				Title:         "Road closure: 45 Weber St E, Kitchener, N2H 1C4",
-				Status:        "active",
-				SourceService: disruptions.SourceTransitAdmin,
-			},
+		getRoadClosureResult: disruptions.DisruptionResponse{
+			ID:     11,
+			Type:   disruptions.TypeRoadClosure,
+			Title:  "Road closure: 45 Weber St E, Kitchener, N2H 1C4",
+			Status: "active",
+		},
+		roadClosureResult: disruptions.DisruptionResponse{
+			ID:            11,
+			Type:          disruptions.TypeRoadClosure,
+			Title:         "Road closure: 45 Weber St E, Kitchener, N2H 1C4",
+			Status:        "active",
+			SourceService: disruptions.SourceTransitAdmin,
+		},
+		updateRoadClosureResult: disruptions.DisruptionResponse{
+			ID:            11,
+			Type:          disruptions.TypeRoadClosure,
+			Title:         "Road closure: 45 Weber St E, Kitchener, N2H 1C4",
+			Status:        "resolved",
+			SourceService: disruptions.SourceTransitAdmin,
 		},
 	}
 	env, _ := newTestDisruptionEnv(t, svc)
@@ -504,6 +540,18 @@ func TestRoadClosuresGetAndPost(t *testing.T) {
 	if svc.listFilter.Type != disruptions.TypeRoadClosure || svc.listFilter.Status != "active" {
 		t.Fatalf("unexpected filter: %+v", svc.listFilter)
 	}
+
+	getOneRec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/road-closures/11", "", nil, "")
+	if getOneRec.Code != http.StatusOK || svc.called != "get_road_closure" || svc.getRoadClosureID != 11 {
+		t.Fatalf("GET /api/transport/v1/road-closures/11 = %d (id=%d), want 200: %s", getOneRec.Code, svc.getRoadClosureID, getOneRec.Body.String())
+	}
+
+	svc.getRoadClosureErr = disruptions.ErrNotFound
+	notFoundRec := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/road-closures/999", "", nil, "")
+	if notFoundRec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/transport/v1/road-closures/999 = %d, want 404", notFoundRec.Code)
+	}
+	svc.getRoadClosureErr = nil
 
 	badTypeGet := authedRequest(env.mux, http.MethodGet, "/api/transport/v1/road-closures?type=delay", "", nil, "")
 	if badTypeGet.Code != http.StatusBadRequest {
@@ -537,19 +585,26 @@ func TestRoadClosuresGetAndPost(t *testing.T) {
 		t.Fatalf("Location = %q, want /api/transport/v1/road-closures/11", loc)
 	}
 
-	// Idempotent upsert returns 200 OK.
-	svc.roadClosureResult.Created = false
-	upsertRec := authedRequest(
+	// PATCH /road-closures/{id} updates/resolves by ID and returns 200 OK.
+	patchRec := authedRequest(
 		env.mux,
-		http.MethodPost,
-		"/api/transport/v1/road-closures",
-		`{"external_id":"RC-11","address":{"streetNumber":"45","streetName":"Weber St E","city":"Kitchener","postalCode":"N2H 1C4"},"valid-until":7200}`,
+		http.MethodPatch,
+		"/api/transport/v1/road-closures/11",
+		`{"status":"resolved","end_time":null}`,
 		adminCookie,
 		adminCSRF,
 	)
-	if upsertRec.Code != http.StatusOK {
-		t.Fatalf("upsert POST /api/transport/v1/road-closures = %d, want 200: %s", upsertRec.Code, upsertRec.Body.String())
+	if patchRec.Code != http.StatusOK || svc.called != "update_road_closure" || svc.updateRoadClosureID != 11 || !svc.updateRoadClosureInput.EndTimeSet {
+		t.Fatalf("PATCH /api/transport/v1/road-closures/11 = %d, want 200: %s", patchRec.Code, patchRec.Body.String())
 	}
+
+	// Non-road-closure ID on PATCH returns 404.
+	svc.updateRoadClosureErr = disruptions.ErrNotFound
+	patchNotFound := authedRequest(env.mux, http.MethodPatch, "/api/transport/v1/road-closures/999", `{"status":"resolved"}`, adminCookie, adminCSRF)
+	if patchNotFound.Code != http.StatusNotFound {
+		t.Fatalf("PATCH /api/transport/v1/road-closures/999 = %d, want 404", patchNotFound.Code)
+	}
+	svc.updateRoadClosureErr = nil
 
 	// Invalid address field type returns 400.
 	badAddr := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"address":{"streetNumber":-1,"streetName":"Weber St","city":"Kitchener"}}`, adminCookie, adminCSRF)
@@ -587,17 +642,23 @@ func bearerRequest(mux http.Handler, method, path, body, authHeader string, cook
 func TestIntegrationEndpointsBearerJWTAuth(t *testing.T) {
 	now := time.Date(2026, 11, 25, 20, 0, 0, 0, time.UTC)
 	svc := &fakeDisruptionService{
-		roadClosureResult: disruptions.RoadClosureResult{
-			Created: true,
-			Disruption: disruptions.DisruptionResponse{
-				ID:            99,
-				Type:          disruptions.TypeRoadClosure,
-				Title:         "Road closure: 123 King St N, Waterloo, N2J 2X7",
-				Status:        disruptions.StatusActive,
-				SourceService: "emergency.service",
-				StartTime:     now,
-				ReceivedAt:    now,
-			},
+		roadClosureResult: disruptions.DisruptionResponse{
+			ID:            99,
+			Type:          disruptions.TypeRoadClosure,
+			Title:         "Road closure: 123 King St N, Waterloo, N2J 2X7",
+			Status:        disruptions.StatusActive,
+			SourceService: "emergency.service",
+			StartTime:     now,
+			ReceivedAt:    now,
+		},
+		updateRoadClosureResult: disruptions.DisruptionResponse{
+			ID:            99,
+			Type:          disruptions.TypeRoadClosure,
+			Title:         "Road closure: 123 King St N, Waterloo, N2J 2X7",
+			Status:        disruptions.StatusResolved,
+			SourceService: "emergency.service",
+			StartTime:     now,
+			ReceivedAt:    now,
 		},
 		serviceStatusResult: disruptions.ServiceStatusResponse{
 			GeneratedAt:       now,
@@ -642,6 +703,7 @@ func TestIntegrationEndpointsBearerJWTAuth(t *testing.T) {
 	}{
 		{http.MethodGet, "/api/transport/v1/integrations/service-status", "", http.StatusOK},
 		{http.MethodPost, "/api/transport/v1/road-closures", roadClosurePayload, http.StatusCreated},
+		{http.MethodPatch, "/api/transport/v1/road-closures/99", `{"status":"resolved"}`, http.StatusOK},
 	}
 
 	// 1. Every allowed integration role succeeds on POST /road-closures and GET /integrations/service-status without cookie, Origin, or CSRF.

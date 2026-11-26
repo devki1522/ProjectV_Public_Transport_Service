@@ -229,6 +229,7 @@ func RegisterDisruptionRoutes(
 	r.Get("/disruptions/affected", handler.AffectedServices)
 	r.Get("/disruptions/{id}", handler.Get)
 	r.Get("/road-closures", handler.ListRoadClosures)
+	r.Get("/road-closures/{id}", handler.GetRoadClosure)
 	r.Get("/service-status", handler.ServiceStatus)
 	r.Get("/routes/{id}/status", handler.RouteStatus)
 	r.Get("/stops/{id}/status", handler.StopStatus)
@@ -262,6 +263,7 @@ func RegisterDisruptionRoutes(
 			integrationMutation.Use(authMiddleware.RequireIntegrationAccess(requiredRole, integrationRoles, csrf, true))
 		}
 		integrationMutation.Post("/road-closures", handler.CreateRoadClosure)
+		integrationMutation.Patch("/road-closures/{id}", handler.UpdateRoadClosure)
 	})
 }
 

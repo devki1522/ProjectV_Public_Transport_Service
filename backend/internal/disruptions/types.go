@@ -355,10 +355,28 @@ type RoadClosureInput struct {
 	RadiusMeters      *float64            `json:"radius_meters,omitempty"`
 }
 
-// RoadClosureResult describes the outcome of creating or upserting a road closure.
-type RoadClosureResult struct {
-	Created    bool
-	Disruption DisruptionResponse
+// UpdateRoadClosureInput is the request payload for PATCH /api/transport/v1/road-closures/{id}.
+type UpdateRoadClosureInput struct {
+	Address          *RoadClosureAddress `json:"address,omitempty"`
+	ValidUntil       *uint64             `json:"valid-until,omitempty"`
+	Title            *string             `json:"title,omitempty"`
+	Description      *string             `json:"description,omitempty"`
+	AffectedArea     *string             `json:"affected_area,omitempty"`
+	Status           *string             `json:"status,omitempty" enums:"scheduled,active,resolved"`
+	StartTime        *time.Time          `json:"start_time,omitempty"`
+	EndTime          *time.Time          `json:"end_time,omitempty"`
+	RouteIDs         *[]int              `json:"route_ids,omitempty"`
+	StopIDs          *[]int              `json:"stop_ids,omitempty"`
+	TripIDs          *[]int              `json:"trip_ids,omitempty"`
+	VehicleIDs       *[]int              `json:"vehicle_ids,omitempty"`
+	AffectedSegments *[]string           `json:"affected_segments,omitempty"`
+
+	// EndTimeSet indicates the JSON payload explicitly included "end_time" (including null to clear it).
+	EndTimeSet bool `json:"-"`
+	// DescriptionSet indicates the JSON payload explicitly included "description".
+	DescriptionSet bool `json:"-"`
+	// AffectedAreaSet indicates the JSON payload explicitly included "affected_area".
+	AffectedAreaSet bool `json:"-"`
 }
 
 // AffectedRoute describes a transit route linked to a disruption.
@@ -537,7 +555,6 @@ type Repository interface {
 	Get(ctx context.Context, id int) (DisruptionResponse, error)
 	Create(ctx context.Context, params SaveDisruptionParams) (DisruptionResponse, error)
 	Update(ctx context.Context, id int, params PatchDisruptionParams) (DisruptionResponse, error)
-	UpsertByExternalRef(ctx context.Context, params SaveDisruptionParams) (DisruptionResponse, bool, error)
 	FindStopsInBounds(ctx context.Context, minLat, maxLat, minLng, maxLng float64) ([]NearbyStop, error)
 	ListActiveImpactedTrips(ctx context.Context, disruptionIDs []int) ([]AffectedTripDetail, error)
 	ListActiveImpactedVehicles(ctx context.Context, disruptionIDs []int) ([]AffectedVehicleDetail, error)

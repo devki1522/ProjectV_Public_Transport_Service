@@ -26,7 +26,9 @@ type DisruptionService interface {
 	ListActive(ctx context.Context, filter disruptions.ListFilter) ([]disruptions.DisruptionResponse, error)
 	Get(ctx context.Context, id int) (disruptions.DisruptionResponse, error)
 	Create(ctx context.Context, input disruptions.CreateDisruptionInput, defaultSource string) (disruptions.DisruptionResponse, error)
-	CreateRoadClosure(ctx context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.RoadClosureResult, error)
+	CreateRoadClosure(ctx context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.DisruptionResponse, error)
+	GetRoadClosure(ctx context.Context, id int) (disruptions.DisruptionResponse, error)
+	UpdateRoadClosure(ctx context.Context, id int, input disruptions.UpdateRoadClosureInput) (disruptions.DisruptionResponse, error)
 	Update(ctx context.Context, id int, input disruptions.UpdateDisruptionInput) (disruptions.DisruptionResponse, error)
 	AffectedServices(ctx context.Context) (disruptions.AffectedServicesSummary, error)
 	ServiceStatus(ctx context.Context) (disruptions.ServiceStatusResponse, error)
@@ -432,17 +434,49 @@ func (h *DisruptionHandler) ListRoadClosures(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, list)
 }
 
-// CreateRoadClosure validates and creates (or idempotently upserts) a road closure disruption (`type='road_closure'`).
+// GetRoadClosure returns a single road closure disruption (`type='road_closure'`) by identifier.
 //
-// @Summary Create or update a road closure
-// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp >= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, route/stop links, and external_id for idempotent upsert (201 created, 200 updated).
+// @Summary Get road closure by ID
+// @Description Returns a single road closure (`type='road_closure'`) and its affected routes, stops, trips, vehicles, and segments.
+// @Tags road-closures
+// @Produce json
+// @Param id path int true "Positive road closure ID" minimum(1)
+// @Success 200 {object} disruptions.DisruptionResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/transport/v1/road-closures/{id} [get]
+func (h *DisruptionHandler) GetRoadClosure(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
+		return
+	}
+	id, ok := parsePositivePathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := rejectUnexpectedDisruptionQuery(r); err != nil {
+		writeDisruptionError(w, err)
+		return
+	}
+	item, err := h.service.GetRoadClosure(r.Context(), id)
+	if err != nil {
+		writeDisruptionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+// CreateRoadClosure validates and creates a road closure disruption (`type='road_closure'`).
+//
+// @Summary Create a road closure
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp >= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, and route/stop links. Returns 201 Created with the created road closure and its numeric id for subsequent PATCH /api/transport/v1/road-closures/{id} updates.
 // @Tags road-closures
 // @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
 // @Param body body disruptions.RoadClosureInput true "Road closure payload"
-// @Success 200 {object} disruptions.DisruptionResponse
 // @Success 201 {object} disruptions.DisruptionResponse
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
@@ -468,20 +502,77 @@ func (h *DisruptionHandler) CreateRoadClosure(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	result, err := h.service.CreateRoadClosure(r.Context(), input, defaultSource)
+	created, err := h.service.CreateRoadClosure(r.Context(), input, defaultSource)
 	if err != nil {
 		h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", 0, defaultSource, disruptionAuditOutcome(err))
 		writeDisruptionError(w, err)
 		return
 	}
 
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-		w.Header().Set("Location", apiBaseFromRequest(r)+"/road-closures/"+strconv.Itoa(result.Disruption.ID))
+	w.Header().Set("Location", apiBaseFromRequest(r)+"/road-closures/"+strconv.Itoa(created.ID))
+	h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", created.ID, created.SourceService, "success")
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// UpdateRoadClosure applies partial updates (such as resolving or extending) to an existing road closure by ID.
+//
+// @Summary Update or resolve a road closure
+// @Description Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Strictly parses JSON and partially updates or resolves an existing road closure (`type='road_closure'`) by id while preserving omitted fields and existing route/stop links. Supports valid-until (Unix epoch timestamp >= 1000000000, or duration in seconds from start_time/now, using the existing start_time when scheduled in the future).
+// @Tags road-closures
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param X-CSRF-Token header string false "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)"
+// @Param id path int true "Positive road closure ID" minimum(1)
+// @Param body body disruptions.UpdateRoadClosureInput true "Road closure partial update payload"
+// @Success 200 {object} disruptions.DisruptionResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Failure 502 {object} map[string]string
+// @Failure 503 {object} map[string]string
+// @Failure 504 {object} map[string]string
+// @Router /api/transport/v1/road-closures/{id} [patch]
+func (h *DisruptionHandler) UpdateRoadClosure(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if h.service == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disruption service is unavailable"})
+		return
 	}
-	h.auditDisruptionEvent(r.Context(), "create_road_closure", "disruption", result.Disruption.ID, result.Disruption.SourceService, "success")
-	writeJSON(w, status, result.Disruption)
+
+	id, ok := parsePositivePathID(w, r, "id")
+	if !ok {
+		h.auditDisruptionEvent(r.Context(), "update_road_closure", "disruption", 0, "", "invalid_request")
+		return
+	}
+
+	var input disruptions.UpdateRoadClosureInput
+	keys, ok := decodeStrictJSONObjectWithKeys(w, r, &input)
+	if !ok {
+		h.auditDisruptionEvent(r.Context(), "update_road_closure", "disruption", id, "", "invalid_request")
+		return
+	}
+	if _, hasEnd := keys["end_time"]; hasEnd {
+		input.EndTimeSet = true
+	}
+	if _, hasDesc := keys["description"]; hasDesc {
+		input.DescriptionSet = true
+	}
+	if _, hasArea := keys["affected_area"]; hasArea {
+		input.AffectedAreaSet = true
+	}
+
+	updated, err := h.service.UpdateRoadClosure(r.Context(), id, input)
+	if err != nil {
+		h.auditDisruptionEvent(r.Context(), "update_road_closure", "disruption", id, "", disruptionAuditOutcome(err))
+		writeDisruptionError(w, err)
+		return
+	}
+
+	h.auditDisruptionEvent(r.Context(), "update_road_closure", "disruption", updated.ID, updated.SourceService, "success")
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func roadClosureDefaultSource(ctx context.Context) string {

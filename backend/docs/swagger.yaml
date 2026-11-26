@@ -510,6 +510,49 @@ definitions:
           type: integer
         type: array
     type: object
+  disruptions.UpdateRoadClosureInput:
+    properties:
+      address:
+        $ref: '#/definitions/disruptions.RoadClosureAddress'
+      affected_area:
+        type: string
+      affected_segments:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        type: string
+      route_ids:
+        items:
+          type: integer
+        type: array
+      start_time:
+        type: string
+      status:
+        enum:
+        - scheduled
+        - active
+        - resolved
+        type: string
+      stop_ids:
+        items:
+          type: integer
+        type: array
+      title:
+        type: string
+      trip_ids:
+        items:
+          type: integer
+        type: array
+      valid-until:
+        type: integer
+      vehicle_ids:
+        items:
+          type: integer
+        type: array
+    type: object
   handlers.SimulatorStartInput:
     properties:
       speed_multiplier:
@@ -1013,9 +1056,9 @@ info:
   description: 'Public resident schedules, cookie-authenticated transit administration,
     and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require
     an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me;
-    POST /api/transport/v1/road-closures and GET /api/transport/v1/integrations/service-status
-    also accept Authorization: Bearer <token> from Registration Service without cookies
-    or CSRF.'
+    POST /api/transport/v1/road-closures, PATCH /api/transport/v1/road-closures/{id},
+    and GET /api/transport/v1/integrations/service-status also accept Authorization:
+    Bearer <token> from Registration Service without cookies or CSRF.'
   title: Public Transport Service API
   version: "1.0"
 paths:
@@ -2301,8 +2344,9 @@ paths:
         trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object
         and valid-until (unsigned integer seconds: Unix epoch timestamp >= 1000000000,
         or duration in seconds from start_time) as well as optional title, coordinates/radius
-        spatial matching, route/stop links, and external_id for idempotent upsert
-        (201 created, 200 updated).'
+        spatial matching, and route/stop links. Returns 201 Created with the created
+        road closure and its numeric id for subsequent PATCH /api/transport/v1/road-closures/{id}
+        updates.'
       parameters:
       - description: Session-bound CSRF token (required for browser cookie sessions;
           omitted for Bearer JWTs)
@@ -2318,10 +2362,6 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/disruptions.DisruptionResponse'
         "201":
           description: Created
           schema:
@@ -2376,7 +2416,134 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Create or update a road closure
+      summary: Create a road closure
+      tags:
+      - road-closures
+  /api/transport/v1/road-closures/{id}:
+    get:
+      description: Returns a single road closure (`type='road_closure'`) and its affected
+        routes, stops, trips, vehicles, and segments.
+      parameters:
+      - description: Positive road closure ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get road closure by ID
+      tags:
+      - road-closures
+    patch:
+      consumes:
+      - application/json
+      description: Accepts a Registration Service service-account Bearer JWT (SH-S07;
+        no cookie, Origin, or CSRF required) or an administrator session cookie with
+        trusted Origin and X-CSRF-Token. Strictly parses JSON and partially updates
+        or resolves an existing road closure (`type='road_closure'`) by id while preserving
+        omitted fields and existing route/stop links. Supports valid-until (Unix epoch
+        timestamp >= 1000000000, or duration in seconds from start_time/now, using
+        the existing start_time when scheduled in the future).
+      parameters:
+      - description: Session-bound CSRF token (required for browser cookie sessions;
+          omitted for Bearer JWTs)
+        in: header
+        name: X-CSRF-Token
+        type: string
+      - description: Positive road closure ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Road closure partial update payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/disruptions.UpdateRoadClosureInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/disruptions.DisruptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update or resolve a road closure
       tags:
       - road-closures
   /api/transport/v1/routes:
