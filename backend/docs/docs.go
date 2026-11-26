@@ -1611,193 +1611,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/transport/v1/integrations/emergency/incidents": {
-            "post": {
-                "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) an emergency disruption.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "integrations"
-                ],
-                "summary": "Ingest an emergency incident or road restriction",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session-bound CSRF token",
-                        "name": "X-CSRF-Token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Emergency incident payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.EmergencyIncidentInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/transport/v1/integrations/security/traffic-alerts": {
-            "post": {
-                "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a security traffic disruption.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "integrations"
-                ],
-                "summary": "Ingest a security or police traffic alert",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session-bound CSRF token",
-                        "name": "X-CSRF-Token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Security traffic alert payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.SecurityTrafficAlertInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/transport/v1/integrations/service-status": {
             "get": {
-                "description": "Requires an authenticated administrator/enterprise session cookie. Returns overall network operational status, active disruptions, detours, and affected services.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an authenticated administrator session cookie. Returns overall network operational status, active disruptions, detours, and affected services.",
                 "produces": [
                     "application/json"
                 ],
@@ -1847,56 +1668,9 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
-                    }
-                }
-            }
-        },
-        "/api/transport/v1/integrations/utilities/notices": {
-            "post": {
-                "description": "Requires an administrator/enterprise session cookie, trusted Origin, and X-CSRF-Token. Evaluates affected transit routes and stops (including spatial radius matching) and creates (201) or idempotently updates (200) a utilities disruption.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "integrations"
-                ],
-                "summary": "Ingest a utilities road closure or construction notice",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session-bound CSRF token",
-                        "name": "X-CSRF-Token",
-                        "in": "header",
-                        "required": true
                     },
-                    {
-                        "description": "Utilities notice payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.UtilitiesNoticeInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/disruptions.ExternalNoticeResult"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1904,8 +1678,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1913,26 +1687,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "504": {
+                        "description": "Gateway Timeout",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2140,7 +1896,12 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Requires an administrator session cookie, trusted Origin, and X-CSRF-Token. Creates a road closure disruption and links affected routes, stops, trips, vehicles, and segments.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp \u003e= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, route/stop links, and external_id for idempotent upsert (201 created, 200 updated).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2150,26 +1911,31 @@ const docTemplate = `{
                 "tags": [
                     "road-closures"
                 ],
-                "summary": "Create a road closure",
+                "summary": "Create or update a road closure",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Session-bound CSRF token",
+                        "description": "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)",
                         "name": "X-CSRF-Token",
-                        "in": "header",
-                        "required": true
+                        "in": "header"
                     },
                     {
-                        "description": "Road closure creation payload",
+                        "description": "Road closure payload",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/disruptions.CreateDisruptionInput"
+                            "$ref": "#/definitions/disruptions.RoadClosureInput"
                         }
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.DisruptionResponse"
+                        }
+                    },
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -2214,6 +1980,33 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3994,7 +3787,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "scheduled",
+                        "active",
+                        "resolved"
+                    ]
                 },
                 "stop_ids": {
                     "type": "array",
@@ -4012,7 +3810,18 @@ const docTemplate = `{
                     }
                 },
                 "type": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "delay",
+                        "detour",
+                        "cancellation",
+                        "stop_closure",
+                        "road_closure",
+                        "construction",
+                        "emergency",
+                        "traffic_restriction",
+                        "accessibility"
+                    ]
                 },
                 "vehicle_ids": {
                     "type": "array",
@@ -4090,83 +3899,6 @@ const docTemplate = `{
                 }
             }
         },
-        "disruptions.EmergencyIncidentInput": {
-            "type": "object",
-            "properties": {
-                "affected_area": {
-                    "type": "string"
-                },
-                "affected_segments": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "external_id": {
-                    "type": "string"
-                },
-                "external_reference": {
-                    "type": "string"
-                },
-                "incident_type": {
-                    "type": "string"
-                },
-                "latitude": {
-                    "type": "number"
-                },
-                "longitude": {
-                    "type": "number"
-                },
-                "radius_meters": {
-                    "type": "number"
-                },
-                "route_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "severity": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "stop_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "title": {
-                    "type": "string"
-                },
-                "trip_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "type": {
-                    "type": "string"
-                },
-                "vehicle_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                }
-            }
-        },
         "disruptions.EntityOperationalStatus": {
             "type": "object",
             "properties": {
@@ -4187,35 +3919,29 @@ const docTemplate = `{
                 }
             }
         },
-        "disruptions.ExternalNoticeResult": {
+        "disruptions.RoadClosureAddress": {
             "type": "object",
             "properties": {
-                "created": {
-                    "type": "boolean"
+                "city": {
+                    "type": "string"
                 },
-                "disruption": {
-                    "$ref": "#/definitions/disruptions.DisruptionResponse"
+                "postalCode": {
+                    "type": "string"
                 },
-                "matched_route_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                "streetName": {
+                    "type": "string"
                 },
-                "matched_stop_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "transit_impact": {
+                "streetNumber": {
                     "type": "string"
                 }
             }
         },
-        "disruptions.SecurityTrafficAlertInput": {
+        "disruptions.RoadClosureInput": {
             "type": "object",
             "properties": {
+                "address": {
+                    "$ref": "#/definitions/disruptions.RoadClosureAddress"
+                },
                 "affected_area": {
                     "type": "string"
                 },
@@ -4224,9 +3950,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                },
-                "alert_type": {
-                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -4255,11 +3978,19 @@ const docTemplate = `{
                         "type": "integer"
                     }
                 },
+                "source_service": {
+                    "type": "string"
+                },
                 "start_time": {
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "scheduled",
+                        "active",
+                        "resolved"
+                    ]
                 },
                 "stop_ids": {
                     "type": "array",
@@ -4277,7 +4008,14 @@ const docTemplate = `{
                     }
                 },
                 "type": {
-                    "type": "string"
+                    "type": "string",
+                    "default": "road_closure",
+                    "enum": [
+                        "road_closure"
+                    ]
+                },
+                "valid-until": {
+                    "type": "integer"
                 },
                 "vehicle_ids": {
                     "type": "array",
@@ -4371,7 +4109,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "scheduled",
+                        "active",
+                        "resolved"
+                    ]
                 },
                 "stop_ids": {
                     "type": "array",
@@ -4389,81 +4132,18 @@ const docTemplate = `{
                     }
                 },
                 "type": {
-                    "type": "string"
-                },
-                "vehicle_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                }
-            }
-        },
-        "disruptions.UtilitiesNoticeInput": {
-            "type": "object",
-            "properties": {
-                "affected_area": {
-                    "type": "string"
-                },
-                "affected_segments": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "external_id": {
-                    "type": "string"
-                },
-                "external_reference": {
-                    "type": "string"
-                },
-                "latitude": {
-                    "type": "number"
-                },
-                "longitude": {
-                    "type": "number"
-                },
-                "notice_type": {
-                    "type": "string"
-                },
-                "radius_meters": {
-                    "type": "number"
-                },
-                "route_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "stop_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "title": {
-                    "type": "string"
-                },
-                "trip_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "type": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "delay",
+                        "detour",
+                        "cancellation",
+                        "stop_closure",
+                        "road_closure",
+                        "construction",
+                        "emergency",
+                        "traffic_restriction",
+                        "accessibility"
+                    ]
                 },
                 "vehicle_ids": {
                     "type": "array",
@@ -5233,6 +4913,14 @@ const docTemplate = `{
                 }
             }
         }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Registration Service service-account JWT formatted as \"Bearer \u003ctoken\u003e\" (SH-S07).",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
     }
 }`
 
@@ -5243,7 +4931,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Public Transport Service API",
-	Description:      "Public resident schedules and cookie-authenticated transit administration. Mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me.",
+	Description:      "Public resident schedules, cookie-authenticated transit administration, and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; POST /api/transport/v1/road-closures and GET /api/transport/v1/integrations/service-status also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

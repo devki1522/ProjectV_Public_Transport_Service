@@ -19,7 +19,7 @@ func clearAuthEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"PORT", "API_VERSION", "DB_MAX_IDLE_CONNS", "DB_MAX_OPEN_CONNS", "DB_CONN_MAX_LIFETIME",
-		"APP_ENV", "AUTH_PROVIDER", "AUTH_REQUIRED_ROLE", "AUTH_SESSION_COOKIE",
+		"APP_ENV", "AUTH_PROVIDER", "AUTH_REQUIRED_ROLE", "AUTH_INTEGRATION_ROLES", "AUTH_SESSION_COOKIE",
 		"AUTH_COOKIE_SECURE", "AUTH_TRUSTED_ORIGINS", "AUTH_TRUSTED_PROXY",
 		"MOCK_JWT_ISSUER", "MOCK_JWT_AUDIENCE", "MOCK_JWT_SECRET",
 		"MOCK_ADMIN_PASSWORD",
@@ -69,12 +69,13 @@ func TestLoadMockDevelopmentDefaults(t *testing.T) {
 			DSN: testDSN, MaxIdleConns: 5, MaxOpenCons: 20, ConnMaxLifetime: time.Hour,
 		},
 		Auth: AuthConfig{
-			Provider:       AuthProviderMock,
-			RequiredRole:   "TransitAdministrator",
-			SessionCookie:  "transit_session",
-			CookieSecure:   false,
-			TrustedOrigins: []string{"http://localhost:3000"},
-			TrustedProxy:   false,
+			Provider:         AuthProviderMock,
+			RequiredRole:     "TransitAdministrator",
+			IntegrationRoles: DefaultIntegrationRoles(),
+			SessionCookie:    "transit_session",
+			CookieSecure:     false,
+			TrustedOrigins:   []string{"http://localhost:3000"},
+			TrustedProxy:     false,
 			JWTTrust: JWTTrustConfig{
 				Issuer:   "transit-dev",
 				Audience: "transit-api",
@@ -520,6 +521,72 @@ func TestLoadBudgetSettings(t *testing.T) {
 					t.Fatalf("expected error for %s=%q", tc.key, tc.value)
 				}
 			})
+		}
+	})
+}
+
+func TestLoadIntegrationRoles(t *testing.T) {
+	t.Run("default roles allow service roles and exclude User and frontline officers", func(t *testing.T) {
+		setRegistrationProdEnv(t)
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := DefaultIntegrationRoles()
+		if !reflect.DeepEqual(got.Auth.IntegrationRoles, want) {
+			t.Fatalf("IntegrationRoles = %v, want %v", got.Auth.IntegrationRoles, want)
+		}
+		for _, disallowed := range []string{"User", "Police Officer", "Sergeant", "Police Chief"} {
+			for _, role := range got.Auth.IntegrationRoles {
+				if role == disallowed {
+					t.Fatalf("disallowed role %q present in default IntegrationRoles", disallowed)
+				}
+			}
+		}
+	})
+
+	t.Run("custom AUTH_REQUIRED_ROLE is appended when AUTH_INTEGRATION_ROLES is unset", func(t *testing.T) {
+		setMockDevEnv(t)
+		t.Setenv("AUTH_REQUIRED_ROLE", "CustomTransitAdmin")
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, role := range got.Auth.IntegrationRoles {
+			if role == "CustomTransitAdmin" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected CustomTransitAdmin in IntegrationRoles, got %v", got.Auth.IntegrationRoles)
+		}
+	})
+
+	t.Run("explicit AUTH_INTEGRATION_ROLES trims outer whitespace, preserves internal spaces, and deduplicates", func(t *testing.T) {
+		setRegistrationProdEnv(t)
+		t.Setenv("AUTH_INTEGRATION_ROLES", " Dispatcher , Security Administrator , Dispatcher ,, Administrator ")
+		got, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"Dispatcher", "Security Administrator", "Administrator"}
+		if !reflect.DeepEqual(got.Auth.IntegrationRoles, want) {
+			t.Fatalf("IntegrationRoles = %v, want %v", got.Auth.IntegrationRoles, want)
+		}
+	})
+
+	t.Run("rejects empty or NUL AUTH_INTEGRATION_ROLES when set", func(t *testing.T) {
+		for _, bad := range []string{" , ", "   "} {
+			setRegistrationProdEnv(t)
+			t.Setenv("AUTH_INTEGRATION_ROLES", bad)
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_INTEGRATION_ROLES") {
+				t.Fatalf("AUTH_INTEGRATION_ROLES=%q got err=%v", bad, err)
+			}
+		}
+		if _, err := parseIntegrationRoles("Admin\x00Role", "TransitAdministrator"); err == nil || !strings.Contains(err.Error(), "AUTH_INTEGRATION_ROLES") {
+			t.Fatalf("expected NUL error, got err=%v", err)
 		}
 	})
 }

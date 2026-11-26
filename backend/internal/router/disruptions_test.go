@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -35,11 +36,10 @@ type fakeDisruptionService struct {
 	updateInput         disruptions.UpdateDisruptionInput
 	updateResult        disruptions.DisruptionResponse
 	updateErr           error
-	utilitiesInput      disruptions.UtilitiesNoticeInput
-	emergencyInput      disruptions.EmergencyIncidentInput
-	securityInput       disruptions.SecurityTrafficAlertInput
-	externalResult      disruptions.ExternalNoticeResult
-	externalErr         error
+	roadClosureInput    disruptions.RoadClosureInput
+	roadClosureSource   string
+	roadClosureResult   disruptions.RoadClosureResult
+	roadClosureErr      error
 	affectedResult      disruptions.AffectedServicesSummary
 	affectedErr         error
 	serviceStatusResult disruptions.ServiceStatusResponse
@@ -82,22 +82,11 @@ func (f *fakeDisruptionService) Update(_ context.Context, id int, input disrupti
 	return f.updateResult, f.updateErr
 }
 
-func (f *fakeDisruptionService) IngestUtilitiesNotice(_ context.Context, input disruptions.UtilitiesNoticeInput) (disruptions.ExternalNoticeResult, error) {
-	f.called = "utilities"
-	f.utilitiesInput = input
-	return f.externalResult, f.externalErr
-}
-
-func (f *fakeDisruptionService) IngestEmergencyIncident(_ context.Context, input disruptions.EmergencyIncidentInput) (disruptions.ExternalNoticeResult, error) {
-	f.called = "emergency"
-	f.emergencyInput = input
-	return f.externalResult, f.externalErr
-}
-
-func (f *fakeDisruptionService) IngestSecurityTrafficAlert(_ context.Context, input disruptions.SecurityTrafficAlertInput) (disruptions.ExternalNoticeResult, error) {
-	f.called = "security"
-	f.securityInput = input
-	return f.externalResult, f.externalErr
+func (f *fakeDisruptionService) CreateRoadClosure(_ context.Context, input disruptions.RoadClosureInput, defaultSource string) (disruptions.RoadClosureResult, error) {
+	f.called = "create_road_closure"
+	f.roadClosureInput = input
+	f.roadClosureSource = defaultSource
+	return f.roadClosureResult, f.roadClosureErr
 }
 
 func (f *fakeDisruptionService) AffectedServices(_ context.Context) (disruptions.AffectedServicesSummary, error) {
@@ -159,7 +148,7 @@ func newTestDisruptionEnv(t *testing.T, svc handlers.DisruptionService) (*testAu
 	mux := chi.NewRouter()
 	mux.Route(router.APIBasePath(""), func(api chi.Router) {
 		router.RegisterAuthRoutes(api, authHandler, authMW)
-		router.RegisterDisruptionRoutes(api, handler, authMW, csrf, "TransitAdministrator")
+		router.RegisterDisruptionRoutes(api, handler, authMW, csrf, "TransitAdministrator", config.DefaultIntegrationRoles())
 	})
 
 	fakeSvc, _ := svc.(*fakeDisruptionService)
@@ -345,9 +334,7 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 	}{
 		{http.MethodPost, "/api/transport/v1/disruptions"},
 		{http.MethodPatch, "/api/transport/v1/disruptions/1"},
-		{http.MethodPost, "/api/transport/v1/integrations/utilities/notices"},
-		{http.MethodPost, "/api/transport/v1/integrations/emergency/incidents"},
-		{http.MethodPost, "/api/transport/v1/integrations/security/traffic-alerts"},
+		{http.MethodPost, "/api/transport/v1/road-closures"},
 		{http.MethodGet, "/api/transport/v1/integrations/service-status"},
 	} {
 		rec := authedRequest(unconfiguredMux, tc.method, tc.path, `{}`, nil, "")
@@ -376,21 +363,18 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 			StartTime:     now,
 			ReceivedAt:    now,
 		},
-		externalResult: disruptions.ExternalNoticeResult{
+		roadClosureResult: disruptions.RoadClosureResult{
 			Created: true,
 			Disruption: disruptions.DisruptionResponse{
 				ID:                88,
 				Type:              disruptions.TypeRoadClosure,
 				Title:             "Watermain Break",
 				Status:            disruptions.StatusActive,
-				SourceService:     disruptions.SourceUtilities,
+				SourceService:     disruptions.SourceTransitAdmin,
 				ExternalReference: &extID,
 				StartTime:         now,
 				ReceivedAt:        now,
 			},
-			MatchedRouteIDs: []int{7},
-			MatchedStopIDs:  []int{3},
-			TransitImpact:   "high: 1 route(s), 1 stop(s) affected",
 		},
 		serviceStatusResult: disruptions.ServiceStatusResponse{
 			GeneratedAt:           now,
@@ -421,9 +405,7 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 	}{
 		{http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"Detour"}`},
 		{http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved"}`},
-		{http.MethodPost, "/api/transport/v1/integrations/utilities/notices", `{"title":"Watermain Break"}`},
-		{http.MethodPost, "/api/transport/v1/integrations/emergency/incidents", `{"title":"Collision"}`},
-		{http.MethodPost, "/api/transport/v1/integrations/security/traffic-alerts", `{"title":"Police Closure"}`},
+		{http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Watermain Break"}`},
 		{http.MethodGet, "/api/transport/v1/integrations/service-status", ""},
 	} {
 		unauthRec := authedRequest(env.mux, tc.method, tc.path, tc.body, nil, "")
@@ -460,25 +442,17 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 		t.Fatalf("PATCH /api/disruptions/42 failed: code=%d input=%+v body=%s", patchRec.Code, svc.updateInput, patchRec.Body.String())
 	}
 
-	// External integrations: 201 on Created=true, 200 on Created=false (idempotent upsert).
-	for _, feed := range []struct {
-		path string
-		body string
-	}{
-		{"/api/transport/v1/integrations/utilities/notices", `{"external_id":"UTIL-101","notice_type":"road_closure","title":"Watermain Break","latitude":43.45,"longitude":-80.49,"radius_meters":400}`},
-		{"/api/transport/v1/integrations/emergency/incidents", `{"external_id":"EMG-202","incident_type":"emergency","severity":"high","title":"Major Collision"}`},
-		{"/api/transport/v1/integrations/security/traffic-alerts", `{"external_id":"SEC-303","alert_type":"traffic_restriction","title":"VIP Escort"}`},
-	} {
-		svc.externalResult.Created = true
-		rec201 := authedRequest(env.mux, http.MethodPost, feed.path, feed.body, adminCookie, adminCSRF)
-		if rec201.Code != http.StatusCreated {
-			t.Fatalf("POST %s (new) = %d, want 201: %s", feed.path, rec201.Code, rec201.Body.String())
-		}
-		svc.externalResult.Created = false
-		rec200 := authedRequest(env.mux, http.MethodPost, feed.path, feed.body, adminCookie, adminCSRF)
-		if rec200.Code != http.StatusOK {
-			t.Fatalf("POST %s (upsert) = %d, want 200: %s", feed.path, rec200.Code, rec200.Body.String())
-		}
+	// Road closure POST via admin session: 201 on Created=true, 200 on Created=false (idempotent upsert).
+	svc.roadClosureResult.Created = true
+	rcBody := `{"external_id":"UTIL-101","title":"Watermain Break","latitude":43.45,"longitude":-80.49,"radius_meters":400}`
+	rec201 := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", rcBody, adminCookie, adminCSRF)
+	if rec201.Code != http.StatusCreated {
+		t.Fatalf("POST /road-closures (new) = %d, want 201: %s", rec201.Code, rec201.Body.String())
+	}
+	svc.roadClosureResult.Created = false
+	rec200 := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", rcBody, adminCookie, adminCSRF)
+	if rec200.Code != http.StatusOK {
+		t.Fatalf("POST /road-closures (upsert) = %d, want 200: %s", rec200.Code, rec200.Body.String())
 	}
 
 	if !strings.Contains(env.auditBuf.String(), `"admin_disruption_operation"`) {
@@ -510,11 +484,15 @@ func TestDisruptionProtectedEndpointsEnforceFailClosedAuthRoleCSRFAndAudit(t *te
 func TestRoadClosuresGetAndPost(t *testing.T) {
 	svc := &fakeDisruptionService{
 		listResult: []disruptions.DisruptionResponse{{ID: 10, Type: disruptions.TypeRoadClosure, Title: "King St Closure", Status: "active"}},
-		createResult: disruptions.DisruptionResponse{
-			ID:     11,
-			Type:   disruptions.TypeRoadClosure,
-			Title:  "Weber St Closure",
-			Status: "active",
+		roadClosureResult: disruptions.RoadClosureResult{
+			Created: true,
+			Disruption: disruptions.DisruptionResponse{
+				ID:            11,
+				Type:          disruptions.TypeRoadClosure,
+				Title:         "Road closure: 45 Weber St E, Kitchener, N2H 1C4",
+				Status:        "active",
+				SourceService: disruptions.SourceTransitAdmin,
+			},
 		},
 	}
 	env, _ := newTestDisruptionEnv(t, svc)
@@ -538,19 +516,284 @@ func TestRoadClosuresGetAndPost(t *testing.T) {
 	}
 
 	adminCookie, adminCSRF := loginAs(t, env.mux, "transit.admin", routerAdminPass)
-	postRec := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"title":"Weber St Closure","affected_area":"Weber St"}`, adminCookie, adminCSRF)
+	postRec := authedRequest(
+		env.mux,
+		http.MethodPost,
+		"/api/transport/v1/road-closures",
+		`{"address":{"streetNumber":45,"streetName":"Weber St E","city":"Kitchener","postalCode":"N2H 1C4"},"valid-until":3600}`,
+		adminCookie,
+		adminCSRF,
+	)
 	if postRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/transport/v1/road-closures = %d, want 201: %s", postRec.Code, postRec.Body.String())
 	}
-	if svc.createInput.Type != disruptions.TypeRoadClosure {
-		t.Fatalf("expected type road_closure, got %q", svc.createInput.Type)
+	if svc.called != "create_road_closure" || svc.roadClosureInput.Address == nil || svc.roadClosureInput.Address.StreetNumber != "45" || svc.roadClosureInput.ValidUntil == nil || *svc.roadClosureInput.ValidUntil != 3600 {
+		t.Fatalf("unexpected roadClosureInput: %+v", svc.roadClosureInput)
+	}
+	if svc.roadClosureSource != disruptions.SourceTransitAdmin {
+		t.Fatalf("roadClosureSource = %q, want %q", svc.roadClosureSource, disruptions.SourceTransitAdmin)
 	}
 	if loc := postRec.Header().Get("Location"); loc != "/api/transport/v1/road-closures/11" {
 		t.Fatalf("Location = %q, want /api/transport/v1/road-closures/11", loc)
 	}
 
-	badTypePost := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"type":"delay","title":"Not a closure"}`, adminCookie, adminCSRF)
-	if badTypePost.Code != http.StatusBadRequest {
-		t.Fatalf("POST /road-closures with non-road_closure type = %d, want 400", badTypePost.Code)
+	// Idempotent upsert returns 200 OK.
+	svc.roadClosureResult.Created = false
+	upsertRec := authedRequest(
+		env.mux,
+		http.MethodPost,
+		"/api/transport/v1/road-closures",
+		`{"external_id":"RC-11","address":{"streetNumber":"45","streetName":"Weber St E","city":"Kitchener","postalCode":"N2H 1C4"},"valid-until":7200}`,
+		adminCookie,
+		adminCSRF,
+	)
+	if upsertRec.Code != http.StatusOK {
+		t.Fatalf("upsert POST /api/transport/v1/road-closures = %d, want 200: %s", upsertRec.Code, upsertRec.Body.String())
+	}
+
+	// Invalid address field type returns 400.
+	badAddr := authedRequest(env.mux, http.MethodPost, "/api/transport/v1/road-closures", `{"address":{"streetNumber":-1,"streetName":"Weber St","city":"Kitchener"}}`, adminCookie, adminCSRF)
+	if badAddr.Code != http.StatusBadRequest {
+		t.Fatalf("POST /road-closures with negative streetNumber = %d, want 400", badAddr.Code)
+	}
+}
+
+func bearerRequest(mux http.Handler, method, path, body, authHeader string, cookie *http.Cookie, csrfToken string) *httptest.ResponseRecorder {
+	var bodyReader *strings.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	} else {
+		bodyReader = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, path, bodyReader)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+		req.Header.Set("Origin", routerTestOrigin)
+	}
+	if csrfToken != "" {
+		req.Header.Set(auth.CSRFHeaderName, csrfToken)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestIntegrationEndpointsBearerJWTAuth(t *testing.T) {
+	now := time.Date(2026, 11, 25, 20, 0, 0, 0, time.UTC)
+	svc := &fakeDisruptionService{
+		roadClosureResult: disruptions.RoadClosureResult{
+			Created: true,
+			Disruption: disruptions.DisruptionResponse{
+				ID:            99,
+				Type:          disruptions.TypeRoadClosure,
+				Title:         "Road closure: 123 King St N, Waterloo, N2J 2X7",
+				Status:        disruptions.StatusActive,
+				SourceService: "emergency.service",
+				StartTime:     now,
+				ReceivedAt:    now,
+			},
+		},
+		serviceStatusResult: disruptions.ServiceStatusResponse{
+			GeneratedAt:       now,
+			OverallStatus:     disruptions.OverallStatusNormal,
+			ActiveDisruptions: []disruptions.DisruptionResponse{},
+			Detours:           []disruptions.DisruptionResponse{},
+			AffectedRoutes:    []disruptions.AffectedRouteSummary{},
+			AffectedStops:     []disruptions.AffectedStopSummary{},
+			AffectedTrips:     []disruptions.AffectedTripSummary{},
+			AffectedVehicles:  []disruptions.AffectedVehicleSummary{},
+			AffectedSegments:  []disruptions.AffectedSegmentSummary{},
+		},
+	}
+	env, _ := newTestDisruptionEnv(t, svc)
+
+	signJWT := func(secret, sub, username string, role any, exp time.Time) string {
+		claims := jwt.MapClaims{
+			"sub": sub,
+			"iss": routerTestIssuer,
+			"aud": routerTestAudience,
+			"exp": exp.Unix(),
+		}
+		if username != "" {
+			claims["unique_name"] = username
+		}
+		if role != nil {
+			claims["role"] = role
+		}
+		tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+
+	roadClosurePayload := `{"address":{"streetNumber":123,"streetName":"King St N","city":"Waterloo","postalCode":"N2J 2X7"},"valid-until":7200}`
+	endpoints := []struct {
+		method     string
+		path       string
+		body       string
+		wantStatus int
+	}{
+		{http.MethodGet, "/api/transport/v1/integrations/service-status", "", http.StatusOK},
+		{http.MethodPost, "/api/transport/v1/road-closures", roadClosurePayload, http.StatusCreated},
+	}
+
+	// 1. Every allowed integration role succeeds on POST /road-closures and GET /integrations/service-status without cookie, Origin, or CSRF.
+	for _, role := range config.DefaultIntegrationRoles() {
+		sub := "svc-" + strings.ReplaceAll(strings.ToLower(role), " ", "-")
+		username := "caller-" + strings.ReplaceAll(strings.ToLower(role), " ", "-")
+		token := signJWT(routerTestSecret, sub, username, role, time.Now().Add(15*time.Minute))
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, "Bearer "+token, nil, "")
+			if rec.Code != ep.wantStatus {
+				t.Fatalf("role=%q %s %s = %d, want %d (body=%s)", role, ep.method, ep.path, rec.Code, ep.wantStatus, rec.Body.String())
+			}
+			if ep.method == http.MethodPost && svc.roadClosureSource != username {
+				t.Fatalf("roadClosureSource = %q, want %q", svc.roadClosureSource, username)
+			}
+		}
+		if !strings.Contains(env.auditBuf.String(), `"subject":"`+sub+`"`) {
+			t.Fatalf("expected audit log subject %q, got %s", sub, env.auditBuf.String())
+		}
+	}
+
+	// 2. Disallowed roles (User, Police Officer) receive 403.
+	for _, disallowed := range []string{"User", "Police Officer"} {
+		token := signJWT(routerTestSecret, "blocked-sub", "blocked", disallowed, time.Now().Add(15*time.Minute))
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, "Bearer "+token, nil, "")
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("disallowed role=%q %s %s = %d, want 403", disallowed, ep.method, ep.path, rec.Code)
+			}
+		}
+	}
+
+	// 3. Expired, wrong-secret, or malformed Bearer headers return 401 even if paired with valid admin cookie + CSRF.
+	adminCookie, adminCSRF := loginAs(t, env.mux, "transit.admin", routerAdminPass)
+	expired := signJWT(routerTestSecret, "svc", "svc", "Administrator", time.Now().Add(-time.Minute))
+	wrongSecret := signJWT("wrong-secret-0123456789abcdef0123", "svc", "svc", "Administrator", time.Now().Add(15*time.Minute))
+	for _, badHeader := range []string{
+		"Bearer " + expired,
+		"Bearer " + wrongSecret,
+		"Basic dXNlcjpwYXNz",
+		"Bearer",
+	} {
+		for _, ep := range endpoints {
+			rec := bearerRequest(env.mux, ep.method, ep.path, ep.body, badHeader, adminCookie, adminCSRF)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("badHeader=%q %s %s = %d, want 401", badHeader, ep.method, ep.path, rec.Code)
+			}
+		}
+	}
+
+	// 4. Non-integration admin disruption mutations remain strictly cookie-authenticated (reject Bearer JWT with 401).
+	adminBearer := signJWT(routerTestSecret, "svc-admin", "svc-admin", "TransitAdministrator", time.Now().Add(15*time.Minute))
+	for _, adminOnly := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodPost, "/api/transport/v1/disruptions", `{"type":"detour","title":"Test"}`},
+		{http.MethodPatch, "/api/transport/v1/disruptions/42", `{"status":"resolved"}`},
+	} {
+		rec := bearerRequest(env.mux, adminOnly.method, adminOnly.path, adminOnly.body, "Bearer "+adminBearer, nil, "")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("non-integration %s %s with Bearer JWT = %d, want 401", adminOnly.method, adminOnly.path, rec.Code)
+		}
+	}
+
+	// 5. Removed per-group endpoints return 404.
+	for _, removedPath := range []string{
+		"/api/transport/v1/integrations/utilities/notices",
+		"/api/transport/v1/integrations/emergency/incidents",
+		"/api/transport/v1/integrations/security/traffic-alerts",
+	} {
+		rec := bearerRequest(env.mux, http.MethodPost, removedPath, `{"title":"Removed"}`, "Bearer "+adminBearer, nil, "")
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("removed endpoint %s returned %d, want 404", removedPath, rec.Code)
+		}
+	}
+
+	// 6. End-to-end RegistrationProvider (/api/Login/validate) via NewMiddlewareWithBearerValidator on POST /road-closures.
+	const claimTypeRole = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+	const claimTypeName = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+	const claimTypeSub = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+
+	regServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/Login/validate" {
+			t.Fatalf("unexpected upstream request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Header.Get("Authorization") {
+		case "Bearer emg-dispatcher-token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": claimTypeSub, "value": "emg-svc-id"},
+					{"type": claimTypeName, "value": "emergency.service"},
+					{"type": claimTypeRole, "value": "Dispatcher"},
+				},
+			})
+		case "Bearer regular-user-token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": true,
+				"claims": []map[string]string{
+					{"type": claimTypeSub, "value": "resident-1"},
+					{"type": claimTypeName, "value": "resident"},
+					{"type": claimTypeRole, "value": "User"},
+				},
+			})
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"authenticated": false,
+				"claims":        []map[string]string{},
+			})
+		}
+	}))
+	defer regServer.Close()
+
+	regTrust := config.JWTTrustConfig{
+		Issuer:   "public-transport-local",
+		Audience: "public-transport-api",
+		Secret:   []byte(routerTestSecret),
+	}
+	regProvider, err := auth.NewRegistrationProvider(config.RegistrationAuthConfig{
+		ServiceURL:       regServer.URL,
+		UpstreamIssuer:   "CmRegistrationService",
+		UpstreamAudience: "CmRegistrationClients",
+		LocalTrust:       regTrust,
+		AdminUsers:       []string{"transit.admin"},
+		RequiredRole:     "TransitAdministrator",
+	}, regServer.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	localValidator, err := auth.NewJWTValidator(regTrust, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	regMW := auth.NewMiddlewareWithBearerValidator(env.sessions, localValidator, regProvider, "transit_session", false)
+	regMux := chi.NewRouter()
+	regMux.Route(router.APIBasePath(""), func(api chi.Router) {
+		router.RegisterDisruptionRoutes(api, handlers.NewDisruptionHandler(svc), regMW, env.csrf, "TransitAdministrator", config.DefaultIntegrationRoles())
+	})
+
+	rcPath := "/api/transport/v1/road-closures"
+	if rec := bearerRequest(regMux, http.MethodPost, rcPath, roadClosurePayload, "Bearer emg-dispatcher-token", nil, ""); rec.Code != http.StatusCreated {
+		t.Fatalf("RegistrationProvider Dispatcher token = %d, want 201 (%s)", rec.Code, rec.Body.String())
+	} else if svc.roadClosureSource != "emergency.service" {
+		t.Fatalf("roadClosureSource = %q, want emergency.service", svc.roadClosureSource)
+	}
+	if rec := bearerRequest(regMux, http.MethodPost, rcPath, roadClosurePayload, "Bearer regular-user-token", nil, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("RegistrationProvider User token = %d, want 403", rec.Code)
+	}
+	if rec := bearerRequest(regMux, http.MethodPost, rcPath, roadClosurePayload, "Bearer invalid-token", nil, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("RegistrationProvider unauthenticated token = %d, want 401", rec.Code)
 	}
 }

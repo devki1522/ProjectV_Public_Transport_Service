@@ -75,6 +75,9 @@ real environment, and tell the Public Transport team if any differ:
 | `STAFF_HR_SERVICE_URL` | `https://cmes-staffhr-api-gtofz7g3n2z56.azurewebsites.net` |
 | `BUDGET_SERVICE_URL` | `https://financeapi20261125000202-g9ctbdc4axdscbet.westus-01.azurewebsites.net` |
 
+> [!NOTE]
+> **Service-to-service integrations (`SH-S07`):** No new secrets are needed in Azure. Calls to `POST /api/transport/v1/road-closures` and `GET /api/transport/v1/integrations/service-status` with `Authorization: Bearer <token>` are verified over HTTPS against `{REGISTRATION_SERVICE_URL}/api/Login/validate` without cookies or CSRF. Optionally set `AUTH_INTEGRATION_ROLES` in App settings to override the default allowed roles (`TransitAdministrator,Administrator,Security Administrator,Dispatcher,Manager,ServiceAccount,Service`).
+
 ## 3. Deploy the new compose file
 
 1. Pull the latest `main` (or ask the Public Transport team for the updated

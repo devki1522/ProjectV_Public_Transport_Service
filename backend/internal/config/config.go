@@ -86,15 +86,31 @@ type RegistrationAuthConfig struct {
 	RequiredRole     string
 }
 type AuthConfig struct {
-	Provider       string
-	RequiredRole   string
-	SessionCookie  string
-	CookieSecure   bool
-	TrustedOrigins []string
-	TrustedProxy   bool
-	JWTTrust       JWTTrustConfig
-	Mock           MockAuthConfig
-	Registration   RegistrationAuthConfig
+	Provider         string
+	RequiredRole     string
+	IntegrationRoles []string
+	SessionCookie    string
+	CookieSecure     bool
+	TrustedOrigins   []string
+	TrustedProxy     bool
+	JWTTrust         JWTTrustConfig
+	Mock             MockAuthConfig
+	Registration     RegistrationAuthConfig
+}
+
+// DefaultIntegrationRoles returns the Registration Service roles allowed to authenticate
+// with Bearer JWTs on /integrations/* endpoints (SH-S07).
+// Resident ("User") and individual frontline officer roles are excluded.
+func DefaultIntegrationRoles() []string {
+	return []string{
+		"TransitAdministrator",
+		"Administrator",
+		"Security Administrator",
+		"Dispatcher",
+		"Manager",
+		"ServiceAccount",
+		"Service",
+	}
 }
 
 func Load() (Config, error) {
@@ -252,6 +268,10 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 	if requiredRole == "" {
 		return AuthConfig{}, fmt.Errorf("AUTH_REQUIRED_ROLE must not be empty")
 	}
+	integrationRoles, err := parseIntegrationRoles(os.Getenv("AUTH_INTEGRATION_ROLES"), requiredRole)
+	if err != nil {
+		return AuthConfig{}, err
+	}
 	sessionCookie := strings.TrimSpace(getEnv("AUTH_SESSION_COOKIE", "transit_session"))
 	if sessionCookie == "" {
 		return AuthConfig{}, fmt.Errorf("AUTH_SESSION_COOKIE must not be empty")
@@ -275,7 +295,7 @@ func loadAuthConfig(env string) (AuthConfig, error) {
 	if err != nil {
 		return AuthConfig{}, err
 	}
-	cfg := AuthConfig{Provider: provider, RequiredRole: requiredRole, SessionCookie: sessionCookie, CookieSecure: cookieSecure, TrustedOrigins: trustedOrigins, TrustedProxy: trustedProxy}
+	cfg := AuthConfig{Provider: provider, RequiredRole: requiredRole, IntegrationRoles: integrationRoles, SessionCookie: sessionCookie, CookieSecure: cookieSecure, TrustedOrigins: trustedOrigins, TrustedProxy: trustedProxy}
 	switch provider {
 	case AuthProviderMock:
 		// Mock mode is development-only (enforced above), so every setting has a
@@ -339,6 +359,45 @@ func hasAnyMockSetting() bool {
 		}
 	}
 	return false
+}
+func parseIntegrationRoles(raw, requiredRole string) ([]string, error) {
+	if raw == "" {
+		roles := DefaultIntegrationRoles()
+		if requiredRole != "" {
+			found := false
+			for _, role := range roles {
+				if role == requiredRole {
+					found = true
+					break
+				}
+			}
+			if !found {
+				roles = append(roles, requiredRole)
+			}
+		}
+		return roles, nil
+	}
+
+	parts := strings.Split(raw, ",")
+	roles := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		if strings.ContainsRune(part, '\x00') {
+			return nil, fmt.Errorf("AUTH_INTEGRATION_ROLES contains invalid NUL byte")
+		}
+		role := strings.TrimSpace(part)
+		if role == "" {
+			continue
+		}
+		if _, exists := seen[role]; !exists {
+			seen[role] = struct{}{}
+			roles = append(roles, role)
+		}
+	}
+	if len(roles) == 0 {
+		return nil, fmt.Errorf("AUTH_INTEGRATION_ROLES must contain at least one role")
+	}
+	return roles, nil
 }
 func parseBoolEnv(key string, fallback bool) (bool, error) {
 	raw := strings.TrimSpace(os.Getenv(key))

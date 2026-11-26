@@ -197,24 +197,8 @@ export function updateDisruption(id, input, csrfToken) {
   })
 }
 
-export function submitUtilitiesNotice(input, csrfToken) {
-  return adminRequest('/integrations/utilities/notices', {
-    method: 'POST',
-    body: input,
-    csrfToken,
-  })
-}
-
-export function submitEmergencyIncident(input, csrfToken) {
-  return adminRequest('/integrations/emergency/incidents', {
-    method: 'POST',
-    body: input,
-    csrfToken,
-  })
-}
-
-export function submitSecurityTrafficAlert(input, csrfToken) {
-  return adminRequest('/integrations/security/traffic-alerts', {
+export function submitRoadClosure(input, csrfToken) {
+  return adminRequest('/road-closures', {
     method: 'POST',
     body: input,
     csrfToken,

@@ -41,10 +41,11 @@ func TestBuildRouterSelectsConfiguredProvider(t *testing.T) {
 	mockCfg := config.Config{
 		Env: config.EnvDevelopment,
 		Auth: config.AuthConfig{
-			Provider:       config.AuthProviderMock,
-			RequiredRole:   "TransitAdministrator",
-			SessionCookie:  "transit_session",
-			TrustedOrigins: []string{"http://localhost:3000"},
+			Provider:         config.AuthProviderMock,
+			RequiredRole:     "TransitAdministrator",
+			IntegrationRoles: config.DefaultIntegrationRoles(),
+			SessionCookie:    "transit_session",
+			TrustedOrigins:   []string{"http://localhost:3000"},
 			JWTTrust: config.JWTTrustConfig{
 				Issuer:   "transit-dev",
 				Audience: "transit-api",
@@ -62,10 +63,16 @@ func TestBuildRouterSelectsConfiguredProvider(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Public health remains reachable and admin health requires authentication.
+	// Public health remains reachable and admin/integration routes require authentication.
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/transport/v1/admin/health", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("GET /api/transport/v1/admin/health status = %d, want 401", rec.Code)
+	}
+
+	intRec := httptest.NewRecorder()
+	h.ServeHTTP(intRec, httptest.NewRequest(http.MethodGet, "/api/transport/v1/integrations/service-status", nil))
+	if intRec.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /api/transport/v1/integrations/service-status status = %d, want 401", intRec.Code)
 	}
 }

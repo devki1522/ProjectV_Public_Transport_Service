@@ -38,10 +38,8 @@ authorization. The frontend never receives the JWT or raw session identifier.
 | `POST /api/admin/vehicles/simulator/reset` | Session + `TransitAdministrator` + CSRF | Clears simulated vehicle locations and resets simulator progress |
 | `POST /api/disruptions` | Session + `TransitAdministrator` + CSRF | Creates a transit disruption (`201`) linking affected routes, stops, trips, vehicles, and segments; logs structured audit event |
 | `PATCH /api/disruptions/{id}` | Session + `TransitAdministrator` + CSRF | Updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200`); logs structured audit event |
-| `POST /api/integrations/utilities/notices` | Session + `TransitAdministrator` + CSRF | Ingests a Utilities road closure or construction notice (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
-| `POST /api/integrations/emergency/incidents` | Session + `TransitAdministrator` + CSRF | Ingests an Emergency Services incident or road restriction (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
-| `POST /api/integrations/security/traffic-alerts` | Session + `TransitAdministrator` + CSRF | Ingests a Security / Police traffic restriction or road closure (`201` created, `200` idempotent update by `external_id`), evaluates spatial/route impacts |
-| `GET /api/integrations/service-status` | Session + `TransitAdministrator` | Returns the enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
+| `POST /api/transport/v1/road-closures` | Bearer JWT (`SH-S07`) or Session + `TransitAdministrator` + CSRF | Creates or upserts a road closure (`201` created, `200` idempotent update by `external_id` / `external_reference`) from `SH-I06` `address` + `valid-until` (`uint64` seconds) and evaluates spatial/route impacts |
+| `GET /api/transport/v1/integrations/service-status` | Bearer JWT (`SH-S07`) or Session + `TransitAdministrator` | Returns the enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
 | `GET /api/transport/v1/admin/staff` | Session + `TransitAdministrator` | Queries CMES Staff/HR headcounts (`active_count`, `on_duty_count`, `vacancies_count`) and department directory (default `PTR`) |
 | `POST` / `PUT /api/transport/v1/admin/staff/employees` | Session + `TransitAdministrator` + CSRF | Validates and forwards employee onboarding to CMES Staff/HR `POST /staff` (`201`) and logs structured audit event |
 
@@ -62,6 +60,7 @@ upstream response, `503` provider unavailable, and `504` upstream timeout.
 
 - **Mock mode** (`APP_ENV=development`, `AUTH_PROVIDER=mock`, both defaults for local development): Authenticates `transit.admin` (`TransitAdministrator`) against `MOCK_ADMIN_PASSWORD` (default `Test!123`) and signs real 15-minute `HS256` JWTs. The signing key comes from `MOCK_JWT_SECRET` (>= 32 bytes) when set, and is otherwise generated randomly at startup. Mock mode and `MOCK_*` variables are rejected outside `APP_ENV=development`.
 - **Registration Service** (`AUTH_PROVIDER=registration`, default outside development): Posts credentials once (no retries, redirects rejected) to `{REGISTRATION_SERVICE_URL}/api/Login/authenticate` over HTTPS. Trusts identity from that direct response, checks the token's issuer, audience, username and expiry, and creates a session token using a generated local signing key. The external signature is not verified; tokens supplied by browsers are never accepted. Administrator access comes exclusively from the case-sensitive `AUTH_ADMIN_WHITELIST`, not upstream roles. No other team's signing key is needed.
+- **Service-to-service integrations (`SH-S07`)**: `POST /api/transport/v1/road-closures` and `GET /api/transport/v1/integrations/service-status` accept `Authorization: Bearer <token>` without a browser cookie, `Origin`, or `X-CSRF-Token` (browser admin UI sessions continue using cookie + CSRF; non-integration admin endpoints remain strictly cookie + CSRF only). In `AUTH_PROVIDER=registration`, Bearer tokens are verified over HTTPS via `POST {REGISTRATION_SERVICE_URL}/api/Login/validate`; in `AUTH_PROVIDER=mock`, tokens are verified locally by `JWTValidator`. Callers must carry an exact role from `AUTH_INTEGRATION_ROLES` (default: `TransitAdministrator`, `Administrator`, `Security Administrator`, `Dispatcher`, `Manager`, `ServiceAccount`, `Service`); resident `User` and frontline officer tokens (`Police Officer`, `Sergeant`, `Police Chief`) receive `403`. No API keys are used.
 - **External team dependency**: Inspected source (`CmRegistrationService`) seeds only `Administrator` and `User` roles. The Registration Service team must create and assign `TransitAdministrator` and provide production URL/issuer/audience/secret values before live integration verification.
 
 ### Resident schedules and departures
@@ -246,18 +245,17 @@ well as PT-NFR-005 through PT-NFR-008.
 | `GET /api/trips/{id}/status` | Public | `EntityOperationalStatus` (`entity_type="trip"`, derived `operational_status`, `active_disruptions` including parent-route disruptions; `404` if unknown trip) |
 | `POST /api/disruptions` | Admin + CSRF | Creates a disruption (`201 Created`) and links routes, stops (auto-resolving serving routes via `route_stops`), trips, vehicles, and segments |
 | `PATCH /api/disruptions/{id}` | Admin + CSRF | Partially updates disruption fields, lifecycle status (`scheduled`, `active`, `resolved`), and affected service links (`200 OK`) |
-| `POST /api/integrations/utilities/notices` | Admin + CSRF | Ingests Utilities notice (`source_service="utilities"`, types `road_closure` \| `construction`) with optional Haversine radius matching (`50`–`5000m`, default `400m`) |
-| `POST /api/integrations/emergency/incidents` | Admin + CSRF | Ingests Emergency Services incident (`source_service="emergency_services"`, types `emergency` \| `road_closure`) with severity and spatial matching |
-| `POST /api/integrations/security/traffic-alerts` | Admin + CSRF | Ingests Security / Police traffic alert (`source_service="security_police"`, types `traffic_restriction` \| `road_closure`) with spatial matching |
-| `GET /api/integrations/service-status` | Admin session | Authenticated enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
+| `GET /api/transport/v1/road-closures` | Public | All road closures filtered by optional `status`, `route_id`, `stop_id`, `trip_id`, `vehicle_id`, `source_service` |
+| `POST /api/transport/v1/road-closures` | Bearer JWT (`SH-S07`) or Admin + CSRF | Creates or upserts a road closure (`201 Created` / `200 OK` by `external_id` or `external_reference`) accepting `SH-I06` `address` (`{ streetNumber, streetName, city, postalCode }`) and `valid-until` (`uint64` seconds: duration from `start_time` or Unix epoch seconds) with optional spatial matching (`latitude`, `longitude`, `radius_meters`) |
+| `GET /api/transport/v1/integrations/service-status` | Bearer JWT (`SH-S07`) or Admin session | Authenticated enterprise service status and active disruption/detour snapshot (`200 ServiceStatusResponse`) |
 
-All external notices retain `source_service`, `external_reference`, and server
-`received_at` timestamps (PT-NFR-007), and upsert idempotently on
+All external road closures retain `source_service`, `external_reference`, and
+server `received_at` timestamps (PT-NFR-007), and upsert idempotently on
 `(source_service, external_reference)` (`201 Created` on insert, `200 OK` on
 update). Stop-level impacts automatically resolve serving active routes from
 `route_stops` and persist `(disruption_id, route_id, stop_id)` in
 `disruption_routes`, so `/api/journeys` (US 174) immediately routes around
-newly ingested closures, emergencies, and detours.
+newly ingested road closures and detours.
 
 ## Develop outside Docker
 

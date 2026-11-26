@@ -2,11 +2,13 @@ package disruptions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type fakeDisruptionRepo struct {
@@ -243,7 +245,7 @@ func TestServiceUpdateAndListActive(t *testing.T) {
 	}
 }
 
-func TestExternalNoticeIngestionSpatialMatchingAndUpsert(t *testing.T) {
+func TestCreateRoadClosureAddressValidUntilAndSpatialMatching(t *testing.T) {
 	fixedNow := time.Date(2026, 11, 18, 20, 0, 0, 0, time.UTC)
 	repo := &fakeDisruptionRepo{
 		nearbyStops: []NearbyStop{
@@ -253,15 +255,25 @@ func TestExternalNoticeIngestionSpatialMatchingAndUpsert(t *testing.T) {
 	}
 	svc := NewServiceWithClock(repo, func() time.Time { return fixedNow })
 
+	// 1. Address with numeric streetNumber + duration valid-until (7200s) + spatial match + idempotent upsert.
+	var addrNum RoadClosureAddress
+	if err := json.Unmarshal([]byte(`{"streetNumber":123,"streetName":"King St N","city":"Waterloo","postalCode":"n2j 2x7"}`), &addrNum); err != nil {
+		t.Fatalf("unmarshal numeric streetNumber address: %v", err)
+	}
+	if addrNum.Format() != "123 King St N, Waterloo, N2J 2X7" {
+		t.Fatalf("Format() = %q", addrNum.Format())
+	}
+
 	extID := "UTIL-2026-900"
 	lat := 43.4500
 	lng := -80.4900
 	radius := 350.0
+	validDuration := uint64(7200)
 	repo.upsertCreated = true
 	repo.upsertResult = DisruptionResponse{
 		ID:                55,
 		Type:              TypeRoadClosure,
-		Title:             "Watermain Break on King St",
+		Title:             "Road closure: 123 King St N, Waterloo, N2J 2X7",
 		Status:            StatusActive,
 		SourceService:     SourceUtilities,
 		ExternalReference: &extID,
@@ -275,94 +287,113 @@ func TestExternalNoticeIngestionSpatialMatchingAndUpsert(t *testing.T) {
 		AffectedSegments: []string{"King St between Union and Erb"},
 	}
 
-	// US 186 Utilities notice ingestion with spatial matching.
-	res, err := svc.IngestUtilitiesNotice(context.Background(), UtilitiesNoticeInput{
+	res, err := svc.CreateRoadClosure(context.Background(), RoadClosureInput{
+		Address:          &addrNum,
+		ValidUntil:       &validDuration,
 		ExternalID:       &extID,
-		NoticeType:       TypeRoadClosure,
-		Title:            "Watermain Break on King St",
 		Latitude:         &lat,
 		Longitude:        &lng,
 		RadiusMeters:     &radius,
 		AffectedSegments: []string{"King St between Union and Erb"},
-	})
+	}, SourceUtilities)
 	if err != nil {
-		t.Fatalf("IngestUtilitiesNotice failed: %v", err)
+		t.Fatalf("CreateRoadClosure failed: %v", err)
 	}
-	if !res.Created || res.Disruption.SourceService != SourceUtilities || !res.Disruption.ReceivedAt.Equal(fixedNow) {
-		t.Fatalf("unexpected utilities result: %+v", res)
+	if !res.Created || repo.upsertParams.SourceService != SourceUtilities || repo.upsertParams.Type != TypeRoadClosure {
+		t.Fatalf("unexpected result/params: %+v params=%+v", res, repo.upsertParams)
+	}
+	if repo.upsertParams.Title != "Road closure: 123 King St N, Waterloo, N2J 2X7" {
+		t.Fatalf("derived title = %q", repo.upsertParams.Title)
+	}
+	if repo.upsertParams.AffectedArea == nil || *repo.upsertParams.AffectedArea != "123 King St N, Waterloo, N2J 2X7" {
+		t.Fatalf("derived affected_area = %v", repo.upsertParams.AffectedArea)
+	}
+	wantEnd := fixedNow.Add(7200 * time.Second)
+	if repo.upsertParams.EndTime == nil || !repo.upsertParams.EndTime.Equal(wantEnd) {
+		t.Fatalf("EndTime = %v, want %v", repo.upsertParams.EndTime, wantEnd)
 	}
 	if len(repo.upsertParams.StopIDs) != 1 || repo.upsertParams.StopIDs[0] != 3 {
 		t.Fatalf("expected spatial match on stop 3 only, got %+v", repo.upsertParams.StopIDs)
 	}
-	if len(res.MatchedRouteIDs) != 1 || res.MatchedRouteIDs[0] != 7 || len(res.MatchedStopIDs) != 1 || res.MatchedStopIDs[0] != 3 {
-		t.Fatalf("unexpected matched IDs: routes=%v stops=%v", res.MatchedRouteIDs, res.MatchedStopIDs)
-	}
-	if !strings.HasPrefix(res.TransitImpact, "high:") {
-		t.Fatalf("expected high transit impact for road_closure, got %q", res.TransitImpact)
-	}
 
-	// US 187 Emergency incident idempotent update (created=false) with critical severity.
+	// 2. String streetNumber + Unix epoch timestamp valid-until + idempotent update (created=false).
+	var addrStr RoadClosureAddress
+	if err := json.Unmarshal([]byte(`{"streetNumber":"45B","streetName":"Weber St E","city":"Kitchener","postalCode":"N2H 1C4"}`), &addrStr); err != nil {
+		t.Fatalf("unmarshal string streetNumber address: %v", err)
+	}
+	epochEnd := uint64(fixedNow.Add(4 * time.Hour).Unix())
 	repo.upsertCreated = false
 	repo.upsertResult.SourceService = SourceEmergency
-	repo.upsertResult.Type = TypeEmergency
-	emRes, err := svc.IngestEmergencyIncident(context.Background(), EmergencyIncidentInput{
-		ExternalID:   &extID,
-		IncidentType: TypeEmergency,
-		Severity:     "critical",
-		Title:        "Multi-vehicle collision",
-		RouteIDs:     []int{7},
-	})
+	res2, err := svc.CreateRoadClosure(context.Background(), RoadClosureInput{
+		Address:    &addrStr,
+		ValidUntil: &epochEnd,
+		ExternalID: &extID,
+		Title:      "Collision closure",
+	}, SourceEmergency)
 	if err != nil {
-		t.Fatalf("IngestEmergencyIncident failed: %v", err)
+		t.Fatalf("CreateRoadClosure epoch update failed: %v", err)
 	}
-	if emRes.Created || !strings.HasPrefix(emRes.TransitImpact, "critical:") {
-		t.Fatalf("expected created=false and critical impact, got %+v", emRes)
+	if res2.Created || repo.upsertParams.EndTime == nil || repo.upsertParams.EndTime.Unix() != int64(epochEnd) {
+		t.Fatalf("unexpected epoch upsert: created=%v end=%v", res2.Created, repo.upsertParams.EndTime)
 	}
 
-	// US 188 Security traffic alert defaults to traffic_restriction.
-	repo.upsertCreated = true
-	repo.upsertResult.SourceService = SourceSecurity
-	repo.upsertResult.Type = TypeTrafficRestriction
-	secRes, err := svc.IngestSecurityTrafficAlert(context.Background(), SecurityTrafficAlertInput{
-		Title:    "Police motorcade restriction",
-		RouteIDs: []int{7},
-	})
+	// 3. Long formatted address safely truncates derived title to MaxTitleRunes (100).
+	longStreet := strings.Repeat("LongStreetName", 7) // 98 chars
+	longRes, err := svc.CreateRoadClosure(context.Background(), RoadClosureInput{
+		Address: &RoadClosureAddress{
+			StreetNumber: "100",
+			StreetName:   longStreet,
+			City:         "Waterloo",
+			PostalCode:   "N2L 3G1",
+		},
+	}, SourceSecurity)
 	if err != nil {
-		t.Fatalf("IngestSecurityTrafficAlert failed: %v", err)
+		t.Fatalf("CreateRoadClosure long address failed: %v", err)
 	}
-	if !secRes.Created || repo.createParams.SourceService != SourceSecurity || repo.createParams.Type != TypeTrafficRestriction {
-		t.Fatalf("unexpected security alert result: %+v params=%+v", secRes, repo.createParams)
+	if longRes.Disruption.ID == 0 || utf8.RuneCountInString(repo.createParams.Title) != MaxTitleRunes {
+		t.Fatalf("expected derived title truncated to %d runes, got %d (%q)", MaxTitleRunes, utf8.RuneCountInString(repo.createParams.Title), repo.createParams.Title)
 	}
 
-	// Reject disallowed feed types, half-specified coordinates, and out-of-range radius.
-	if _, err := svc.IngestUtilitiesNotice(context.Background(), UtilitiesNoticeInput{
-		NoticeType: TypeEmergency,
-		Title:      "Invalid utilities type",
-	}); err == nil {
-		t.Fatal("expected error for utilities notice with type=emergency")
+	// 4. Address JSON validation errors.
+	for _, badAddrJSON := range []string{
+		`{"streetNumber":-5,"streetName":"King St","city":"Waterloo","postalCode":"N2J 2X7"}`,
+		`{"streetNumber":12.5,"streetName":"King St","city":"Waterloo","postalCode":"N2J 2X7"}`,
+		`{"streetNumber":"10","streetName":"King St","city":"Waterloo","extra":"nope"}`,
+		`{"streetNumber":"10","street_number":"11","streetName":"King St","city":"Waterloo"}`,
+	} {
+		var bad RoadClosureAddress
+		if err := json.Unmarshal([]byte(badAddrJSON), &bad); err == nil {
+			t.Fatalf("expected address unmarshal error for %s", badAddrJSON)
+		}
 	}
-	if _, err := svc.IngestEmergencyIncident(context.Background(), EmergencyIncidentInput{
-		Title:    "Missing longitude",
-		Latitude: &lat,
-	}); err == nil {
-		t.Fatal("expected error when latitude provided without longitude")
-	}
+
+	// 5. Service validation errors.
+	zeroValidUntil := uint64(0)
+	expiredEpoch := uint64(fixedNow.Add(-time.Minute).Unix())
+	tooLongDuration := uint64(maxDurationSeconds + 1)
+	endTimeVal := fixedNow.Add(time.Hour)
 	badRadius := 20.0
-	if _, err := svc.IngestSecurityTrafficAlert(context.Background(), SecurityTrafficAlertInput{
-		Title:        "Radius too small",
-		Latitude:     &lat,
-		Longitude:    &lng,
-		RadiusMeters: &badRadius,
-	}); err == nil {
-		t.Fatal("expected error for radius_meters < 50")
-	}
 	nanVal := math.NaN()
-	if _, err := svc.IngestSecurityTrafficAlert(context.Background(), SecurityTrafficAlertInput{
-		Title:     "NaN lat",
-		Latitude:  &nanVal,
-		Longitude: &lng,
-	}); err == nil {
-		t.Fatal("expected error for NaN latitude")
+
+	for _, tc := range []struct {
+		name  string
+		input RoadClosureInput
+	}{
+		{"valid-until 0", RoadClosureInput{Title: "T", ValidUntil: &zeroValidUntil}},
+		{"expired unix valid-until", RoadClosureInput{Title: "T", ValidUntil: &expiredEpoch}},
+		{"valid-until duration > 10y", RoadClosureInput{Title: "T", ValidUntil: &tooLongDuration}},
+		{"both valid-until and end_time", RoadClosureInput{Title: "T", ValidUntil: &validDuration, EndTime: &endTimeVal}},
+		{"missing streetName", RoadClosureInput{Address: &RoadClosureAddress{StreetNumber: "1", City: "Waterloo"}}},
+		{"missing city", RoadClosureInput{Address: &RoadClosureAddress{StreetNumber: "1", StreetName: "King St"}}},
+		{"non-road_closure type", RoadClosureInput{Title: "T", Type: TypeDelay}},
+		{"missing title and address", RoadClosureInput{ValidUntil: &validDuration}},
+		{"half-specified lat without lng", RoadClosureInput{Title: "T", Latitude: &lat}},
+		{"radius < 50", RoadClosureInput{Title: "T", Latitude: &lat, Longitude: &lng, RadiusMeters: &badRadius}},
+		{"NaN latitude", RoadClosureInput{Title: "T", Latitude: &nanVal, Longitude: &lng}},
+	} {
+		if _, err := svc.CreateRoadClosure(context.Background(), tc.input, SourceTransitAdmin); err == nil {
+			t.Fatalf("%s: expected validation error, got nil", tc.name)
+		}
 	}
 }
 
