@@ -348,17 +348,16 @@ func (s *Service) Update(ctx context.Context, id int, input UpdateDisruptionInpu
 	return normalizeDisruptionResponse(updated), nil
 }
 
-// CreateRoadClosure validates and creates (or idempotently upserts by external reference)
-// a road closure disruption from either an external service or transit administrator.
-func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput, defaultSource string) (RoadClosureResult, error) {
+// CreateRoadClosure validates and creates a road closure disruption from either an external service or transit administrator.
+func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput, defaultSource string) (DisruptionResponse, error) {
 	if err := s.ensureRepo(); err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	now := s.now().UTC()
 
 	disruptionType := strings.ToLower(strings.TrimSpace(input.Type))
 	if disruptionType != "" && disruptionType != TypeRoadClosure {
-		return RoadClosureResult{}, &InvalidInput{Message: "type must be road_closure for road-closures endpoint"}
+		return DisruptionResponse{}, &InvalidInput{Message: "type must be road_closure for road-closures endpoint"}
 	}
 
 	var formattedAddr string
@@ -366,13 +365,13 @@ func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput,
 		var err error
 		formattedAddr, err = validateAndFormatAddress(*input.Address)
 		if err != nil {
-			return RoadClosureResult{}, err
+			return DisruptionResponse{}, err
 		}
 	}
 
 	affectedArea, err := validateOptionalString("affected_area", input.AffectedArea, MaxAffectedAreaRunes)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	if affectedArea == nil && formattedAddr != "" {
 		areaCopy := formattedAddr
@@ -385,16 +384,16 @@ func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput,
 	}
 	title, err := validateRequiredString("title", rawTitle, MaxTitleRunes)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 
 	description, err := validateOptionalString("description", input.Description, MaxDescriptionRunes)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	extRef, err := resolveExternalReference(input.ExternalID, input.ExternalReference)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 
 	source := strings.TrimSpace(input.SourceService)
@@ -406,20 +405,20 @@ func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput,
 	}
 	source, err = validateRequiredString("source_service", source, MaxSourceServiceRunes)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 
 	startTime := now
 	if input.StartTime != nil {
 		if input.StartTime.IsZero() {
-			return RoadClosureResult{}, &InvalidInput{Message: "start_time is invalid"}
+			return DisruptionResponse{}, &InvalidInput{Message: "start_time is invalid"}
 		}
 		startTime = input.StartTime.UTC()
 	}
 
 	endTime, err := resolveRoadClosureEndTime(startTime, input.ValidUntil, input.EndTime)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 
 	status := strings.ToLower(strings.TrimSpace(input.Status))
@@ -430,54 +429,54 @@ func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput,
 			status = StatusActive
 		}
 	} else if !IsValidStatus(status) {
-		return RoadClosureResult{}, &InvalidInput{Message: "status must be one of scheduled, active, or resolved"}
+		return DisruptionResponse{}, &InvalidInput{Message: "status must be one of scheduled, active, or resolved"}
 	}
 
 	routeIDs, err := validateIDSlice("route_ids", input.RouteIDs)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	stopIDs, err := validateIDSlice("stop_ids", input.StopIDs)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	tripIDs, err := validateIDSlice("trip_ids", input.TripIDs)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	vehicleIDs, err := validateIDSlice("vehicle_ids", input.VehicleIDs)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 	segments, err := validateSegments(input.AffectedSegments)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
 
 	radius := DefaultRadiusMeters
 	if input.RadiusMeters != nil {
 		if !isFiniteInRange(*input.RadiusMeters, MinRadiusMeters, MaxRadiusMeters) {
-			return RoadClosureResult{}, &InvalidInput{Message: "radius_meters must be a finite number between 50 and 5000"}
+			return DisruptionResponse{}, &InvalidInput{Message: "radius_meters must be a finite number between 50 and 5000"}
 		}
 		radius = *input.RadiusMeters
 	}
 
 	if (input.Latitude != nil) != (input.Longitude != nil) {
-		return RoadClosureResult{}, &InvalidInput{Message: "latitude and longitude must be provided together"}
+		return DisruptionResponse{}, &InvalidInput{Message: "latitude and longitude must be provided together"}
 	}
 	if input.Latitude != nil && input.Longitude != nil {
 		lat := *input.Latitude
 		lng := *input.Longitude
 		if !isFiniteInRange(lat, -90, 90) {
-			return RoadClosureResult{}, &InvalidInput{Message: "latitude must be between -90 and 90"}
+			return DisruptionResponse{}, &InvalidInput{Message: "latitude must be between -90 and 90"}
 		}
 		if !isFiniteInRange(lng, -180, 180) {
-			return RoadClosureResult{}, &InvalidInput{Message: "longitude must be between -180 and 180"}
+			return DisruptionResponse{}, &InvalidInput{Message: "longitude must be between -180 and 180"}
 		}
 		minLat, maxLat, minLng, maxLng := boundingBox(lat, lng, radius)
 		candidates, err := s.repo.FindStopsInBounds(ctx, minLat, maxLat, minLng, maxLng)
 		if err != nil {
-			return RoadClosureResult{}, err
+			return DisruptionResponse{}, err
 		}
 		for _, candidate := range candidates {
 			if haversineMeters(lat, lng, candidate.Latitude, candidate.Longitude) <= radius {
@@ -505,23 +504,118 @@ func (s *Service) CreateRoadClosure(ctx context.Context, input RoadClosureInput,
 		AffectedSegments:  segments,
 	}
 
-	var (
-		disruption DisruptionResponse
-		created    bool
-	)
-	if extRef != nil {
-		disruption, created, err = s.repo.UpsertByExternalRef(ctx, saveParams)
-	} else {
-		disruption, err = s.repo.Create(ctx, saveParams)
-		created = true
-	}
+	disruption, err := s.repo.Create(ctx, saveParams)
 	if err != nil {
-		return RoadClosureResult{}, err
+		return DisruptionResponse{}, err
 	}
-	return RoadClosureResult{
-		Created:    created,
-		Disruption: normalizeDisruptionResponse(disruption),
-	}, nil
+	return normalizeDisruptionResponse(disruption), nil
+}
+
+// GetRoadClosure loads a single road closure disruption (`type='road_closure'`) by identifier.
+func (s *Service) GetRoadClosure(ctx context.Context, id int) (DisruptionResponse, error) {
+	if err := s.ensureRepo(); err != nil {
+		return DisruptionResponse{}, err
+	}
+	if err := validatePositiveID("id", id); err != nil {
+		return DisruptionResponse{}, err
+	}
+	item, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return DisruptionResponse{}, err
+	}
+	if item.Type != TypeRoadClosure {
+		return DisruptionResponse{}, ErrNotFound
+	}
+	return normalizeDisruptionResponse(item), nil
+}
+
+// UpdateRoadClosure validates and applies partial updates to an existing road closure disruption (`type='road_closure'`).
+func (s *Service) UpdateRoadClosure(ctx context.Context, id int, input UpdateRoadClosureInput) (DisruptionResponse, error) {
+	if err := s.ensureRepo(); err != nil {
+		return DisruptionResponse{}, err
+	}
+	if err := validatePositiveID("id", id); err != nil {
+		return DisruptionResponse{}, err
+	}
+
+	if input.Address == nil &&
+		input.ValidUntil == nil &&
+		input.Title == nil &&
+		input.Description == nil && !input.DescriptionSet &&
+		input.AffectedArea == nil && !input.AffectedAreaSet &&
+		input.Status == nil &&
+		input.StartTime == nil &&
+		input.EndTime == nil && !input.EndTimeSet &&
+		input.RouteIDs == nil &&
+		input.StopIDs == nil &&
+		input.TripIDs == nil &&
+		input.VehicleIDs == nil &&
+		input.AffectedSegments == nil {
+		return DisruptionResponse{}, &InvalidInput{Message: "at least one field must be provided for update"}
+	}
+
+	if input.ValidUntil != nil && (input.EndTime != nil || input.EndTimeSet) {
+		return DisruptionResponse{}, &InvalidInput{Message: "provide either valid-until or end_time, not both"}
+	}
+
+	existing, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return DisruptionResponse{}, err
+	}
+	if existing.Type != TypeRoadClosure {
+		return DisruptionResponse{}, ErrNotFound
+	}
+
+	affectedArea := input.AffectedArea
+	affectedAreaSet := input.AffectedAreaSet
+	if input.Address != nil {
+		formattedAddr, err := validateAndFormatAddress(*input.Address)
+		if err != nil {
+			return DisruptionResponse{}, err
+		}
+		if affectedArea == nil && !affectedAreaSet {
+			areaCopy := formattedAddr
+			affectedArea = &areaCopy
+			affectedAreaSet = true
+		}
+	}
+
+	endTime := input.EndTime
+	endTimeSet := input.EndTimeSet
+	if input.ValidUntil != nil {
+		refTime := s.now().UTC()
+		if input.StartTime != nil {
+			if input.StartTime.IsZero() {
+				return DisruptionResponse{}, &InvalidInput{Message: "start_time is invalid"}
+			}
+			refTime = input.StartTime.UTC()
+		} else if existing.StartTime.UTC().After(refTime) {
+			refTime = existing.StartTime.UTC()
+		}
+		resolvedEnd, err := resolveRoadClosureEndTime(refTime, input.ValidUntil, nil)
+		if err != nil {
+			return DisruptionResponse{}, err
+		}
+		endTime = resolvedEnd
+		endTimeSet = true
+	}
+
+	return s.Update(ctx, id, UpdateDisruptionInput{
+		Title:            input.Title,
+		Description:      input.Description,
+		AffectedArea:     affectedArea,
+		Status:           input.Status,
+		StartTime:        input.StartTime,
+		EndTime:          endTime,
+		RouteIDs:         input.RouteIDs,
+		StopIDs:          input.StopIDs,
+		TripIDs:          input.TripIDs,
+		VehicleIDs:       input.VehicleIDs,
+		AffectedSegments: input.AffectedSegments,
+		EndTimeSet:       endTimeSet,
+		DescriptionSet:   input.DescriptionSet,
+		AffectedAreaSet:  affectedAreaSet,
+	})
 }
 
 func validateAndFormatAddress(addr RoadClosureAddress) (string, error) {

@@ -30,7 +30,7 @@ import (
 
 // @title Public Transport Service API
 // @version 1.0
-// @description Public resident schedules, cookie-authenticated transit administration, and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; POST /api/transport/v1/road-closures and GET /api/transport/v1/integrations/service-status also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.
+// @description Public resident schedules, cookie-authenticated transit administration, and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; POST /api/transport/v1/road-closures, PATCH /api/transport/v1/road-closures/{id}, and GET /api/transport/v1/integrations/service-status also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.
 // @BasePath /
 // @securityDefinitions.apikey BearerAuth
 // @in header

@@ -1901,7 +1901,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp \u003e= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, route/stop links, and external_id for idempotent upsert (201 created, 200 updated).",
+                "description": "Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Accepts the shared SH-I06 address object and valid-until (unsigned integer seconds: Unix epoch timestamp \u003e= 1000000000, or duration in seconds from start_time) as well as optional title, coordinates/radius spatial matching, and route/stop links. Returns 201 Created with the created road closure and its numeric id for subsequent PATCH /api/transport/v1/road-closures/{id} updates.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1911,7 +1911,7 @@ const docTemplate = `{
                 "tags": [
                     "road-closures"
                 ],
-                "summary": "Create or update a road closure",
+                "summary": "Create a road closure",
                 "parameters": [
                     {
                         "type": "string",
@@ -1930,14 +1930,188 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.DisruptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/transport/v1/road-closures/{id}": {
+            "get": {
+                "description": "Returns a single road closure (` + "`" + `type='road_closure'` + "`" + `) and its affected routes, stops, trips, vehicles, and segments.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "Get road closure by ID",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive road closure ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/disruptions.DisruptionResponse"
                         }
                     },
-                    "201": {
-                        "description": "Created",
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Accepts a Registration Service service-account Bearer JWT (SH-S07; no cookie, Origin, or CSRF required) or an administrator session cookie with trusted Origin and X-CSRF-Token. Strictly parses JSON and partially updates or resolves an existing road closure (` + "`" + `type='road_closure'` + "`" + `) by id while preserving omitted fields and existing route/stop links. Supports valid-until (Unix epoch timestamp \u003e= 1000000000, or duration in seconds from start_time/now, using the existing start_time when scheduled in the future).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "road-closures"
+                ],
+                "summary": "Update or resolve a road closure",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session-bound CSRF token (required for browser cookie sessions; omitted for Bearer JWTs)",
+                        "name": "X-CSRF-Token",
+                        "in": "header"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Positive road closure ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Road closure partial update payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/disruptions.UpdateRoadClosureInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/disruptions.DisruptionResponse"
                         }
@@ -4153,6 +4327,70 @@ const docTemplate = `{
                 }
             }
         },
+        "disruptions.UpdateRoadClosureInput": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/disruptions.RoadClosureAddress"
+                },
+                "affected_area": {
+                    "type": "string"
+                },
+                "affected_segments": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "route_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "scheduled",
+                        "active",
+                        "resolved"
+                    ]
+                },
+                "stop_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "trip_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "valid-until": {
+                    "type": "integer"
+                },
+                "vehicle_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "handlers.SimulatorStartInput": {
             "type": "object",
             "properties": {
@@ -4931,7 +5169,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Public Transport Service API",
-	Description:      "Public resident schedules, cookie-authenticated transit administration, and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; POST /api/transport/v1/road-closures and GET /api/transport/v1/integrations/service-status also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.",
+	Description:      "Public resident schedules, cookie-authenticated transit administration, and Bearer JWT road-closure integrations (SH-S07). Admin browser mutations require an administrator session, a trusted Origin, and X-CSRF-Token from login or /auth/me; POST /api/transport/v1/road-closures, PATCH /api/transport/v1/road-closures/{id}, and GET /api/transport/v1/integrations/service-status also accept Authorization: Bearer <token> from Registration Service without cookies or CSRF.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

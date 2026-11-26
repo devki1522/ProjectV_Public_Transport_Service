@@ -164,65 +164,8 @@ func TestRepositoryCreateAndHydrate(t *testing.T) {
 	})
 }
 
-func TestRepositoryUpsertByExternalRefAndUpdate(t *testing.T) {
+func TestRepositoryUpdate(t *testing.T) {
 	now := time.Date(2026, 11, 18, 20, 0, 0, 0, time.UTC)
-
-	t.Run("upserts existing external disruption in place (created=false)", func(t *testing.T) {
-		repo, mock := mockDisruptionRepository(t)
-		extRef := "EMG-404"
-
-		mock.ExpectBegin()
-		mock.ExpectQuery(`SELECT id FROM disruptions WHERE source_service = \$1 AND external_reference = \$2`).
-			WithArgs(SourceEmergency, extRef).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(77))
-
-		mock.ExpectExec(`UPDATE disruptions SET type = \$1`).
-			WithArgs(TypeEmergency, "Updated Emergency", nil, nil, now, nil, StatusResolved, now, 77).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		mock.ExpectExec(`DELETE FROM disruption_routes WHERE disruption_id = \$1`).
-			WithArgs(77).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-		mock.ExpectExec(`DELETE FROM disruption_impacts WHERE disruption_id = \$1`).
-			WithArgs(77).
-			WillReturnResult(sqlmock.NewResult(0, 0))
-
-		mock.ExpectQuery(`SELECT d\.id, d\.type, d\.title`).
-			WithArgs(77).
-			WillReturnRows(sqlmock.NewRows([]string{
-				"id", "type", "title", "description", "affected_area",
-				"start_time", "end_time", "status", "source_service",
-				"external_reference", "received_at",
-			}).AddRow(77, TypeEmergency, "Updated Emergency", nil, nil, now, nil, StatusResolved, SourceEmergency, extRef, now))
-
-		mock.ExpectQuery(`SELECT dr\.disruption_id, dr\.route_id`).
-			WithArgs(77).
-			WillReturnRows(sqlmock.NewRows([]string{
-				"disruption_id", "route_id", "route_number", "route_name", "direction", "stop_id", "stop_name",
-			}))
-		mock.ExpectQuery(`SELECT di\.disruption_id, di\.trip_id`).
-			WithArgs(77).
-			WillReturnRows(sqlmock.NewRows([]string{
-				"disruption_id", "trip_id", "vehicle_id", "segment_description",
-			}))
-		mock.ExpectCommit()
-
-		res, created, err := repo.UpsertByExternalRef(context.Background(), SaveDisruptionParams{
-			Type:              TypeEmergency,
-			Title:             "Updated Emergency",
-			StartTime:         now,
-			Status:            StatusResolved,
-			SourceService:     SourceEmergency,
-			ExternalReference: &extRef,
-			ReceivedAt:        now,
-		})
-		if err != nil {
-			t.Fatalf("UpsertByExternalRef failed: %v", err)
-		}
-		if created || res.ID != 77 || res.Status != StatusResolved {
-			t.Fatalf("expected created=false id=77 status=resolved, got created=%v res=%+v", created, res)
-		}
-	})
 
 	t.Run("rejects update when patched end_time is before existing start_time", func(t *testing.T) {
 		repo, mock := mockDisruptionRepository(t)
